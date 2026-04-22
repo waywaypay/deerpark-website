@@ -2,7 +2,7 @@ import React from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch } from "lucide-react";
+import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch, FlaskConical, Scale, AppWindow } from "lucide-react";
 import heroTexture from "../assets/hero-texture.png";
 import dataVis from "../assets/data-vis.png";
 import officeImg from "../assets/office.png";
@@ -154,6 +154,21 @@ const Services = () => {
       title: "Capability Rollout & Enablement",
       desc: "We manage phased deployment of AI capabilities across business units, training teams to operate as orchestrators of agentic systems rather than manual executors of repetitive tasks.",
       icon: Cpu
+    },
+    {
+      title: "Tool & Vendor Evaluation",
+      desc: "We assess the crowded AI tooling landscape on your behalf — evaluating orchestration frameworks, retrieval systems, vector stores, and SaaS AI products against your specific technical requirements and build-versus-buy calculus.",
+      icon: Scale
+    },
+    {
+      title: "Foundation Model Evaluation",
+      desc: "We run structured benchmarks across frontier and open-weight models for your specific tasks — measuring accuracy, latency, cost, and context handling to identify the right model for each workload in your stack.",
+      icon: FlaskConical
+    },
+    {
+      title: "AI Application Assessment",
+      desc: "We audit deployed AI applications for output quality, failure modes, prompt injection risk, and alignment with business intent — providing a rigorous report and a remediation roadmap before systems reach production at scale.",
+      icon: AppWindow
     }
   ];
 
@@ -195,7 +210,7 @@ const TechStack = () => {
     { label: "MCPs", desc: "Model Context Protocols provide agents with structured, permission-controlled access to your internal data, software, and APIs in real time." },
     { label: "Prompts", desc: "The governed interface between your organization's knowledge and model behavior — designed, versioned, and maintained as a strategic internal asset." },
     { label: "Orchestration", desc: "The coordination layer that sequences agents, routes tasks, handles failures, and synthesizes outputs into coherent results across complex workflows." },
-    { label: "Evals", desc: "Continuous measurement of agent output quality, latency, and accuracy — the feedback loop that keeps your AI systems aligned with business objectives over time." },
+    { label: "Evals", desc: "Structured evaluation across three layers — tools and vendors, foundation models, and deployed applications — ensuring every component of your AI stack meets the quality bar your business requires." },
   ];
 
   return (
@@ -316,7 +331,8 @@ const Footer = () => (
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
             <li><a href="#services" className="hover:text-white transition-colors">Workflow Diagnostics</a></li>
             <li><a href="#services" className="hover:text-white transition-colors">Agent Architecture</a></li>
-            <li><a href="#services" className="hover:text-white transition-colors">MCP Engineering</a></li>
+            <li><a href="#services" className="hover:text-white transition-colors">Model Evaluation</a></li>
+            <li><a href="#services" className="hover:text-white transition-colors">Application Assessment</a></li>
             <li><a href="#services" className="hover:text-white transition-colors">Prompt Governance</a></li>
           </ul>
         </div>
