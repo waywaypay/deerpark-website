@@ -22,8 +22,8 @@ const FadeIn = ({ children, delay = 0, className = "" }: { children: React.React
 const Navbar = () => (
   <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-background/80 backdrop-blur-md">
     <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-      <Link href="/" className="font-serif text-2xl font-semibold tracking-wide">
-        deerpark<span className="text-muted-foreground">.io</span>
+      <Link href="/" className="font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground">
+        Deerpark<span className="text-foreground/50 font-light">.io</span>
       </Link>
       <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
         <a href="#services" className="hover:text-foreground transition-colors">Services</a>
@@ -56,7 +56,7 @@ const Hero = () => {
           <FadeIn>
             <div className="flex items-center gap-3 mb-8">
               <div className="h-[1px] w-12 bg-primary"></div>
-              <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">AI-First Strategic Consulting</span>
+              <span className="section-label">AI-First Strategic Consulting</span>
             </div>
           </FadeIn>
 
@@ -105,7 +105,7 @@ const Problem = () => (
         <div className="relative h-[600px] w-full border border-white/10 bg-background overflow-hidden p-8 flex flex-col justify-end">
           <img src={dataVis} alt="Data visualization" className="absolute inset-0 w-full h-full object-cover opacity-50 mix-blend-screen" />
           <div className="relative z-10 bg-black/80 backdrop-blur border border-white/10 p-6">
-            <div className="font-mono text-sm text-muted-foreground mb-2">SYSTEM METRIC</div>
+            <div className="section-label mb-2">Client Benchmark</div>
             <div className="text-3xl font-serif mb-1">90% Reduction</div>
             <div className="text-sm font-sans text-muted-foreground">in manual processing time, across client engagements</div>
           </div>
@@ -155,7 +155,7 @@ const Services = () => {
         <FadeIn>
           <div className="flex items-center gap-3 mb-16">
             <div className="h-[1px] w-12 bg-primary"></div>
-            <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Practice Areas</span>
+            <span className="section-label">Practice Areas</span>
           </div>
           <h2 className="text-4xl md:text-6xl font-serif mb-20 max-w-3xl">From first audit to full agentic deployment.</h2>
         </FadeIn>
@@ -196,7 +196,7 @@ const TechStack = () => {
         <FadeIn>
           <div className="flex items-center gap-3 mb-16">
             <div className="h-[1px] w-12 bg-primary"></div>
-            <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">The Stack We Build With</span>
+            <span className="section-label">The Stack We Build With</span>
           </div>
           <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">The vocabulary of enterprise AI. Spoken fluently.</h2>
           <p className="text-lg text-muted-foreground font-light max-w-2xl mb-20">
@@ -208,7 +208,7 @@ const TechStack = () => {
           {concepts.map((c, i) => (
             <FadeIn key={i} delay={i * 0.07}>
               <div className="bg-background p-8 hover:bg-white/[0.03] transition-colors">
-                <div className="font-mono text-xs uppercase tracking-[0.2em] text-primary mb-4">{c.label}</div>
+                <div className="font-sans text-xs font-semibold uppercase tracking-[0.15em] text-primary/80 mb-4">{c.label}</div>
                 <p className="text-muted-foreground font-light text-sm leading-relaxed">{c.desc}</p>
               </div>
             </FadeIn>
@@ -251,7 +251,7 @@ const Approach = () => (
         ].map((s, i) => (
           <FadeIn key={i} delay={i * 0.15}>
             <div className="border-t border-background/20 pt-8">
-              <div className="font-mono text-sm mb-6 text-background/50">{s.step}</div>
+              <div className="font-sans text-xs font-medium tracking-[0.15em] mb-6 text-background/40 uppercase">{s.step}</div>
               <h3 className="text-2xl font-serif mb-4">{s.title}</h3>
               <p className="text-background/80 font-light text-sm leading-relaxed">{s.desc}</p>
             </div>
@@ -302,7 +302,7 @@ const Footer = () => (
           </p>
         </div>
         <div>
-          <h4 className="font-mono text-xs uppercase tracking-widest mb-6 text-foreground">Practice</h4>
+          <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Practice</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
             <li><a href="#" className="hover:text-white transition-colors">Workflow Diagnostics</a></li>
             <li><a href="#" className="hover:text-white transition-colors">Agent Architecture</a></li>
@@ -311,7 +311,7 @@ const Footer = () => (
           </ul>
         </div>
         <div>
-          <h4 className="font-mono text-xs uppercase tracking-widest mb-6 text-foreground">Company</h4>
+          <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Company</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
             <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
             <li><a href="#" className="hover:text-white transition-colors">Methodology</a></li>

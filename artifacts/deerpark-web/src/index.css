@@ -2,7 +2,7 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Cormorant+SC:wght@300;400;500;600&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 
@@ -85,7 +85,8 @@
 
   --app-font-sans: 'Plus Jakarta Sans', sans-serif;
   --app-font-serif: 'Playfair Display', serif;
-  --app-font-mono: 'Space Mono', monospace;
+  --app-font-mono: 'Plus Jakarta Sans', sans-serif;
+  --app-font-wordmark: 'Cormorant SC', serif;
   
   --radius: 0rem; /* Sharp edges for a precise, serious look */
 
@@ -105,12 +106,26 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
-    /* Optional: subtle noise overlay pattern for texture */
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.02'/%3E%3C/svg%3E");
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-serif tracking-tight;
+  }
+}
+
+@layer utilities {
+  .font-wordmark {
+    font-family: var(--app-font-wordmark);
+  }
+
+  .section-label {
+    font-family: var(--app-font-sans);
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: hsl(var(--muted-foreground));
   }
 }
 
