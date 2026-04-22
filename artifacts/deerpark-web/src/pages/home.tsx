@@ -29,12 +29,16 @@ const Navbar = () => (
         <a href="#services" className="hover:text-foreground transition-colors">Services</a>
         <a href="#methodology" className="hover:text-foreground transition-colors">Methodology</a>
         <a href="#impact" className="hover:text-foreground transition-colors">Impact</a>
-        <Button variant="secondary" className="font-sans text-xs uppercase tracking-widest rounded-none">
-          Client Portal
-        </Button>
-        <Button className="font-sans text-xs uppercase tracking-widest rounded-none">
-          Schedule Briefing
-        </Button>
+        <a href="mailto:contact@deerpark.io?subject=Client+Portal+Access">
+          <Button variant="secondary" className="font-sans text-xs uppercase tracking-widest rounded-none">
+            Client Portal
+          </Button>
+        </a>
+        <a href="mailto:contact@deerpark.io?subject=Briefing+Request">
+          <Button className="font-sans text-xs uppercase tracking-widest rounded-none">
+            Schedule Briefing
+          </Button>
+        </a>
       </nav>
     </div>
   </header>
@@ -74,12 +78,16 @@ const Hero = () => {
           </FadeIn>
 
           <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4">
-            <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
-              Schedule Confidential Briefing <ArrowRight className="ml-2 w-4 h-4" />
-            </Button>
-            <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-white/20 hover:bg-white/5">
-              Explore Methodology
-            </Button>
+            <a href="mailto:contact@deerpark.io?subject=Confidential+Briefing+Request">
+              <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
+                Schedule Confidential Briefing <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </a>
+            <a href="#methodology">
+              <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-white/20 hover:bg-white/5">
+                Explore Methodology
+              </Button>
+            </a>
           </FadeIn>
         </div>
       </div>
@@ -263,7 +271,7 @@ const Approach = () => (
 );
 
 const Trust = () => (
-  <section className="py-32 relative overflow-hidden">
+  <section id="about" className="py-32 relative overflow-hidden">
     <div className="absolute inset-0 z-0">
       <img src={officeImg} alt="Office" className="w-full h-full object-cover opacity-20 grayscale" />
       <div className="absolute inset-0 bg-background/90 mix-blend-multiply" />
@@ -281,9 +289,11 @@ const Trust = () => (
         <p className="text-xl text-muted-foreground font-light mb-12">
           Founded by veterans of enterprise software, management consulting, and AI research, Deerpark operates at the intersection of deep domain knowledge and frontier model capability. We serve organizations that can't afford to get AI wrong.
         </p>
-        <Button size="lg" className="rounded-none h-14 px-10 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
-          Request a Confidential Assessment
-        </Button>
+        <a href="mailto:contact@deerpark.io?subject=Assessment+Request">
+          <Button size="lg" className="rounded-none h-14 px-10 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
+            Request a Confidential Assessment
+          </Button>
+        </a>
       </FadeIn>
     </div>
   </section>
@@ -294,9 +304,9 @@ const Footer = () => (
     <div className="container mx-auto px-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
-          <div className="font-serif text-2xl font-semibold tracking-wide mb-6">
-            deerpark<span className="text-muted-foreground">.io</span>
-          </div>
+          <a href="/" className="font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground inline-block mb-6">
+            Deerpark<span className="text-foreground/50 font-light">.io</span>
+          </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
             AI-first strategic consulting. We help organizations redesign how work gets done — deploying agents, skills, and agentic infrastructure that compound over time.
           </p>
@@ -304,27 +314,27 @@ const Footer = () => (
         <div>
           <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Practice</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
-            <li><a href="#" className="hover:text-white transition-colors">Workflow Diagnostics</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Agent Architecture</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">MCP Engineering</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Prompt Governance</a></li>
+            <li><a href="#services" className="hover:text-white transition-colors">Workflow Diagnostics</a></li>
+            <li><a href="#services" className="hover:text-white transition-colors">Agent Architecture</a></li>
+            <li><a href="#services" className="hover:text-white transition-colors">MCP Engineering</a></li>
+            <li><a href="#services" className="hover:text-white transition-colors">Prompt Governance</a></li>
           </ul>
         </div>
         <div>
           <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Company</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
-            <li><a href="#" className="hover:text-white transition-colors">About Us</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Methodology</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Contact</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Client Portal</a></li>
+            <li><a href="#about" className="hover:text-white transition-colors">About Us</a></li>
+            <li><a href="#methodology" className="hover:text-white transition-colors">Methodology</a></li>
+            <li><a href="mailto:contact@deerpark.io" className="hover:text-white transition-colors">Contact</a></li>
+            <li><a href="mailto:contact@deerpark.io?subject=Client+Portal+Access" className="hover:text-white transition-colors">Client Portal</a></li>
           </ul>
         </div>
       </div>
       <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-white/5 text-xs text-muted-foreground font-light">
         <div>&copy; {new Date().getFullYear()} Deerpark.io. All rights reserved.</div>
         <div className="flex gap-6 mt-4 md:mt-0">
-          <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
-          <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
+          <a href="mailto:contact@deerpark.io?subject=Privacy+Inquiry" className="hover:text-white transition-colors">Privacy Policy</a>
+          <a href="mailto:contact@deerpark.io?subject=Terms+Inquiry" className="hover:text-white transition-colors">Terms of Service</a>
         </div>
       </div>
     </div>
