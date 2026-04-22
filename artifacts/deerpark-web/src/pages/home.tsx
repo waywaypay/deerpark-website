@@ -210,7 +210,7 @@ const TechStack = () => {
     { label: "MCPs", desc: "Model Context Protocols provide agents with structured, permission-controlled access to your internal data, software, and APIs in real time." },
     { label: "Prompts", desc: "The governed interface between your organization's knowledge and model behavior — designed, versioned, and maintained as a strategic internal asset." },
     { label: "Orchestration", desc: "The coordination layer that sequences agents, routes tasks, handles failures, and synthesizes outputs into coherent results across complex workflows." },
-    { label: "Evals", desc: "Structured evaluation across three layers — tools and vendors, foundation models, and deployed applications — ensuring every component of your AI stack meets the quality bar your business requires." },
+    { label: "Evals", desc: "Systematic frameworks for measuring whether agent outputs are correct, safe, and on-task — including LLM-as-judge pipelines, ground truth test suites, regression testing across prompt versions, and human review workflows." },
   ];
 
   return (
