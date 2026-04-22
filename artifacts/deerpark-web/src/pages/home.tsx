@@ -46,51 +46,98 @@ const Navbar = () => (
   </header>
 );
 
+const TICKER_ITEMS = [
+  "Workflow Diagnostic & Mapping",
+  "Agent Architecture & Design",
+  "MCP & Integration Engineering",
+  "Prompt Engineering & Governance",
+  "Multi-Agent Orchestration",
+  "Capability Rollout & Enablement",
+  "Tool & Vendor Evaluation",
+  "Foundation Model Evaluation",
+  "AI Application Assessment",
+];
+
 const Hero = () => {
   const { scrollYProgress } = useScroll();
-  const y = useTransform(scrollYProgress, [0, 1], [0, 200]);
+  const capybaraY = useTransform(scrollYProgress, [0, 1], [0, 80]);
 
   return (
-    <section className="relative min-h-[100dvh] flex items-center pt-20 overflow-hidden">
-      <motion.div style={{ y }} className="absolute inset-0 z-0 opacity-40">
-        <img src={heroTexture} alt="" className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
-      </motion.div>
+    <section className="relative min-h-[100dvh] flex flex-col justify-between pt-20 overflow-hidden">
+      {/* Subtle grid overlay */}
+      <div className="absolute inset-0 z-0" style={{
+        backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
+        backgroundSize: "80px 80px"
+      }} />
+      <div className="absolute inset-0 z-0 bg-gradient-to-br from-background via-background to-background/80" />
 
-      <div className="container relative z-10 mx-auto px-6">
-        <div className="max-w-4xl">
-          <FadeIn>
-            <div className="flex items-center gap-3 mb-8">
-              <div className="h-[1px] w-12 bg-primary"></div>
-              <span className="section-label">AI-First Strategic Consulting</span>
-            </div>
-          </FadeIn>
+      {/* Main content */}
+      <div className="container relative z-10 mx-auto px-6 flex-1 flex items-center">
+        <div className="grid md:grid-cols-2 gap-8 items-center w-full py-12">
+          {/* Left: text */}
+          <div>
+            <FadeIn>
+              <div className="flex items-center gap-3 mb-10">
+                <div className="h-[1px] w-12 bg-white/40"></div>
+                <span className="section-label">AI-First Strategic Consulting</span>
+              </div>
+            </FadeIn>
 
-          <FadeIn delay={0.1}>
-            <h1 className="text-6xl md:text-8xl font-serif leading-[1.05] mb-8 text-gradient">
-              Enterprise intelligence,<br />
-              redesigned from first principles.
-            </h1>
-          </FadeIn>
+            <FadeIn delay={0.1}>
+              <h1 className="text-5xl md:text-[4.5rem] font-serif leading-[1.05] mb-8 text-gradient">
+                We rebuild how your organization works.
+              </h1>
+            </FadeIn>
 
-          <FadeIn delay={0.2}>
-            <p className="text-xl md:text-2xl text-muted-foreground leading-relaxed max-w-2xl mb-12 font-sans font-light">
-              We audit your workflows, architect multi-agent systems, and deploy AI across your organization — delivering up to 90% time savings with measurably higher quality output.
-            </p>
-          </FadeIn>
+            <FadeIn delay={0.2}>
+              <p className="text-lg text-muted-foreground leading-relaxed max-w-lg mb-12 font-sans font-light">
+                Deerpark maps your operations, architects multi-agent systems, and deploys agentic infrastructure — fundamentally restructuring where human effort is actually required.
+              </p>
+            </FadeIn>
 
-          <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4">
-            <a href="mailto:contact@deerpark.io?subject=Confidential+Briefing+Request">
-              <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
-                Schedule Confidential Briefing <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </a>
-            <a href="#methodology">
-              <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-white/20 hover:bg-white/5">
-                Explore Methodology
-              </Button>
-            </a>
-          </FadeIn>
+            <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4">
+              <a href="mailto:contact@deerpark.io?subject=Confidential+Briefing+Request">
+                <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
+                  Schedule Confidential Briefing <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </a>
+              <a href="#methodology">
+                <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-white/20 hover:bg-white/5">
+                  Explore Methodology
+                </Button>
+              </a>
+            </FadeIn>
+          </div>
+
+          {/* Right: capybara */}
+          <motion.div
+            style={{ y: capybaraY }}
+            className="hidden md:flex items-center justify-center relative"
+          >
+            <FadeIn delay={0.15} className="relative">
+              {/* warm ambient glow */}
+              <div className="absolute inset-0 -m-20 rounded-full bg-amber-800/25 blur-3xl pointer-events-none" />
+              <div className="absolute inset-0 -m-8 rounded-full bg-amber-900/15 blur-xl pointer-events-none" />
+              <img
+                src={capybara}
+                alt="Deerpark"
+                className="relative z-10 w-[440px] h-[440px] object-contain select-none"
+                draggable={false}
+              />
+            </FadeIn>
+          </motion.div>
+        </div>
+      </div>
+
+      {/* Bottom ticker */}
+      <div className="relative z-10 border-t border-white/8 py-4 overflow-hidden bg-background/60 backdrop-blur-sm">
+        <div className="flex animate-marquee">
+          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
+            <span key={i} className="section-label flex items-center gap-3 shrink-0 px-8">
+              <span className="w-1.5 h-1.5 rounded-full bg-white/30 inline-block" />
+              {item}
+            </span>
+          ))}
         </div>
       </div>
     </section>
