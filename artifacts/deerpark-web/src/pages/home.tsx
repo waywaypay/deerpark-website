@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowRight, ChevronRight, BarChart3, Clock, Zap, Shield, FileText, MessagesSquare } from "lucide-react";
+import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch } from "lucide-react";
 import heroTexture from "../assets/hero-texture.png";
 import dataVis from "../assets/data-vis.png";
 import officeImg from "../assets/office.png";
@@ -50,29 +50,29 @@ const Hero = () => {
         <img src={heroTexture} alt="" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-background via-background/80 to-transparent" />
       </motion.div>
-      
+
       <div className="container relative z-10 mx-auto px-6">
         <div className="max-w-4xl">
           <FadeIn>
             <div className="flex items-center gap-3 mb-8">
               <div className="h-[1px] w-12 bg-primary"></div>
-              <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">AI-First IR Consulting</span>
+              <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">AI-First Strategic Consulting</span>
             </div>
           </FadeIn>
-          
+
           <FadeIn delay={0.1}>
             <h1 className="text-6xl md:text-8xl font-serif leading-[1.05] mb-8 text-gradient">
-              Precision advisory.<br />
-              Accelerated by intelligence.
+              Enterprise intelligence,<br />
+              redesigned from first principles.
             </h1>
           </FadeIn>
-          
+
           <FadeIn delay={0.2}>
             <p className="text-xl md:text-2xl text-muted-foreground leading-relaxed max-w-2xl mb-12 font-sans font-light">
-              We redesign investor relations workflows using advanced AI models, delivering up to 90% time savings and uncompromising analytical rigor for the modern CFO.
+              We audit your workflows, architect multi-agent systems, and deploy AI across your organization — delivering up to 90% time savings with measurably higher quality output.
             </p>
           </FadeIn>
-          
+
           <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4">
             <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
               Schedule Confidential Briefing <ArrowRight className="ml-2 w-4 h-4" />
@@ -93,12 +93,12 @@ const Problem = () => (
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
-            <h2 className="text-4xl md:text-5xl font-serif mb-8">The manual synthesis era is over.</h2>
+            <h2 className="text-4xl md:text-5xl font-serif mb-8">Most organizations are running 2019 workflows on 2025 infrastructure.</h2>
             <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
-              Investor relations teams spend countless hours parsing transcripts, summarizing market sentiment, and drafting disclosures. This manual extraction of insight is prone to fatigue, bias, and delay.
+              Teams have adopted AI tools piecemeal — a chatbot here, a summarizer there. But the underlying workflow logic hasn't changed. The result is AI that assists, not AI that transforms.
             </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
-              Deerpark replaces brute-force analysis with highly tuned AI agents. We build bespoke systems that instantly process qualitative data, allowing your team to focus entirely on strategic narrative and relationship management.
+              Deerpark takes a different approach. We map your entire operational stack, identify where agents, prompts, and Model Context Protocols can displace manual effort, and architect purpose-built systems that fundamentally restructure how work gets done.
             </p>
           </FadeIn>
         </div>
@@ -107,7 +107,7 @@ const Problem = () => (
           <div className="relative z-10 bg-black/80 backdrop-blur border border-white/10 p-6">
             <div className="font-mono text-sm text-muted-foreground mb-2">SYSTEM METRIC</div>
             <div className="text-3xl font-serif mb-1">90% Reduction</div>
-            <div className="text-sm font-sans text-muted-foreground">in manual synthesis time</div>
+            <div className="text-sm font-sans text-muted-foreground">in manual processing time, across client engagements</div>
           </div>
         </div>
       </div>
@@ -118,34 +118,34 @@ const Problem = () => (
 const Services = () => {
   const services = [
     {
-      title: "Earnings Call Preparation",
-      desc: "Automated aggregation of peer transcripts, analyst notes, and internal data to generate comprehensive Q&A prep documents and scripts.",
-      icon: MessagesSquare
+      title: "Workflow Diagnostic & Mapping",
+      desc: "We document every workflow, decision point, and human handoff across your organization — quantifying where time and capital are being lost to tasks that agents can own end-to-end.",
+      icon: ScanSearch
     },
     {
-      title: "Roadshow Materials",
-      desc: "Dynamic generation of localized investor profiles, historical interaction logs, and tailored pitch variations for institutional meetings.",
-      icon: Zap
+      title: "Agent Architecture & Design",
+      desc: "We design purpose-built AI agents with clearly defined skills, memory structures, and tool access — built to operate autonomously within your existing systems and data environment.",
+      icon: Network
     },
     {
-      title: "Disclosure Management",
-      desc: "AI-assisted drafting and cross-referencing of quarterly filings against prior statements and peer disclosures to ensure narrative consistency.",
-      icon: FileText
+      title: "MCP & Integration Engineering",
+      desc: "We implement Model Context Protocols (MCPs) that give your agents secure, structured access to internal databases, APIs, and enterprise software — safely and at scale.",
+      icon: Terminal
     },
     {
-      title: "Shareholder Communications",
-      desc: "Rapid drafting of precise, tone-matched correspondence for institutional and retail inquiries based on approved corporate messaging.",
-      icon: Shield
+      title: "Prompt Engineering & Governance",
+      desc: "We build and maintain your organization's prompt library — system prompts, chain-of-thought templates, few-shot examples, and evaluation frameworks — as a governed internal asset.",
+      icon: GitBranch
     },
     {
-      title: "Financial Narrative Development",
-      desc: "Algorithmic analysis of market sentiment and media reception to refine positioning and address emerging investor concerns.",
-      icon: BarChart3
+      title: "Multi-Agent Orchestration",
+      desc: "For complex workflows, we design orchestrator-agent hierarchies where specialized sub-agents handle discrete tasks and a coordinating layer manages sequencing, routing, and error recovery.",
+      icon: Layers
     },
     {
-      title: "Continuous Workflow Automation",
-      desc: "End-to-end redesign of your IR tech stack, integrating bespoke LLM pipelines securely within your existing corporate infrastructure.",
-      icon: Clock
+      title: "Capability Rollout & Enablement",
+      desc: "We manage phased deployment of AI capabilities across business units, training teams to operate as orchestrators of agentic systems rather than manual executors of repetitive tasks.",
+      icon: Cpu
     }
   ];
 
@@ -155,9 +155,9 @@ const Services = () => {
         <FadeIn>
           <div className="flex items-center gap-3 mb-16">
             <div className="h-[1px] w-12 bg-primary"></div>
-            <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Focus Areas</span>
+            <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Practice Areas</span>
           </div>
-          <h2 className="text-4xl md:text-6xl font-serif mb-20 max-w-3xl">Comprehensive redesign of the IR function.</h2>
+          <h2 className="text-4xl md:text-6xl font-serif mb-20 max-w-3xl">From first audit to full agentic deployment.</h2>
         </FadeIn>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">
@@ -180,6 +180,45 @@ const Services = () => {
   );
 };
 
+const TechStack = () => {
+  const concepts = [
+    { label: "Agents", desc: "Autonomous AI systems with defined skills and tool access, capable of completing multi-step tasks without human intervention." },
+    { label: "Skills", desc: "Discrete capabilities assigned to agents — from web search and document retrieval to code execution and API calls — composable and reusable across workflows." },
+    { label: "MCPs", desc: "Model Context Protocols provide agents with structured, permission-controlled access to your internal data, software, and APIs in real time." },
+    { label: "Prompts", desc: "The governed interface between your organization's knowledge and model behavior — designed, versioned, and maintained as a strategic internal asset." },
+    { label: "Orchestration", desc: "The coordination layer that sequences agents, routes tasks, handles failures, and synthesizes outputs into coherent results across complex workflows." },
+    { label: "Evals", desc: "Continuous measurement of agent output quality, latency, and accuracy — the feedback loop that keeps your AI systems aligned with business objectives over time." },
+  ];
+
+  return (
+    <section id="impact" className="py-32 border-t border-white/5 bg-card">
+      <div className="container mx-auto px-6">
+        <FadeIn>
+          <div className="flex items-center gap-3 mb-16">
+            <div className="h-[1px] w-12 bg-primary"></div>
+            <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">The Stack We Build With</span>
+          </div>
+          <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">The vocabulary of enterprise AI. Spoken fluently.</h2>
+          <p className="text-lg text-muted-foreground font-light max-w-2xl mb-20">
+            We don't translate AI for your business — we build the AI that becomes your business advantage. Every engagement is grounded in the primitives that make enterprise AI systems actually work.
+          </p>
+        </FadeIn>
+
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-px bg-white/5">
+          {concepts.map((c, i) => (
+            <FadeIn key={i} delay={i * 0.07}>
+              <div className="bg-background p-8 hover:bg-white/[0.03] transition-colors">
+                <div className="font-mono text-xs uppercase tracking-[0.2em] text-primary mb-4">{c.label}</div>
+                <p className="text-muted-foreground font-light text-sm leading-relaxed">{c.desc}</p>
+              </div>
+            </FadeIn>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const Approach = () => (
   <section id="methodology" className="py-32 bg-foreground text-background">
     <div className="container mx-auto px-6">
@@ -188,15 +227,27 @@ const Approach = () => (
           <h2 className="text-4xl md:text-6xl font-serif max-w-2xl">The Deerpark Methodology.</h2>
         </FadeIn>
         <FadeIn delay={0.2} className="max-w-md mt-8 md:mt-0 text-background/70 font-light">
-          We don't sell software. We sell operational leverage. Our engagements are consultative, deeply integrated, and intensely focused on measurable outcomes.
+          We don't sell software licenses or pre-packaged AI tools. We sell operational leverage — bespoke systems built for your specific workflows, data, and organizational constraints.
         </FadeIn>
       </div>
 
       <div className="grid md:grid-cols-3 gap-8">
         {[
-          { step: "01", title: "Diagnostic Audit", desc: "We map your current IR workflows, identifying latency, redundancy, and areas where human capital is misallocated to rote synthesis." },
-          { step: "02", title: "System Architecture", desc: "We design custom AI agents and prompt chains tailored to your company's distinct voice, data structures, and regulatory constraints." },
-          { step: "03", title: "Deployment & Training", desc: "We embed the solution into your environment, training your team to operate as editors of AI output rather than manual drafters." }
+          {
+            step: "01",
+            title: "Workflow Diagnostic",
+            desc: "We conduct a comprehensive audit of your existing processes — documenting every workflow, tool, decision gate, and human touchpoint. We quantify time cost, error rate, and strategic misallocation across your operations."
+          },
+          {
+            step: "02",
+            title: "System Architecture",
+            desc: "We design a tailored AI system: agent roles and skills, prompt libraries, MCP integrations, orchestration logic, and evaluation criteria. Every element is scoped to your environment, data governance requirements, and measurable targets."
+          },
+          {
+            step: "03",
+            title: "Deployment & Enablement",
+            desc: "We build, test, and deploy the system within your infrastructure. We train your teams to operate as orchestrators — setting goals, reviewing outputs, and continuously improving the agents that execute on their behalf."
+          }
         ].map((s, i) => (
           <FadeIn key={i} delay={i * 0.15}>
             <div className="border-t border-background/20 pt-8">
@@ -218,20 +269,20 @@ const Trust = () => (
       <div className="absolute inset-0 bg-background/90 mix-blend-multiply" />
       <div className="absolute inset-0 bg-gradient-to-b from-background via-transparent to-background" />
     </div>
-    
+
     <div className="container relative z-10 mx-auto px-6 text-center max-w-4xl">
       <FadeIn>
         <div className="inline-block p-4 border border-white/10 bg-black/50 backdrop-blur-md mb-8">
-          <Shield className="w-8 h-8" />
+          <Network className="w-8 h-8" />
         </div>
         <h2 className="text-4xl md:text-5xl font-serif mb-8 leading-tight">
-          Where elite consulting meets<br />artificial intelligence.
+          Where strategic consulting meets<br />agentic AI.
         </h2>
         <p className="text-xl text-muted-foreground font-light mb-12">
-          Founded by veterans of top-tier financial institutions and leading technology firms, Deerpark provides the discretion and rigor demanded by the Fortune 500.
+          Founded by veterans of enterprise software, management consulting, and AI research, Deerpark operates at the intersection of deep domain knowledge and frontier model capability. We serve organizations that can't afford to get AI wrong.
         </p>
         <Button size="lg" className="rounded-none h-14 px-10 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
-          Request a Case Study
+          Request a Confidential Assessment
         </Button>
       </FadeIn>
     </div>
@@ -247,16 +298,16 @@ const Footer = () => (
             deerpark<span className="text-muted-foreground">.io</span>
           </div>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
-            AI-first investor relations consulting. We transform the IR function from a cost center to a strategic advantage through applied intelligence.
+            AI-first strategic consulting. We help organizations redesign how work gets done — deploying agents, skills, and agentic infrastructure that compound over time.
           </p>
         </div>
         <div>
           <h4 className="font-mono text-xs uppercase tracking-widest mb-6 text-foreground">Practice</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
-            <li><a href="#" className="hover:text-white transition-colors">Earnings Prep</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Disclosure Automation</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Market Intelligence</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">IR Tech Stack</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Workflow Diagnostics</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Agent Architecture</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">MCP Engineering</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Prompt Governance</a></li>
           </ul>
         </div>
         <div>
@@ -288,6 +339,7 @@ export default function Home() {
         <Hero />
         <Problem />
         <Services />
+        <TechStack />
         <Approach />
         <Trust />
       </main>
