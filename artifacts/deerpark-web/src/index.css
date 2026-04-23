@@ -52,33 +52,33 @@
 }
 
 :root {
-  /* Enforcing dark theme for the entire app */
-  --background: 240 10% 4%; /* #09090b */
-  --foreground: 0 0% 98%;   /* #fafafa */
+  /* Deep forest green dark theme */
+  --background: 140 25% 5%;   /* #080f0b — near-black with forest green tint */
+  --foreground: 80 15% 96%;   /* warm off-white */
 
-  --border: 240 5% 15%;
-  --input: 240 5% 15%;
-  --ring: 240 5% 25%;
+  --border: 140 20% 13%;
+  --input: 140 20% 13%;
+  --ring: 140 20% 22%;
 
-  --card: 240 6% 6%;
-  --card-foreground: 0 0% 98%;
-  --card-border: 240 5% 15%;
+  --card: 140 22% 7%;          /* #0c1510 — slightly lighter */
+  --card-foreground: 80 15% 96%;
+  --card-border: 140 18% 14%;
 
-  --popover: 240 6% 6%;
-  --popover-foreground: 0 0% 98%;
-  --popover-border: 240 5% 15%;
+  --popover: 140 22% 7%;
+  --popover-foreground: 80 15% 96%;
+  --popover-border: 140 18% 14%;
 
-  --primary: 0 0% 98%;
-  --primary-foreground: 240 10% 4%;
+  --primary: 80 15% 96%;
+  --primary-foreground: 140 25% 5%;
 
-  --secondary: 240 5% 12%;
-  --secondary-foreground: 0 0% 98%;
+  --secondary: 140 18% 11%;
+  --secondary-foreground: 80 15% 96%;
 
-  --muted: 240 5% 12%;
-  --muted-foreground: 240 5% 65%;
+  --muted: 140 18% 11%;
+  --muted-foreground: 140 10% 58%;
 
-  --accent: 240 5% 15%;
-  --accent-foreground: 0 0% 98%;
+  --accent: 140 18% 14%;
+  --accent-foreground: 80 15% 96%;
 
   --destructive: 0 62.8% 30.6%;
   --destructive-foreground: 0 0% 98%;
@@ -134,7 +134,7 @@
 }
 
 .text-gradient {
-  background: linear-gradient(to right, #ffffff, #a1a1aa);
+  background: linear-gradient(to right, #f0f5f0, #8aab8e);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }

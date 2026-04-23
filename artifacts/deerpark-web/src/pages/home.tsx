@@ -24,7 +24,7 @@ const Navbar = () => (
   <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-background/80 backdrop-blur-md">
     <div className="container mx-auto px-6 h-20 flex items-center justify-between">
       <Link href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground">
-        <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain brightness-0 invert" />
+        <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain brightness-150" />
         <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
       </Link>
       <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
@@ -115,13 +115,13 @@ const Hero = () => {
             className="hidden md:flex items-center justify-center relative"
           >
             <FadeIn delay={0.15} className="relative">
-              {/* cool ambient glow */}
-              <div className="absolute inset-0 -m-20 rounded-full bg-white/8 blur-3xl pointer-events-none" />
-              <div className="absolute inset-0 -m-8 rounded-full bg-white/5 blur-xl pointer-events-none" />
+              {/* forest green ambient glow */}
+              <div className="absolute inset-0 -m-20 rounded-full blur-3xl pointer-events-none" style={{background: "radial-gradient(circle, rgba(34,100,50,0.35) 0%, transparent 70%)"}} />
+              <div className="absolute inset-0 -m-8 rounded-full blur-xl pointer-events-none" style={{background: "radial-gradient(circle, rgba(34,100,50,0.2) 0%, transparent 70%)"}} />
               <img
                 src={logo}
                 alt="DeerPark"
-                className="relative z-10 w-[520px] h-[520px] object-contain select-none brightness-0 invert opacity-90"
+                className="relative z-10 w-[520px] h-[520px] object-contain select-none brightness-150"
                 draggable={false}
               />
             </FadeIn>
@@ -369,7 +369,7 @@ const Footer = () => (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
           <a href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground mb-6">
-            <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain brightness-0 invert" />
+            <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain brightness-150" />
             <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
           </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
