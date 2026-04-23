@@ -3,7 +3,6 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch, FlaskConical, Scale, AppWindow } from "lucide-react";
-import heroTexture from "../assets/hero-texture.png";
 import dataVis from "../assets/data-vis.png";
 import officeImg from "../assets/office.png";
 import logo from "../assets/logo-icon.png";
