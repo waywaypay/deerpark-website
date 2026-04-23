@@ -64,68 +64,78 @@ const Hero = () => {
 
   return (
     <section className="relative min-h-[100dvh] flex flex-col justify-between pt-20 overflow-hidden">
-      {/* Subtle grid overlay */}
+      {/* Atmospheric background — light source from right */}
       <div className="absolute inset-0 z-0" style={{
-        backgroundImage: "linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px)",
-        backgroundSize: "80px 80px"
+        background: "radial-gradient(ellipse 70% 80% at 80% 50%, rgba(34,90,48,0.45) 0%, transparent 65%)"
       }} />
-      <div className="absolute inset-0 z-0 bg-gradient-to-br from-background via-background to-background/80" />
+      {/* Fine diagonal lines for texture */}
+      <div className="absolute inset-0 z-0 opacity-[0.06]" style={{
+        backgroundImage: "repeating-linear-gradient(120deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 60px)"
+      }} />
 
-      {/* Main content */}
+      {/* Deer — oversized, anchored to right, partially cropped */}
+      <motion.div
+        style={{ y: deerY }}
+        className="absolute right-[-60px] top-1/2 -translate-y-[48%] z-0 hidden md:block pointer-events-none"
+      >
+        <img
+          src={logo}
+          alt=""
+          className="w-[680px] h-[680px] object-contain select-none brightness-125 opacity-90"
+          draggable={false}
+        />
+      </motion.div>
+
+      {/* Main content — left column only, deer is behind */}
       <div className="container relative z-10 mx-auto px-6 flex-1 flex items-center">
-        <div className="grid md:grid-cols-2 gap-8 items-center w-full pt-20 pb-12">
-          {/* Left: text */}
-          <div>
-            <FadeIn>
-              <div className="flex items-center gap-3 mb-10">
-                <div className="h-[1px] w-12 bg-white/40"></div>
-                <span className="section-label">AI-First Strategic Consulting</span>
-              </div>
-            </FadeIn>
+        <div className="max-w-[52%] md:max-w-[48%] pt-16 pb-12">
+          <FadeIn>
+            <div className="flex items-center gap-3 mb-12">
+              <div className="h-[1px] w-10 bg-foreground/30" />
+              <span className="section-label">AI-First Strategic Consulting</span>
+            </div>
+          </FadeIn>
 
-            <FadeIn delay={0.1}>
-              <h1 className="text-5xl md:text-[4.5rem] font-serif leading-[1.05] mb-8 text-gradient">
-                We rebuild how your organization works.
-              </h1>
-            </FadeIn>
+          <FadeIn delay={0.1}>
+            <h1 className="text-5xl md:text-[4.75rem] font-serif leading-[1.02] mb-8 text-gradient">
+              AI isn't a tool upgrade.<br />
+              <em className="not-italic font-light">It's an operating model.</em>
+            </h1>
+          </FadeIn>
 
-            <FadeIn delay={0.2}>
-              <p className="text-lg text-muted-foreground leading-relaxed max-w-lg mb-12 font-sans font-light">
-                DeerPark maps your operations, architects multi-agent systems, and deploys agentic infrastructure — fundamentally restructuring where human effort is actually required.
-              </p>
-            </FadeIn>
+          <FadeIn delay={0.2}>
+            <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-md mb-10 font-sans font-light">
+              DeerPark partners with organizations to map operations, architect multi-agent systems, and deploy the agentic infrastructure that restructures where human effort is actually required.
+            </p>
+          </FadeIn>
 
-            <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4">
-              <a href="mailto:contact@deerpark.io?subject=Confidential+Briefing+Request">
-                <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
-                  Schedule Confidential Briefing <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </a>
-              <a href="#methodology">
-                <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-white/20 hover:bg-white/5">
-                  Explore Methodology
-                </Button>
-              </a>
-            </FadeIn>
-          </div>
+          <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4 mb-14">
+            <a href="mailto:contact@deerpark.io?subject=Confidential+Briefing+Request">
+              <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-100">
+                Schedule Briefing <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+            </a>
+            <a href="#methodology">
+              <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-white/20 hover:bg-white/5">
+                Our Methodology
+              </Button>
+            </a>
+          </FadeIn>
 
-          {/* Right: deer */}
-          <motion.div
-            style={{ y: deerY }}
-            className="hidden md:flex items-center justify-center relative"
-          >
-            <FadeIn delay={0.15} className="relative">
-              {/* forest green ambient glow */}
-              <div className="absolute inset-0 -m-20 rounded-full blur-3xl pointer-events-none" style={{background: "radial-gradient(circle, rgba(34,100,50,0.35) 0%, transparent 70%)"}} />
-              <div className="absolute inset-0 -m-8 rounded-full blur-xl pointer-events-none" style={{background: "radial-gradient(circle, rgba(34,100,50,0.2) 0%, transparent 70%)"}} />
-              <img
-                src={logo}
-                alt="DeerPark"
-                className="relative z-10 w-[520px] h-[520px] object-contain select-none brightness-150"
-                draggable={false}
-              />
-            </FadeIn>
-          </motion.div>
+          <FadeIn delay={0.4}>
+            <div className="flex gap-10 border-t border-white/10 pt-8">
+              {[
+                { stat: "90%", label: "avg. reduction in manual processing time" },
+                { stat: "6 wks", label: "from audit to first agent in production" },
+                { stat: "100%", label: "of engagements include evals + governance" },
+              ].map(({ stat, label }) => (
+                <div key={stat}>
+                  <div className="text-2xl font-serif text-foreground mb-1">{stat}</div>
+                  <div className="text-xs text-muted-foreground font-sans leading-snug max-w-[100px]">{label}</div>
+                </div>
+              ))}
+            </div>
+          </FadeIn>
         </div>
       </div>
 
