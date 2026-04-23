@@ -6,7 +6,7 @@ import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch, Flas
 import heroTexture from "../assets/hero-texture.png";
 import dataVis from "../assets/data-vis.png";
 import officeImg from "../assets/office.png";
-import logo from "../assets/logo.png";
+import logo from "../assets/logo-cropped.png";
 
 const FadeIn = ({ children, delay = 0, className = "" }: { children: React.ReactNode, delay?: number, className?: string }) => (
   <motion.div
@@ -24,7 +24,7 @@ const Navbar = () => (
   <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-background/80 backdrop-blur-md">
     <div className="container mx-auto px-6 h-20 flex items-center justify-between">
       <Link href="/">
-        <img src={logo} alt="DeerPark.io" className="h-12 object-contain brightness-[4]" />
+        <img src={logo} alt="DeerPark.io" className="h-14 object-contain" />
       </Link>
       <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
         <a href="#services" className="hover:text-foreground transition-colors">Services</a>
@@ -120,7 +120,7 @@ const Hero = () => {
               <img
                 src={logo}
                 alt="DeerPark"
-                className="relative z-10 w-[440px] h-[440px] object-contain select-none brightness-[3] contrast-[0.9]"
+                className="relative z-10 w-[520px] h-[520px] object-contain select-none"
                 draggable={false}
               />
             </FadeIn>
@@ -368,7 +368,7 @@ const Footer = () => (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
           <a href="/" className="inline-block mb-6">
-            <img src={logo} alt="DeerPark.io" className="h-12 object-contain brightness-[4]" />
+            <img src={logo} alt="DeerPark.io" className="h-14 object-contain" />
           </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
             AI-first strategic consulting. We help organizations redesign how work gets done — deploying agents, skills, and agentic infrastructure that compound over time.
