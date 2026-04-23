@@ -24,7 +24,7 @@ const Navbar = () => (
   <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-background/80 backdrop-blur-md">
     <div className="container mx-auto px-6 h-20 flex items-center justify-between">
       <Link href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground">
-        <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain" />
+        <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain brightness-0 invert" />
         <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
       </Link>
       <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
@@ -73,7 +73,7 @@ const Hero = () => {
 
       {/* Main content */}
       <div className="container relative z-10 mx-auto px-6 flex-1 flex items-center">
-        <div className="grid md:grid-cols-2 gap-8 items-center w-full py-12">
+        <div className="grid md:grid-cols-2 gap-8 items-center w-full pt-20 pb-12">
           {/* Left: text */}
           <div>
             <FadeIn>
@@ -121,7 +121,7 @@ const Hero = () => {
               <img
                 src={logo}
                 alt="DeerPark"
-                className="relative z-10 w-[520px] h-[520px] object-contain select-none"
+                className="relative z-10 w-[520px] h-[520px] object-contain select-none brightness-0 invert opacity-90"
                 draggable={false}
               />
             </FadeIn>
@@ -369,7 +369,7 @@ const Footer = () => (
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
           <a href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground mb-6">
-            <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain" />
+            <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain brightness-0 invert" />
             <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
           </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
