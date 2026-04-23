@@ -2,7 +2,7 @@ import React, { FormEvent, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch, FlaskConical, Scale, AppWindow } from "lucide-react";
+import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch, FlaskConical, Scale, AppWindow, Check } from "lucide-react";
 import dataVis from "../assets/data-vis.png";
 import officeImg from "../assets/office.png";
 import logo from "../assets/logo-icon.png";
@@ -64,7 +64,7 @@ const TICKER_ITEMS = [
 
 const Hero = () => {
   const { scrollYProgress } = useScroll();
-  const deerY = useTransform(scrollYProgress, [0, 1], [0, 80]);
+  const panelY = useTransform(scrollYProgress, [0, 1], [0, 40]);
 
   return (
     <section className="relative min-h-[100dvh] flex flex-col justify-between pt-20 overflow-hidden">
@@ -77,22 +77,10 @@ const Hero = () => {
         backgroundImage: "repeating-linear-gradient(120deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 60px)"
       }} />
 
-      {/* Deer — oversized, anchored to right, partially cropped */}
-      <motion.div
-        style={{ y: deerY }}
-        className="absolute right-[-60px] top-1/2 -translate-y-[48%] z-0 hidden md:block pointer-events-none"
-      >
-        <img
-          src={logo}
-          alt=""
-          className="w-[680px] h-[680px] object-contain select-none brightness-125 opacity-90"
-          draggable={false}
-        />
-      </motion.div>
-
-      {/* Main content — left column only, deer is behind */}
+      {/* Main content */}
       <div className="container relative z-10 mx-auto px-6 flex-1 flex items-center">
-        <div className="max-w-[52%] md:max-w-[48%] pt-16 pb-12">
+        <div className="grid lg:grid-cols-2 gap-12 items-center w-full pt-16 pb-12">
+          <div>
           <FadeIn>
             <div className="flex items-center gap-3 mb-12">
               <div className="h-[1px] w-10 bg-foreground/30" />
@@ -102,14 +90,14 @@ const Hero = () => {
 
           <FadeIn delay={0.1}>
             <h1 className="text-5xl md:text-[4.75rem] font-serif leading-[1.02] mb-8 text-gradient">
-              AI isn't a tool upgrade.<br />
-              <em className="not-italic font-light">It's an operating model.</em>
+              Reduce manual workflow load.<br />
+              <em className="not-italic font-light">Deploy agents where it pays.</em>
             </h1>
           </FadeIn>
 
           <FadeIn delay={0.2}>
             <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-md mb-10 font-sans font-light">
-              DeerPark partners with organizations to map operations, architect multi-agent systems, and deploy the agentic infrastructure that restructures where human effort is actually required.
+              We map each workflow, estimate automation lift, then ship production agents with guardrails, testing, and owner handoff in six weeks.
             </p>
           </FadeIn>
 
@@ -128,10 +116,10 @@ const Hero = () => {
 
           <FadeIn delay={0.4}>
             <div className="flex gap-10 border-t border-white/10 pt-8">
-              {[
-                { stat: "90%", label: "avg. reduction in manual processing time" },
-                { stat: "6 wks", label: "from audit to first agent in production" },
-                { stat: "100%", label: "of engagements include evals + governance" },
+                {[
+                { stat: "90%", label: "manual effort removed from repetitive steps" },
+                { stat: "6 wks", label: "audit to first production workflow" },
+                { stat: "3", label: "required controls: evals, logging, approval" },
               ].map(({ stat, label }) => (
                 <div key={stat}>
                   <div className="text-2xl font-serif text-foreground mb-1">{stat}</div>
@@ -139,6 +127,29 @@ const Hero = () => {
                 </div>
               ))}
             </div>
+          </FadeIn>
+          </div>
+
+          <FadeIn delay={0.25}>
+            <motion.div style={{ y: panelY }} className="border border-white/15 bg-black/40 backdrop-blur p-8 lg:p-10">
+              <div className="section-label mb-4">Practice Scope</div>
+              <h2 className="text-3xl md:text-4xl font-serif mb-6">From first audit to full agentic deployment.</h2>
+              <div className="space-y-4 text-sm font-light text-muted-foreground">
+                {[
+                  "Week 1: workflow map, failure points, and priority queue.",
+                  "Week 2-3: agent roles, tool permissions, and prompt contracts.",
+                  "Week 4-6: staging rollout, eval suite, and operator training.",
+                ].map((item) => (
+                  <div key={item} className="flex items-start gap-3">
+                    <Check className="w-4 h-4 mt-0.5 text-primary shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+              <a href="#services" className="inline-flex items-center mt-8 text-xs uppercase tracking-widest text-foreground/80 hover:text-foreground">
+                View detailed scope <ArrowRight className="ml-2 w-3.5 h-3.5" />
+              </a>
+            </motion.div>
           </FadeIn>
         </div>
       </div>
@@ -164,12 +175,12 @@ const Problem = () => (
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
-            <h2 className="text-4xl md:text-5xl font-serif mb-8">Most organizations are running 2019 workflows on 2025 infrastructure.</h2>
+            <h2 className="text-4xl md:text-5xl font-serif mb-8">Most teams buy AI seats but keep the same manual workflow.</h2>
             <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
-              Teams have adopted AI tools piecemeal — a chatbot here, a summarizer there. But the underlying workflow logic hasn't changed. The result is AI that assists, not AI that transforms.
+              Analysts still copy data between systems, managers still approve low-risk tasks, and reporting still depends on one person stitching documents every Friday.
             </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
-              DeerPark takes a different approach. We map your entire operational stack, identify where agents, prompts, and Model Context Protocols can displace manual effort, and architect purpose-built systems that fundamentally restructure how work gets done.
+              We replace these steps with targeted agents tied to your APIs and policies, then hand your team runbooks, fallback rules, and monthly performance baselines.
             </p>
           </FadeIn>
         </div>
@@ -178,7 +189,7 @@ const Problem = () => (
           <div className="relative z-10 bg-black/80 backdrop-blur border border-white/10 p-6">
             <div className="section-label mb-2">Client Benchmark</div>
             <div className="text-3xl font-serif mb-1">90% Reduction</div>
-            <div className="text-sm font-sans text-muted-foreground">in manual processing time, across client engagements</div>
+            <div className="text-sm font-sans text-muted-foreground">in manual processing time on invoice, intake, and reporting flows</div>
           </div>
         </div>
       </div>
@@ -190,47 +201,47 @@ const Services = () => {
   const services = [
     {
       title: "Workflow Diagnostic & Mapping",
-      desc: "We document every workflow, decision point, and human handoff across your organization — quantifying where time and capital are being lost to tasks that agents can own end-to-end.",
+      desc: "We capture each step, owner, and system touchpoint, then rank tasks by automation value, complexity, and risk so implementation starts where payback is fastest.",
       icon: ScanSearch
     },
     {
       title: "Agent Architecture & Design",
-      desc: "We design purpose-built AI agents with clearly defined skills, memory structures, and tool access — built to operate autonomously within your existing systems and data environment.",
+      desc: "We define agent roles, allowed actions, escalation paths, and context windows for each workflow so every task has clear boundaries and ownership.",
       icon: Network
     },
     {
       title: "MCP & Integration Engineering",
-      desc: "We implement Model Context Protocols (MCPs) that give your agents secure, structured access to internal databases, APIs, and enterprise software — safely and at scale.",
+      desc: "We connect agents to your systems through MCP servers and direct APIs with role-based access, request logs, and test fixtures before production release.",
       icon: Terminal
     },
     {
       title: "Prompt Engineering & Governance",
-      desc: "We build and maintain your organization's prompt library — system prompts, chain-of-thought templates, few-shot examples, and evaluation frameworks — as a governed internal asset.",
+      desc: "We version system prompts and task templates, attach acceptance tests to each change, and route high-risk outputs to human approval.",
       icon: GitBranch
     },
     {
       title: "Multi-Agent Orchestration",
-      desc: "For complex workflows, we design orchestrator-agent hierarchies where specialized sub-agents handle discrete tasks and a coordinating layer manages sequencing, routing, and error recovery.",
+      desc: "For multi-step work, we define orchestrator logic for routing, retry rules, timeout behavior, and fallback actions when a step fails.",
       icon: Layers
     },
     {
       title: "Capability Rollout & Enablement",
-      desc: "We manage phased deployment of AI capabilities across business units, training teams to operate as orchestrators of agentic systems rather than manual executors of repetitive tasks.",
+      desc: "We launch in phases with operator playbooks, change tracking, and weekly KPI reviews so teams can manage agent workflows without vendor dependence.",
       icon: Cpu
     },
     {
       title: "Tool & Vendor Evaluation",
-      desc: "We assess the crowded AI tooling landscape on your behalf — evaluating orchestration frameworks, retrieval systems, vector stores, and SaaS AI products against your specific technical requirements and build-versus-buy calculus.",
+      desc: "We compare platforms using your latency, security, and cost targets and deliver a build-vs-buy decision memo with migration effort estimates.",
       icon: Scale
     },
     {
       title: "Foundation Model Evaluation",
-      desc: "We run structured benchmarks across frontier and open-weight models for your specific tasks — measuring accuracy, latency, cost, and context handling to identify the right model for each workload in your stack.",
+      desc: "We benchmark candidate models on your real tasks for accuracy, latency, and cost, then assign each workflow a default model and fallback model.",
       icon: FlaskConical
     },
     {
       title: "AI Application Assessment",
-      desc: "We audit deployed AI applications for output quality, failure modes, prompt injection risk, and alignment with business intent — providing a rigorous report and a remediation roadmap before systems reach production at scale.",
+      desc: "We audit existing AI apps for failure patterns, prompt injection exposure, and policy gaps, then prioritize fixes by operational impact.",
       icon: AppWindow
     }
   ];
@@ -243,7 +254,7 @@ const Services = () => {
             <div className="h-[1px] w-12 bg-primary"></div>
             <span className="section-label">Practice Areas</span>
           </div>
-          <h2 className="text-4xl md:text-6xl font-serif mb-20 max-w-3xl">From first audit to full agentic deployment.</h2>
+          <h2 className="text-4xl md:text-6xl font-serif mb-20 max-w-3xl">Delivery scope by workflow stage.</h2>
         </FadeIn>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-16">
@@ -284,9 +295,9 @@ const TechStack = () => {
             <div className="h-[1px] w-12 bg-primary"></div>
             <span className="section-label">The Stack We Build With</span>
           </div>
-          <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">The vocabulary of enterprise AI. Spoken fluently.</h2>
+          <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">The technical stack behind reliable agent workflows.</h2>
           <p className="text-lg text-muted-foreground font-light max-w-2xl mb-20">
-            We don't translate AI for your business — we build the AI that becomes your business advantage. Every engagement is grounded in the primitives that make enterprise AI systems actually work.
+            Each implementation uses the same core components: scoped agent roles, controlled data access, orchestration rules, and measurable quality checks.
           </p>
         </FadeIn>
 
@@ -313,7 +324,7 @@ const Approach = () => (
           <h2 className="text-4xl md:text-6xl font-serif max-w-2xl">The DeerPark Methodology.</h2>
         </FadeIn>
         <FadeIn delay={0.2} className="max-w-md mt-8 md:mt-0 text-background/70 font-light">
-          We don't sell software licenses or pre-packaged AI tools. We sell operational leverage — bespoke systems built for your specific workflows, data, and organizational constraints.
+          We build custom workflow systems for your environment and hand your team the operating model to run them after launch.
         </FadeIn>
       </div>
 
@@ -322,17 +333,17 @@ const Approach = () => (
           {
             step: "01",
             title: "Workflow Diagnostic",
-            desc: "We conduct a comprehensive audit of your existing processes — documenting every workflow, tool, decision gate, and human touchpoint. We quantify time cost, error rate, and strategic misallocation across your operations."
+            desc: "We map your current process end-to-end, measure cycle time and error rate, and select the first workflow where automation reduces cost quickly."
           },
           {
             step: "02",
             title: "System Architecture",
-            desc: "We design a tailored AI system: agent roles and skills, prompt libraries, MCP integrations, orchestration logic, and evaluation criteria. Every element is scoped to your environment, data governance requirements, and measurable targets."
+            desc: "We define agent skills, tool permissions, orchestration logic, and eval thresholds based on your security and compliance requirements."
           },
           {
             step: "03",
             title: "Deployment & Enablement",
-            desc: "We build, test, and deploy the system within your infrastructure. We train your teams to operate as orchestrators — setting goals, reviewing outputs, and continuously improving the agents that execute on their behalf."
+            desc: "We deploy to your stack, run acceptance tests, train workflow owners, and set a review cadence for quality, latency, and escalation metrics."
           }
         ].map((s, i) => (
           <FadeIn key={i} delay={i * 0.15}>
@@ -365,7 +376,7 @@ const Trust = () => (
           Where strategic consulting meets<br />agentic AI.
         </h2>
         <p className="text-xl text-muted-foreground font-light mb-12">
-          Founded by veterans of enterprise software, management consulting, and AI research, DeerPark operates at the intersection of deep domain knowledge and frontier model capability. We serve organizations that can't afford to get AI wrong.
+          Our team has delivered enterprise software, operations programs, and production AI systems. We focus on teams with high process volume and low tolerance for output errors.
         </p>
         <a href="mailto:contact@deerpark.io?subject=Assessment+Request">
           <Button size="lg" className="rounded-none h-14 px-10 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-200">
@@ -411,12 +422,12 @@ const LeadCapture = () => {
               Get a free AI Workflow Scorecard.
             </h2>
             <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6 max-w-xl">
-              Share your current process constraints and we'll return a concise, executive-ready scorecard with the top automation opportunities, risk flags, and fastest path to deployment.
+              Share your workflow constraints and we will send a scorecard with estimated savings, rollout risk, and a recommended first deployment sequence.
             </p>
             <div className="space-y-3 text-sm text-muted-foreground font-light">
-              <p>• Delivery target: within 2 business days.</p>
-              <p>• Includes estimated effort and priority matrix.</p>
-              <p>• No obligation and no software purchase required.</p>
+              <p>• Delivery target: 2 business days.</p>
+              <p>• Includes effort estimate and priority ranking.</p>
+              <p>• No software purchase required.</p>
             </div>
           </FadeIn>
 
@@ -464,7 +475,7 @@ const Footer = () => (
             <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
           </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
-            AI-first strategic consulting. We help organizations redesign how work gets done — deploying agents, skills, and agentic infrastructure that compound over time.
+            Strategic AI implementation for high-volume workflows. We design, deploy, and operationalize agents tied to measurable business outcomes.
           </p>
         </div>
         <div>
