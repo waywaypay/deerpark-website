@@ -6,7 +6,7 @@ import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch, Flas
 import heroTexture from "../assets/hero-texture.png";
 import dataVis from "../assets/data-vis.png";
 import officeImg from "../assets/office.png";
-import deer from "../assets/deer.png";
+import logo from "../assets/logo.png";
 
 const FadeIn = ({ children, delay = 0, className = "" }: { children: React.ReactNode, delay?: number, className?: string }) => (
   <motion.div
@@ -23,9 +23,8 @@ const FadeIn = ({ children, delay = 0, className = "" }: { children: React.React
 const Navbar = () => (
   <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-background/80 backdrop-blur-md">
     <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-      <Link href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground">
-        <img src={deer} alt="DeerPark mascot" className="h-12 w-12 object-contain" />
-        <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
+      <Link href="/">
+        <img src={logo} alt="DeerPark.io" className="h-12 object-contain brightness-[4]" />
       </Link>
       <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
         <a href="#services" className="hover:text-foreground transition-colors">Services</a>
@@ -119,9 +118,9 @@ const Hero = () => {
               <div className="absolute inset-0 -m-20 rounded-full bg-white/8 blur-3xl pointer-events-none" />
               <div className="absolute inset-0 -m-8 rounded-full bg-white/5 blur-xl pointer-events-none" />
               <img
-                src={deer}
+                src={logo}
                 alt="DeerPark"
-                className="relative z-10 w-[440px] h-[440px] object-contain select-none"
+                className="relative z-10 w-[440px] h-[440px] object-contain select-none brightness-[3] contrast-[0.9]"
                 draggable={false}
               />
             </FadeIn>
@@ -368,9 +367,8 @@ const Footer = () => (
     <div className="container mx-auto px-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
-          <a href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground mb-6">
-            <img src={deer} alt="DeerPark mascot" className="h-12 w-12 object-contain" />
-            <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
+          <a href="/" className="inline-block mb-6">
+            <img src={logo} alt="DeerPark.io" className="h-12 object-contain brightness-[4]" />
           </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
             AI-first strategic consulting. We help organizations redesign how work gets done — deploying agents, skills, and agentic infrastructure that compound over time.
