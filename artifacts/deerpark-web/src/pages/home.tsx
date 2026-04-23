@@ -6,7 +6,7 @@ import { ArrowRight, Network, Cpu, GitBranch, Layers, Terminal, ScanSearch, Flas
 import heroTexture from "../assets/hero-texture.png";
 import dataVis from "../assets/data-vis.png";
 import officeImg from "../assets/office.png";
-import logo from "../assets/logo-cropped.png";
+import logo from "../assets/logo-icon.png";
 
 const FadeIn = ({ children, delay = 0, className = "" }: { children: React.ReactNode, delay?: number, className?: string }) => (
   <motion.div
@@ -23,8 +23,9 @@ const FadeIn = ({ children, delay = 0, className = "" }: { children: React.React
 const Navbar = () => (
   <header className="fixed top-0 w-full z-50 border-b border-white/5 bg-background/80 backdrop-blur-md">
     <div className="container mx-auto px-6 h-20 flex items-center justify-between">
-      <Link href="/">
-        <img src={logo} alt="DeerPark.io" className="h-14 object-contain" />
+      <Link href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground">
+        <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain" />
+        <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
       </Link>
       <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
         <a href="#services" className="hover:text-foreground transition-colors">Services</a>
@@ -367,8 +368,9 @@ const Footer = () => (
     <div className="container mx-auto px-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
-          <a href="/" className="inline-block mb-6">
-            <img src={logo} alt="DeerPark.io" className="h-14 object-contain" />
+          <a href="/" className="flex items-center gap-3 font-wordmark text-[1.35rem] font-medium tracking-[0.06em] text-foreground mb-6">
+            <img src={logo} alt="DeerPark icon" className="h-10 w-10 object-contain" />
+            <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
           </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
             AI-first strategic consulting. We help organizations redesign how work gets done — deploying agents, skills, and agentic infrastructure that compound over time.
