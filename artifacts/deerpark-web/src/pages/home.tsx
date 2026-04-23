@@ -1,4 +1,4 @@
-import React from "react";
+import React, { FormEvent, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -38,6 +38,11 @@ const Navbar = () => (
         <a href="mailto:contact@deerpark.io?subject=Briefing+Request">
           <Button className="font-sans text-xs uppercase tracking-widest rounded-none">
             Schedule Briefing
+          </Button>
+        </a>
+        <a href="#assessment">
+          <Button className="font-sans text-xs uppercase tracking-widest rounded-none bg-white text-black hover:bg-gray-100">
+            Free Scorecard
           </Button>
         </a>
       </nav>
@@ -109,9 +114,9 @@ const Hero = () => {
           </FadeIn>
 
           <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4 mb-14">
-            <a href="mailto:contact@deerpark.io?subject=Confidential+Briefing+Request">
+            <a href="#assessment">
               <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-100">
-                Schedule Briefing <ArrowRight className="ml-2 w-4 h-4" />
+                Get Free Scorecard <ArrowRight className="ml-2 w-4 h-4" />
               </Button>
             </a>
             <a href="#methodology">
@@ -372,6 +377,83 @@ const Trust = () => (
   </section>
 );
 
+const LeadCapture = () => {
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get("name") || "").trim();
+    const email = String(formData.get("email") || "").trim();
+    const company = String(formData.get("company") || "").trim();
+    const challenge = String(formData.get("challenge") || "").trim();
+
+    const subject = encodeURIComponent("AI Workflow Scorecard Request");
+    const body = encodeURIComponent(
+      `Name: ${name}\nEmail: ${email}\nCompany: ${company}\nBiggest workflow challenge: ${challenge}`,
+    );
+
+    window.location.href = `mailto:contact@deerpark.io?subject=${subject}&body=${body}`;
+    setSubmitted(true);
+    event.currentTarget.reset();
+  };
+
+  return (
+    <section id="assessment" className="py-32 border-t border-white/10 bg-card">
+      <div className="container mx-auto px-6">
+        <div className="grid lg:grid-cols-2 gap-12 items-start">
+          <FadeIn>
+            <div className="flex items-center gap-3 mb-8">
+              <div className="h-[1px] w-12 bg-primary"></div>
+              <span className="section-label">Lead Capture</span>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-serif mb-6">
+              Get a free AI Workflow Scorecard.
+            </h2>
+            <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6 max-w-xl">
+              Share your current process constraints and we'll return a concise, executive-ready scorecard with the top automation opportunities, risk flags, and fastest path to deployment.
+            </p>
+            <div className="space-y-3 text-sm text-muted-foreground font-light">
+              <p>• Delivery target: within 2 business days.</p>
+              <p>• Includes estimated effort and priority matrix.</p>
+              <p>• No obligation and no software purchase required.</p>
+            </div>
+          </FadeIn>
+
+          <FadeIn delay={0.1}>
+            <form onSubmit={handleSubmit} className="border border-white/10 bg-background p-8 space-y-5">
+              <div>
+                <label htmlFor="name" className="section-label block mb-2">Name</label>
+                <input id="name" name="name" required className="w-full h-12 bg-card border border-white/10 px-4 text-sm outline-none focus:border-primary/80" />
+              </div>
+              <div>
+                <label htmlFor="email" className="section-label block mb-2">Work Email</label>
+                <input id="email" name="email" type="email" required className="w-full h-12 bg-card border border-white/10 px-4 text-sm outline-none focus:border-primary/80" />
+              </div>
+              <div>
+                <label htmlFor="company" className="section-label block mb-2">Company</label>
+                <input id="company" name="company" required className="w-full h-12 bg-card border border-white/10 px-4 text-sm outline-none focus:border-primary/80" />
+              </div>
+              <div>
+                <label htmlFor="challenge" className="section-label block mb-2">Biggest Workflow Challenge</label>
+                <textarea id="challenge" name="challenge" rows={4} required className="w-full bg-card border border-white/10 px-4 py-3 text-sm outline-none focus:border-primary/80" />
+              </div>
+              <Button type="submit" size="lg" className="w-full rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-white text-black hover:bg-gray-100">
+                Send My Scorecard Request <ArrowRight className="ml-2 w-4 h-4" />
+              </Button>
+              {submitted && (
+                <p className="text-xs text-muted-foreground">
+                  Thank you — your default email app should open to send the request.
+                </p>
+              )}
+            </form>
+          </FadeIn>
+        </div>
+      </div>
+    </section>
+  );
+};
+
 const Footer = () => (
   <footer className="border-t border-white/10 bg-background pt-20 pb-10">
     <div className="container mx-auto px-6">
@@ -400,6 +482,7 @@ const Footer = () => (
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
             <li><a href="#about" className="hover:text-white transition-colors">About Us</a></li>
             <li><a href="#methodology" className="hover:text-white transition-colors">Methodology</a></li>
+            <li><a href="#assessment" className="hover:text-white transition-colors">Free Scorecard</a></li>
             <li><a href="mailto:contact@deerpark.io" className="hover:text-white transition-colors">Contact</a></li>
             <li><a href="mailto:contact@deerpark.io?subject=Client+Portal+Access" className="hover:text-white transition-colors">Client Portal</a></li>
           </ul>
@@ -427,7 +510,14 @@ export default function Home() {
         <TechStack />
         <Approach />
         <Trust />
+        <LeadCapture />
       </main>
+      <a
+        href="#assessment"
+        className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-white text-black px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
+      >
+        Get Free Scorecard
+      </a>
       <Footer />
     </div>
   );
