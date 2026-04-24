@@ -1,0 +1,20 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "DE3qA6sYW51M5PSIUtMi-"
+uri = "file://artifacts/deerpark-web/src/assets/hero-texture.png"
+type = "image"
+title = "Dark abstract geometric texture"
+
+[[generated]]
+id = "L1YLVTpGuAFOi_nRsP_Xy"
+uri = "file://artifacts/deerpark-web/src/assets/data-vis.png"
+type = "image"
+title = "Elegant data visualization"
+
+[[generated]]
+id = "-F1R-YUAZpJZxs5_Uov-M"
+uri = "file://artifacts/deerpark-web/src/assets/office.png"
+type = "image"
+title = "Luxurious office lobby"
