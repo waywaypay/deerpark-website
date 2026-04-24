@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { startHeadlineScheduler } from "./lib/ingest-headlines";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,10 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
+    const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
+    startHeadlineScheduler(intervalMinutes * 60 * 1000);
+    logger.info({ intervalMinutes }, "Headline scheduler started");
+  }
 });

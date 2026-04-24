@@ -2,8 +2,6 @@
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
 
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Cormorant+SC:wght@300;400;500;600&display=swap');
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -52,35 +50,35 @@
 }
 
 :root {
-  /* Deep forest green dark theme */
-  --background: 140 25% 5%;   /* #080f0b — near-black with forest green tint */
-  --foreground: 80 15% 96%;   /* warm off-white */
+  /* Warm paper light theme — editorial, serif-friendly */
+  --background: 35 28% 94%;      /* #f3ede2 — warm cream paper */
+  --foreground: 25 14% 14%;      /* #2a241f — warm deep ink */
 
-  --border: 140 20% 13%;
-  --input: 140 20% 13%;
-  --ring: 140 20% 22%;
+  --border: 30 18% 80%;
+  --input: 30 18% 80%;
+  --ring: 25 12% 40%;
 
-  --card: 140 22% 7%;          /* #0c1510 — slightly lighter */
-  --card-foreground: 80 15% 96%;
-  --card-border: 140 18% 14%;
+  --card: 35 22% 90%;            /* slightly darker cream for alt sections */
+  --card-foreground: 25 14% 14%;
+  --card-border: 30 15% 76%;
 
-  --popover: 140 22% 7%;
-  --popover-foreground: 80 15% 96%;
-  --popover-border: 140 18% 14%;
+  --popover: 35 30% 97%;
+  --popover-foreground: 25 14% 14%;
+  --popover-border: 30 18% 80%;
 
-  --primary: 80 15% 96%;
-  --primary-foreground: 140 25% 5%;
+  --primary: 25 14% 14%;          /* deep ink for primary */
+  --primary-foreground: 35 28% 94%;
 
-  --secondary: 140 18% 11%;
-  --secondary-foreground: 80 15% 96%;
+  --secondary: 35 18% 86%;
+  --secondary-foreground: 25 14% 14%;
 
-  --muted: 140 18% 11%;
-  --muted-foreground: 140 10% 58%;
+  --muted: 35 18% 88%;
+  --muted-foreground: 25 8% 38%;
 
-  --accent: 140 18% 14%;
-  --accent-foreground: 80 15% 96%;
+  --accent: 35 18% 82%;
+  --accent-foreground: 25 14% 14%;
 
-  --destructive: 0 62.8% 30.6%;
+  --destructive: 0 62.8% 40%;
   --destructive-foreground: 0 0% 98%;
 
   --app-font-sans: 'Plus Jakarta Sans', sans-serif;
@@ -134,7 +132,7 @@
 }
 
 .text-gradient {
-  background: linear-gradient(to right, #f0f5f0, #8aab8e);
+  background: linear-gradient(to right, #1a1612, #6b5f52);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -147,4 +145,18 @@
 .animate-marquee {
   animation: marquee 32s linear infinite;
   will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .animate-marquee {
+    animation: none;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

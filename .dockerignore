@@ -1,0 +1,17 @@
+**/node_modules
+**/dist
+**/.vite
+**/.cache
+**/.turbo
+**/.tsbuildinfo
+**/tsconfig.tsbuildinfo
+.git
+.github
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage
+artifacts/mockup-sandbox
+attached_assets
