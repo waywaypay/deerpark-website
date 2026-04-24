@@ -29,7 +29,7 @@ const Navbar = () => {
   const [open, setOpen] = useState(false);
   return (
     <header className="fixed top-0 w-full z-50 border-b border-foreground/10 bg-background/80 backdrop-blur-md">
-      <div className="container mx-auto px-6 h-28 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-6 h-28 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-wordmark text-[1.5rem] md:text-[1.75rem] font-medium tracking-[0.06em] text-foreground">
           <img src={logo} alt="DeerPark icon" className="h-24 w-24 md:h-28 md:w-28 object-contain scale-[1.6] origin-left -ml-2" />
           <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
@@ -56,7 +56,7 @@ const Navbar = () => {
       </div>
       {open && (
         <div className="md:hidden border-t border-foreground/10 bg-background">
-          <nav className="container mx-auto px-6 py-6 flex flex-col gap-5 text-sm font-medium text-muted-foreground">
+          <nav className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-5 text-sm font-medium text-muted-foreground">
             {NAV_LINKS.map((l) => (
               <a key={l.href} href={l.href} onClick={() => setOpen(false)} className="hover:text-foreground transition-colors">
                 {l.label}
@@ -99,7 +99,7 @@ const Hero = () => {
         backgroundImage: "repeating-linear-gradient(120deg, rgba(255,255,255,0.8) 0px, rgba(255,255,255,0.8) 1px, transparent 1px, transparent 60px)"
       }} />
 
-      <div className="container relative z-10 mx-auto px-6 flex-1 flex items-center">
+      <div className="max-w-7xl relative z-10 mx-auto px-6 flex-1 flex items-center">
         <div className="grid lg:grid-cols-2 gap-12 items-center w-full pt-16 pb-12">
           <div>
           <FadeIn>
@@ -190,7 +190,7 @@ const Hero = () => {
 
 const Problem = () => (
   <section className="py-32 bg-card relative">
-    <div className="container mx-auto px-6">
+    <div className="max-w-7xl mx-auto px-6">
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
@@ -272,7 +272,7 @@ const SERVICE_PILLARS = [
 
 const Services = () => (
   <section id="services" className="py-32 border-t border-foreground/10">
-    <div className="container mx-auto px-6">
+    <div className="max-w-7xl mx-auto px-6">
       <FadeIn>
         <div className="flex items-center gap-3 mb-16">
           <div className="h-[1px] w-12 bg-primary"></div>
@@ -327,7 +327,7 @@ const CASE_STACK = [
 
 const CaseStudy = () => (
   <section id="case-study" className="py-32 border-t border-foreground/15 bg-foreground text-background">
-    <div className="container mx-auto px-6">
+    <div className="max-w-7xl mx-auto px-6">
       <div className="grid lg:grid-cols-12 gap-12">
         <FadeIn className="lg:col-span-4">
           <div className="flex items-center gap-3 mb-8">
@@ -571,7 +571,7 @@ const Dispatch = () => {
 
   return (
   <section id="dispatch" className="py-32 border-t border-foreground/15 bg-background">
-    <div className="container mx-auto px-6">
+    <div className="max-w-7xl mx-auto px-6">
       <FadeIn>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-primary"></div>
@@ -802,7 +802,7 @@ const FAQ = () => {
   const [open, setOpen] = useState<number | null>(0);
   return (
     <section id="faq" className="py-32 border-t border-foreground/10 bg-background">
-      <div className="container mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-12 gap-12">
           <FadeIn className="lg:col-span-4">
             <div className="flex items-center gap-3 mb-8">
@@ -906,7 +906,7 @@ const LeadCapture = () => {
 
   return (
     <section id="assessment" className="py-32 border-t border-foreground/15 bg-card">
-      <div className="container mx-auto px-6">
+      <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-12 items-start">
           <FadeIn>
             <div className="flex items-center gap-3 mb-8">
@@ -994,7 +994,7 @@ const LeadCapture = () => {
 
 const Footer = () => (
   <footer className="border-t border-foreground/15 bg-background pt-20 pb-10">
-    <div className="container mx-auto px-6">
+    <div className="max-w-7xl mx-auto px-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
           <a href="/" className="flex items-center gap-2 font-wordmark text-[1.5rem] font-medium tracking-[0.06em] text-foreground mb-6">

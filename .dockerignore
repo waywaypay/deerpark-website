@@ -13,5 +13,4 @@
 !.env.example
 .DS_Store
 coverage
-artifacts/mockup-sandbox
 attached_assets
