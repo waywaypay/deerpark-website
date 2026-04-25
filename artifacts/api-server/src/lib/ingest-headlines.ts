@@ -74,6 +74,61 @@ async function fetchHfPapers(source: SourceConfig): Promise<NormalizedItem[]> {
   });
 }
 
+async function fetchAnthropicNews(source: SourceConfig): Promise<NormalizedItem[]> {
+  const res = await fetch(source.url, {
+    headers: {
+      accept: "text/html",
+      "user-agent": "DeerPark-Headlines/1.0 (+https://deerpark.io)",
+    },
+  });
+  if (!res.ok) throw new Error(`Anthropic returned ${res.status}`);
+  const html = await res.text();
+
+  const cardRe = /<a href="(\/news\/[a-z0-9-]+)"[^>]*class="[^"]*PublicationList-module[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+  const dateRe = /^([A-Z][a-z]{2})\s+(\d{1,2}),\s+(\d{4})\s+\S+\s+(.+)$/;
+  const seen = new Set<string>();
+  const items: NormalizedItem[] = [];
+
+  for (const match of html.matchAll(cardRe)) {
+    const slug = match[1]!;
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+
+    const inner = match[2]!.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const decoded = inner
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&#8217;/g, "’")
+      .replace(/&#8216;/g, "‘");
+
+    const parsed = decoded.match(dateRe);
+    let title = decoded;
+    let publishedAt = new Date();
+    if (parsed) {
+      const [, month, day, year, t] = parsed;
+      title = t!.trim();
+      const candidate = new Date(`${month} ${day}, ${year}`);
+      if (!Number.isNaN(candidate.getTime())) publishedAt = candidate;
+    }
+    if (!title) continue;
+
+    const url = `https://www.anthropic.com${slug}`;
+    items.push({
+      source: source.displayName,
+      category: source.category,
+      title,
+      url,
+      urlHash: hashUrl(url),
+      publishedAt,
+    });
+  }
+
+  return items;
+}
+
 async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
   switch (source.kind) {
     case "rss":
@@ -82,6 +137,8 @@ async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
       return fetchHackerNews(source);
     case "hf-papers":
       return fetchHfPapers(source);
+    case "anthropic-news":
+      return fetchAnthropicNews(source);
   }
 }
 

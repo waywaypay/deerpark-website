@@ -1,4 +1,4 @@
-export type SourceKind = "rss" | "hn" | "hf-papers";
+export type SourceKind = "rss" | "hn" | "hf-papers" | "anthropic-news";
 
 export type SourceConfig = {
   id: string;
@@ -9,10 +9,9 @@ export type SourceConfig = {
   enabled: boolean;
 };
 
-// URLs can be overridden via env vars. Defaults point at publicly known feeds;
-// Anthropic / OpenAI are disabled by default because they do not publish a
-// stable public RSS feed at time of writing — enable once you've wired a
-// scraper or an alternative source (e.g. a mirror).
+// URLs can be overridden via env vars. Defaults point at publicly known feeds.
+// Anthropic doesn't publish a stable RSS feed, so it uses a custom HTML
+// scraper against /news; OpenAI publishes RSS at /news/rss.xml.
 export const SOURCES: SourceConfig[] = [
   {
     id: "hacker-news",
@@ -36,17 +35,17 @@ export const SOURCES: SourceConfig[] = [
     id: "anthropic",
     displayName: "Anthropic",
     category: "Lab",
-    kind: "rss",
-    url: process.env["ANTHROPIC_FEED_URL"] ?? "",
-    enabled: Boolean(process.env["ANTHROPIC_FEED_URL"]),
+    kind: "anthropic-news",
+    url: process.env["ANTHROPIC_FEED_URL"] ?? "https://www.anthropic.com/news",
+    enabled: true,
   },
   {
     id: "openai",
     displayName: "OpenAI",
     category: "Lab",
     kind: "rss",
-    url: process.env["OPENAI_FEED_URL"] ?? "",
-    enabled: Boolean(process.env["OPENAI_FEED_URL"]),
+    url: process.env["OPENAI_FEED_URL"] ?? "https://openai.com/news/rss.xml",
+    enabled: true,
   },
   {
     id: "google",
