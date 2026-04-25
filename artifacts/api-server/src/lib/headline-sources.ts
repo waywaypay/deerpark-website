@@ -1,4 +1,4 @@
-export type SourceKind = "rss" | "hn" | "hf-papers" | "anthropic-news";
+export type SourceKind = "rss" | "hn" | "hf-papers" | "anthropic-news" | "mistral-news";
 
 export type SourceConfig = {
   id: string;
@@ -9,9 +9,12 @@ export type SourceConfig = {
   enabled: boolean;
 };
 
-// URLs can be overridden via env vars. Defaults point at publicly known feeds.
-// Anthropic doesn't publish a stable RSS feed, so it uses a custom HTML
-// scraper against /news; OpenAI publishes RSS at /news/rss.xml.
+// URLs can be overridden via env vars. Anthropic and Mistral don't publish
+// stable RSS, so they use custom scrapers (Anthropic = HTML listing, Mistral
+// = sitemap + per-article SSR titles). Meta AI and xAI are intentionally
+// omitted: ai.meta.com returns 400 and x.ai returns 403 even with a real
+// browser UA — they actively block server-to-server scrapers and would
+// silently return zero items.
 export const SOURCES: SourceConfig[] = [
   {
     id: "hacker-news",
@@ -29,6 +32,14 @@ export const SOURCES: SourceConfig[] = [
     category: "Models",
     kind: "hf-papers",
     url: process.env["HF_PAPERS_URL"] ?? "https://huggingface.co/api/daily_papers",
+    enabled: true,
+  },
+  {
+    id: "arxiv",
+    displayName: "arXiv cs.AI",
+    category: "Research",
+    kind: "rss",
+    url: process.env["ARXIV_FEED_URL"] ?? "https://rss.arxiv.org/rss/cs.AI",
     enabled: true,
   },
   {
@@ -56,6 +67,32 @@ export const SOURCES: SourceConfig[] = [
     enabled: true,
   },
   {
+    id: "deepmind",
+    displayName: "Google DeepMind",
+    category: "Lab",
+    kind: "rss",
+    url: process.env["DEEPMIND_FEED_URL"] ?? "https://deepmind.google/blog/rss.xml",
+    enabled: true,
+  },
+  {
+    id: "microsoft",
+    displayName: "Microsoft AI",
+    category: "Lab",
+    kind: "rss",
+    url:
+      process.env["MICROSOFT_AI_FEED_URL"] ??
+      "https://news.microsoft.com/source/topics/ai/feed/",
+    enabled: true,
+  },
+  {
+    id: "mistral",
+    displayName: "Mistral",
+    category: "Lab",
+    kind: "mistral-news",
+    url: process.env["MISTRAL_FEED_URL"] ?? "https://mistral.ai/sitemap.xml",
+    enabled: true,
+  },
+  {
     id: "nvidia",
     displayName: "NVIDIA",
     category: "Infra",
@@ -71,6 +108,42 @@ export const SOURCES: SourceConfig[] = [
     url:
       process.env["AWS_ML_FEED_URL"] ??
       "https://aws.amazon.com/blogs/machine-learning/feed/",
+    enabled: true,
+  },
+  {
+    id: "techcrunch-ai",
+    displayName: "TechCrunch AI",
+    category: "Press",
+    kind: "rss",
+    url:
+      process.env["TECHCRUNCH_AI_FEED_URL"] ??
+      "https://techcrunch.com/category/artificial-intelligence/feed/",
+    enabled: true,
+  },
+  {
+    id: "verge-ai",
+    displayName: "The Verge AI",
+    category: "Press",
+    kind: "rss",
+    url:
+      process.env["VERGE_AI_FEED_URL"] ??
+      "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+    enabled: true,
+  },
+  {
+    id: "import-ai",
+    displayName: "Import AI",
+    category: "Newsletter",
+    kind: "rss",
+    url: process.env["IMPORT_AI_FEED_URL"] ?? "https://importai.substack.com/feed",
+    enabled: true,
+  },
+  {
+    id: "latent-space",
+    displayName: "Latent Space",
+    category: "Newsletter",
+    kind: "rss",
+    url: process.env["LATENT_SPACE_FEED_URL"] ?? "https://www.latent.space/feed",
     enabled: true,
   },
 ];

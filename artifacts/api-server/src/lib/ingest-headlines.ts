@@ -7,7 +7,13 @@ import { logger } from "./logger";
 
 type NormalizedItem = Omit<InsertHeadline, "id" | "createdAt" | "relevanceScore">;
 
-const parser = new Parser({ timeout: 15_000 });
+const USER_AGENT =
+  "Mozilla/5.0 (compatible; DeerPark-Headlines/1.0; +https://deerpark.io)";
+
+const parser = new Parser({
+  timeout: 15_000,
+  headers: { "User-Agent": USER_AGENT },
+});
 
 const hashUrl = (url: string) => createHash("sha1").update(url).digest("hex");
 
@@ -76,10 +82,7 @@ async function fetchHfPapers(source: SourceConfig): Promise<NormalizedItem[]> {
 
 async function fetchAnthropicNews(source: SourceConfig): Promise<NormalizedItem[]> {
   const res = await fetch(source.url, {
-    headers: {
-      accept: "text/html",
-      "user-agent": "DeerPark-Headlines/1.0 (+https://deerpark.io)",
-    },
+    headers: { accept: "text/html", "user-agent": USER_AGENT },
   });
   if (!res.ok) throw new Error(`Anthropic returned ${res.status}`);
   const html = await res.text();
@@ -129,6 +132,65 @@ async function fetchAnthropicNews(source: SourceConfig): Promise<NormalizedItem[
   return items;
 }
 
+async function fetchMistralNews(source: SourceConfig): Promise<NormalizedItem[]> {
+  // Mistral's /news page is JS-rendered, but their sitemap.xml lists every
+  // news URL with a lastmod date. Each article page is server-rendered with
+  // og:title metadata, so we fetch the sitemap, take recent /news/ entries,
+  // then fetch each article for its title.
+  const sitemapRes = await fetch(source.url, {
+    headers: { accept: "application/xml", "user-agent": USER_AGENT },
+  });
+  if (!sitemapRes.ok) throw new Error(`Mistral sitemap returned ${sitemapRes.status}`);
+  const sitemapXml = await sitemapRes.text();
+
+  const urlBlockRe =
+    /<url>\s*<loc>(https:\/\/mistral\.ai\/news\/[a-z0-9-]+)<\/loc>[\s\S]*?<lastmod>([^<]+)<\/lastmod>/g;
+  const candidates: { url: string; lastmod: Date }[] = [];
+  for (const match of sitemapXml.matchAll(urlBlockRe)) {
+    const lastmod = new Date(match[2]!);
+    if (Number.isNaN(lastmod.getTime())) continue;
+    candidates.push({ url: match[1]!, lastmod });
+  }
+  candidates.sort((a, b) => b.lastmod.getTime() - a.lastmod.getTime());
+  const recent = candidates.slice(0, 15);
+
+  const ogTitleRe = /<meta\s+property="og:title"\s+content="([^"]+)"/i;
+  const titleTagRe = /<title>([^<]+)<\/title>/i;
+
+  const items = await Promise.all(
+    recent.map(async ({ url, lastmod }): Promise<NormalizedItem | null> => {
+      try {
+        const res = await fetch(url, {
+          headers: { accept: "text/html", "user-agent": USER_AGENT },
+        });
+        if (!res.ok) return null;
+        const html = await res.text();
+        const raw = (html.match(ogTitleRe)?.[1] ?? html.match(titleTagRe)?.[1] ?? "")
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'");
+        // Strip "| Mistral AI" suffix that Mistral appends to every page title.
+        const title = raw.replace(/\s*\|\s*Mistral AI\s*$/, "").trim();
+        if (!title) return null;
+        return {
+          source: source.displayName,
+          category: source.category,
+          title,
+          url,
+          urlHash: hashUrl(url),
+          publishedAt: lastmod,
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return items.filter((i): i is NormalizedItem => i !== null);
+}
+
 async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
   switch (source.kind) {
     case "rss":
@@ -139,6 +201,8 @@ async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
       return fetchHfPapers(source);
     case "anthropic-news":
       return fetchAnthropicNews(source);
+    case "mistral-news":
+      return fetchMistralNews(source);
   }
 }
 
