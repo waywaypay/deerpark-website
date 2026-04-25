@@ -92,36 +92,42 @@ export type IngestResult = {
   error?: string;
 };
 
+async function ingestOne(source: SourceConfig): Promise<IngestResult> {
+  try {
+    const items = await fetchSource(source);
+    if (items.length === 0) {
+      return { source: source.displayName, fetched: 0, inserted: 0 };
+    }
+    const rows = await db
+      .insert(headlinesTable)
+      .values(items)
+      .onConflictDoNothing({
+        target: [headlinesTable.source, headlinesTable.urlHash],
+      })
+      .returning({ id: headlinesTable.id });
+    return {
+      source: source.displayName,
+      fetched: items.length,
+      inserted: rows.length,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn({ source: source.id, err: message }, "Source ingestion failed");
+    return { source: source.displayName, fetched: 0, inserted: 0, error: message };
+  }
+}
+
+export async function ingestSourceById(id: string): Promise<IngestResult | null> {
+  const source = SOURCES.find((s) => s.id === id);
+  if (!source) return null;
+  return ingestOne(source);
+}
+
 export async function ingestAllSources(): Promise<IngestResult[]> {
   const enabled = SOURCES.filter((s) => s.enabled);
   logger.info({ count: enabled.length }, "Starting headline ingestion");
 
-  const results = await Promise.all(
-    enabled.map(async (source): Promise<IngestResult> => {
-      try {
-        const items = await fetchSource(source);
-        if (items.length === 0) {
-          return { source: source.displayName, fetched: 0, inserted: 0 };
-        }
-        const rows = await db
-          .insert(headlinesTable)
-          .values(items)
-          .onConflictDoNothing({
-            target: [headlinesTable.source, headlinesTable.urlHash],
-          })
-          .returning({ id: headlinesTable.id });
-        return {
-          source: source.displayName,
-          fetched: items.length,
-          inserted: rows.length,
-        };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        logger.warn({ source: source.id, err: message }, "Source ingestion failed");
-        return { source: source.displayName, fetched: 0, inserted: 0, error: message };
-      }
-    }),
-  );
+  const results = await Promise.all(enabled.map(ingestOne));
 
   const totalInserted = results.reduce((sum, r) => sum + r.inserted, 0);
   logger.info({ totalInserted, results }, "Headline ingestion complete");

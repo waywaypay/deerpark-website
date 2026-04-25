@@ -8,6 +8,10 @@
     {
       "source": "/api/:path*",
       "destination": "https://deerpark-api.fly.dev/api/:path*"
+    },
+    {
+      "source": "/((?!api|assets|.*\\..*).*)",
+      "destination": "/index.html"
     }
   ],
   "headers": [
