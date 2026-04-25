@@ -756,21 +756,21 @@ const DispatchView = ({ token }: { token: string }) => {
   );
 };
 
-type View = "home" | "dispatch" | "leads";
+type View = "home" | "agents" | "dispatch" | "leads";
 
-type HomeTile = {
-  id: Exclude<View, "home">;
+type Tile<T extends string> = {
+  id: T;
   label: string;
   description: string;
   Icon: typeof Bot;
 };
 
-const HOME_TILES: HomeTile[] = [
+const HOME_TILES: Tile<"agents" | "leads">[] = [
   {
-    id: "dispatch",
-    label: "Dispatch",
-    description: "News agents — headline ingestion, writers, and email.",
-    Icon: Radio,
+    id: "agents",
+    label: "Agents",
+    description: "All autonomous agents — Dispatch news pipeline and more to come.",
+    Icon: Bot,
   },
   {
     id: "leads",
@@ -780,7 +780,46 @@ const HOME_TILES: HomeTile[] = [
   },
 ];
 
-const Home = ({ onSelect }: { onSelect: (view: Exclude<View, "home">) => void }) => (
+const AGENT_TILES: Tile<"dispatch">[] = [
+  {
+    id: "dispatch",
+    label: "Dispatch",
+    description: "News pipeline — headline ingestion, writers, and email.",
+    Icon: Radio,
+  },
+];
+
+const TileGrid = <T extends string>({
+  tiles,
+  onSelect,
+}: {
+  tiles: Tile<T>[];
+  onSelect: (id: T) => void;
+}) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {tiles.map(({ id, label, description, Icon }) => (
+      <button
+        key={id}
+        type="button"
+        onClick={() => onSelect(id)}
+        className="group aspect-square border border-foreground/15 bg-card p-6 text-left flex flex-col justify-between hover:border-primary/60 hover:bg-background/60 transition-colors"
+      >
+        <Icon className="w-8 h-8 text-foreground/80 group-hover:text-primary transition-colors" />
+        <div>
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-serif">{label}</div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          </div>
+          <p className="text-xs text-muted-foreground font-light mt-2 leading-relaxed">
+            {description}
+          </p>
+        </div>
+      </button>
+    ))}
+  </div>
+);
+
+const Home = ({ onSelect }: { onSelect: (view: "agents" | "leads") => void }) => (
   <div className="space-y-8">
     <div>
       <div className="section-label">Admin</div>
@@ -789,30 +828,39 @@ const Home = ({ onSelect }: { onSelect: (view: Exclude<View, "home">) => void })
         Pick a surface to manage.
       </p>
     </div>
-
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {HOME_TILES.map(({ id, label, description, Icon }) => (
-        <button
-          key={id}
-          type="button"
-          onClick={() => onSelect(id)}
-          className="group aspect-square border border-foreground/15 bg-card p-6 text-left flex flex-col justify-between hover:border-primary/60 hover:bg-background/60 transition-colors"
-        >
-          <Icon className="w-8 h-8 text-foreground/80 group-hover:text-primary transition-colors" />
-          <div>
-            <div className="flex items-center justify-between">
-              <div className="text-lg font-serif">{label}</div>
-              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-            </div>
-            <p className="text-xs text-muted-foreground font-light mt-2 leading-relaxed">
-              {description}
-            </p>
-          </div>
-        </button>
-      ))}
-    </div>
+    <TileGrid tiles={HOME_TILES} onSelect={onSelect} />
   </div>
 );
+
+const AgentsHome = ({ onSelect }: { onSelect: (view: "dispatch") => void }) => (
+  <div className="space-y-8">
+    <div>
+      <div className="section-label">Agents</div>
+      <h1 className="text-3xl font-serif mt-1">Agent groups</h1>
+      <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
+        Each tile is a family of agents working toward one outcome.
+      </p>
+    </div>
+    <TileGrid tiles={AGENT_TILES} onSelect={onSelect} />
+  </div>
+);
+
+const VIEW_LABELS: Record<Exclude<View, "home">, string> = {
+  agents: "Agents",
+  dispatch: "Dispatch",
+  leads: "Scorecard leads",
+};
+
+const breadcrumbFor = (view: View): Exclude<View, "home">[] => {
+  if (view === "home") return [];
+  if (view === "dispatch") return ["agents", "dispatch"];
+  return [view];
+};
+
+const parentOf = (view: View): View => {
+  if (view === "dispatch") return "agents";
+  return "home";
+};
 
 const Admin = () => {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
@@ -827,38 +875,51 @@ const Admin = () => {
     setToken(null);
   };
 
+  const crumbs = breadcrumbFor(view);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-foreground/15 bg-background/80 backdrop-blur-md sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 min-w-0">
             <Link href="/" className="font-wordmark text-lg tracking-[0.06em] hover:text-foreground/70">
               DeerPark<span className="text-foreground/50 font-light">.io</span>
             </Link>
             <button
               type="button"
               onClick={() => setView("home")}
-              className="section-label hover:text-foreground"
+              className="section-label hover:text-foreground ml-3"
             >
               Admin
             </button>
-            {view !== "home" && (
-              <span className="text-xs text-muted-foreground inline-flex items-center gap-2">
-                <ChevronRight className="w-3 h-3" />
-                <span className="text-foreground">
-                  {view === "dispatch" ? "Dispatch" : "Scorecard leads"}
+            {crumbs.map((crumb, i) => {
+              const isLast = i === crumbs.length - 1;
+              return (
+                <span key={crumb} className="text-xs inline-flex items-center gap-2 min-w-0">
+                  <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                  {isLast ? (
+                    <span className="text-foreground">{VIEW_LABELS[crumb]}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setView(crumb)}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {VIEW_LABELS[crumb]}
+                    </button>
+                  )}
                 </span>
-              </span>
-            )}
+              );
+            })}
           </div>
           <div className="flex items-center gap-2">
             {view !== "home" && (
               <button
                 type="button"
-                onClick={() => setView("home")}
+                onClick={() => setView(parentOf(view))}
                 className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 mr-3"
               >
-                <ArrowLeft className="w-3 h-3" /> Admin home
+                <ArrowLeft className="w-3 h-3" /> Back
               </button>
             )}
             <Link href="/" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5">
@@ -877,6 +938,7 @@ const Admin = () => {
 
       <main className="max-w-7xl mx-auto px-6 py-10">
         {view === "home" && <Home onSelect={setView} />}
+        {view === "agents" && <AgentsHome onSelect={setView} />}
         {view === "dispatch" && <DispatchView token={token} />}
         {view === "leads" && <LeadsTab token={token} />}
       </main>
