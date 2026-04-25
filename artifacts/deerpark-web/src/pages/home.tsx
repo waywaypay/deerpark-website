@@ -30,8 +30,8 @@ const Navbar = () => {
   return (
     <header className="fixed top-0 w-full z-50 border-b border-foreground/10 bg-background/80 backdrop-blur-md">
       <div className="max-w-7xl mx-auto px-6 h-20 md:h-24 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-wordmark text-[1.25rem] md:text-[1.5rem] font-medium tracking-[0.06em] text-foreground">
-          <img src={logo} alt="DeerPark icon" className="h-14 w-14 md:h-20 md:w-20 object-contain scale-[1.5] origin-left -ml-1.5" />
+        <Link href="/" className="flex items-center gap-3 font-wordmark text-[1.25rem] md:text-[1.5rem] font-medium tracking-[0.06em] text-foreground -ml-1">
+          <img src={logo} alt="DeerPark icon" className="h-10 md:h-12 w-auto object-contain object-left" />
           <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
@@ -997,8 +997,8 @@ const Footer = () => (
     <div className="max-w-7xl mx-auto px-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-20">
         <div className="col-span-1 md:col-span-2">
-          <a href="/" className="flex items-center gap-2 font-wordmark text-[1.5rem] font-medium tracking-[0.06em] text-foreground mb-6">
-            <img src={logo} alt="DeerPark icon" className="h-24 w-24 object-contain scale-[1.6] origin-left -ml-2" />
+          <a href="/" className="flex items-center gap-3 font-wordmark text-[1.5rem] font-medium tracking-[0.06em] text-foreground mb-6 -ml-1">
+            <img src={logo} alt="DeerPark icon" className="h-12 w-auto object-contain object-left" />
             <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
           </a>
           <p className="text-muted-foreground font-light text-sm max-w-sm">
