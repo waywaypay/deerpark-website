@@ -1,7 +1,19 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, RefreshCw, LogOut, Play, ExternalLink, Mail, Bot } from "lucide-react";
+import {
+  ArrowLeft,
+  RefreshCw,
+  LogOut,
+  Play,
+  ExternalLink,
+  Mail,
+  Bot,
+  Radio,
+  PenLine,
+  Send,
+  ChevronRight,
+} from "lucide-react";
 
 const TOKEN_KEY = "deerpark.admin.token";
 
@@ -549,11 +561,262 @@ const LeadsTab = ({ token }: { token: string }) => {
   );
 };
 
-type Tab = "agents" | "leads";
+type WriterAgent = {
+  id: string;
+  displayName: string;
+  description: string;
+  enabled: boolean;
+};
+
+type EmailAgent = {
+  id: string;
+  displayName: string;
+  description: string;
+  enabled: boolean;
+};
+
+const PLACEHOLDER_WRITER_AGENTS: WriterAgent[] = [];
+const PLACEHOLDER_EMAIL_AGENTS: EmailAgent[] = [];
+
+const WriterAgentsTab = () => {
+  const [agents] = useState<WriterAgent[]>(PLACEHOLDER_WRITER_AGENTS);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-serif">Writer agents</h2>
+          <p className="text-sm text-muted-foreground font-light mt-1">
+            Agents that turn ingested headlines into long-form blog posts.
+          </p>
+        </div>
+        <Button
+          disabled
+          className="rounded-none text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+        >
+          <PenLine className="w-3.5 h-3.5" /> New writer agent
+        </Button>
+      </div>
+
+      <div className="border border-foreground/15 bg-card overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left bg-background/40">
+            <tr className="border-b border-foreground/10">
+              <th className="px-4 py-3 section-label">Agent</th>
+              <th className="px-4 py-3 section-label">Description</th>
+              <th className="px-4 py-3 section-label">Status</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {agents.map((a) => (
+              <tr key={a.id} className="border-b border-foreground/10 hover:bg-background/40">
+                <td className="px-4 py-3">{a.displayName}</td>
+                <td className="px-4 py-3 text-muted-foreground">{a.description}</td>
+                <td className="px-4 py-3">
+                  <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${a.enabled ? "border-primary/40 text-primary" : "border-foreground/20 text-muted-foreground"}`}>
+                    {a.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    <Play className="w-3 h-3" /> Run
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            {agents.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  No writer agents configured yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+const EmailAgentsTab = () => {
+  const [agents] = useState<EmailAgent[]>(PLACEHOLDER_EMAIL_AGENTS);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-serif">Email agents</h2>
+          <p className="text-sm text-muted-foreground font-light mt-1">
+            Agents that draft and send outbound emails based on ingested signals.
+          </p>
+        </div>
+        <Button
+          disabled
+          className="rounded-none text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+        >
+          <Send className="w-3.5 h-3.5" /> New email agent
+        </Button>
+      </div>
+
+      <div className="border border-foreground/15 bg-card overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left bg-background/40">
+            <tr className="border-b border-foreground/10">
+              <th className="px-4 py-3 section-label">Agent</th>
+              <th className="px-4 py-3 section-label">Description</th>
+              <th className="px-4 py-3 section-label">Status</th>
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {agents.map((a) => (
+              <tr key={a.id} className="border-b border-foreground/10 hover:bg-background/40">
+                <td className="px-4 py-3">{a.displayName}</td>
+                <td className="px-4 py-3 text-muted-foreground">{a.description}</td>
+                <td className="px-4 py-3">
+                  <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${a.enabled ? "border-primary/40 text-primary" : "border-foreground/20 text-muted-foreground"}`}>
+                    {a.enabled ? "Enabled" : "Disabled"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    <Play className="w-3 h-3" /> Run
+                  </Button>
+                </td>
+              </tr>
+            ))}
+            {agents.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  No email agents configured yet.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+type DispatchSection = "headlines" | "writers" | "emails";
+
+const DispatchView = ({ token }: { token: string }) => {
+  const [section, setSection] = useState<DispatchSection>("headlines");
+
+  const sections: { id: DispatchSection; label: string; Icon: typeof Bot; description: string }[] = [
+    { id: "headlines", label: "Headline ingestion", Icon: Radio, description: "Sources that fetch AI news on a schedule" },
+    { id: "writers", label: "Writer agents", Icon: PenLine, description: "Turn headlines into blog posts" },
+    { id: "emails", label: "Email agents", Icon: Send, description: "Draft and send outbound emails" },
+  ];
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <div className="section-label">Dispatch</div>
+        <h2 className="text-3xl font-serif mt-1">News agents</h2>
+        <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
+          The full pipeline that ingests AI news, writes posts about it, and sends email out the door.
+        </p>
+      </div>
+
+      <div className="flex gap-1 border-b border-foreground/15 -mb-px">
+        {sections.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSection(id)}
+            className={`px-4 py-2.5 text-xs uppercase tracking-widest border-b-2 inline-flex items-center gap-2 ${
+              section === id
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Icon className="w-3.5 h-3.5" />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === "headlines" && <AgentsTab token={token} />}
+      {section === "writers" && <WriterAgentsTab />}
+      {section === "emails" && <EmailAgentsTab />}
+    </div>
+  );
+};
+
+type View = "home" | "dispatch" | "leads";
+
+type HomeTile = {
+  id: Exclude<View, "home">;
+  label: string;
+  description: string;
+  Icon: typeof Bot;
+};
+
+const HOME_TILES: HomeTile[] = [
+  {
+    id: "dispatch",
+    label: "Dispatch",
+    description: "News agents — headline ingestion, writers, and email.",
+    Icon: Radio,
+  },
+  {
+    id: "leads",
+    label: "Scorecard leads",
+    description: "Submissions from the homepage lead-capture form.",
+    Icon: Mail,
+  },
+];
+
+const Home = ({ onSelect }: { onSelect: (view: Exclude<View, "home">) => void }) => (
+  <div className="space-y-8">
+    <div>
+      <div className="section-label">Admin</div>
+      <h1 className="text-3xl font-serif mt-1">Control room</h1>
+      <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
+        Pick a surface to manage.
+      </p>
+    </div>
+
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {HOME_TILES.map(({ id, label, description, Icon }) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onSelect(id)}
+          className="group aspect-square border border-foreground/15 bg-card p-6 text-left flex flex-col justify-between hover:border-primary/60 hover:bg-background/60 transition-colors"
+        >
+          <Icon className="w-8 h-8 text-foreground/80 group-hover:text-primary transition-colors" />
+          <div>
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-serif">{label}</div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+            </div>
+            <p className="text-xs text-muted-foreground font-light mt-2 leading-relaxed">
+              {description}
+            </p>
+          </div>
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 const Admin = () => {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
-  const [tab, setTab] = useState<Tab>("agents");
+  const [view, setView] = useState<View>("home");
 
   if (!token) {
     return <Login onAuthed={setToken} />;
@@ -572,9 +835,32 @@ const Admin = () => {
             <Link href="/" className="font-wordmark text-lg tracking-[0.06em] hover:text-foreground/70">
               DeerPark<span className="text-foreground/50 font-light">.io</span>
             </Link>
-            <span className="section-label">Admin</span>
+            <button
+              type="button"
+              onClick={() => setView("home")}
+              className="section-label hover:text-foreground"
+            >
+              Admin
+            </button>
+            {view !== "home" && (
+              <span className="text-xs text-muted-foreground inline-flex items-center gap-2">
+                <ChevronRight className="w-3 h-3" />
+                <span className="text-foreground">
+                  {view === "dispatch" ? "Dispatch" : "Scorecard leads"}
+                </span>
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2">
+            {view !== "home" && (
+              <button
+                type="button"
+                onClick={() => setView("home")}
+                className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 mr-3"
+              >
+                <ArrowLeft className="w-3 h-3" /> Admin home
+              </button>
+            )}
             <Link href="/" className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5">
               <ArrowLeft className="w-3 h-3" /> Site
             </Link>
@@ -587,30 +873,12 @@ const Admin = () => {
             </button>
           </div>
         </div>
-        <div className="max-w-7xl mx-auto px-6 flex gap-1 -mb-px">
-          {([
-            { id: "agents" as const, label: "Agents", Icon: Bot },
-            { id: "leads" as const, label: "Scorecard leads", Icon: Mail },
-          ]).map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`px-4 py-2.5 text-xs uppercase tracking-widest border-b-2 inline-flex items-center gap-2 ${
-                tab === id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        {tab === "agents" ? <AgentsTab token={token} /> : <LeadsTab token={token} />}
+        {view === "home" && <Home onSelect={setView} />}
+        {view === "dispatch" && <DispatchView token={token} />}
+        {view === "leads" && <LeadsTab token={token} />}
       </main>
     </div>
   );
