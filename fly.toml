@@ -1,47 +1,42 @@
-# Fly.io config for @workspace/api-server.
+# fly.toml app configuration file generated for deerpark-api on 2026-04-24T09:37:35-07:00
 #
-# First deploy:
-#   fly launch --copy-config --name deerpark-api --no-deploy
-#   fly secrets set DATABASE_URL="postgres://..." INGEST_SECRET="$(openssl rand -hex 32)"
-#   fly deploy
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
-# Subsequent deploys:
-#   fly deploy
 
-app = "deerpark-api"
-primary_region = "iad"
+app = 'deerpark-api'
+primary_region = 'iad'
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = 'Dockerfile'
 
 [env]
-  NODE_ENV = "production"
-  PORT = "8080"
-  HEADLINE_INGEST_INTERVAL_MIN = "15"
+  HEADLINE_INGEST_INTERVAL_MIN = '15'
+  NODE_ENV = 'production'
+  PORT = '8080'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  # Keep one machine alive so the in-process ingestion scheduler keeps running.
-  auto_stop_machines = "off"
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
-  processes = ["app"]
+  processes = ['app']
 
   [http_service.concurrency]
-    type = "requests"
-    soft_limit = 200
+    type = 'requests'
     hard_limit = 250
+    soft_limit = 200
 
   [[http_service.checks]]
-    grace_period = "10s"
-    interval = "30s"
-    method = "GET"
-    timeout = "5s"
-    path = "/api/healthz"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/api/healthz'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
-  cpu_kind = "shared"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
+  cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 512

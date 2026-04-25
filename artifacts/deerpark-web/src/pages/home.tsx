@@ -29,9 +29,9 @@ const Navbar = () => {
   const [open, setOpen] = useState(false);
   return (
     <header className="fixed top-0 w-full z-50 border-b border-foreground/10 bg-background/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-6 h-28 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-2 font-wordmark text-[1.5rem] md:text-[1.75rem] font-medium tracking-[0.06em] text-foreground">
-          <img src={logo} alt="DeerPark icon" className="h-24 w-24 md:h-28 md:w-28 object-contain scale-[1.6] origin-left -ml-2" />
+      <div className="max-w-7xl mx-auto px-6 h-20 md:h-24 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2 font-wordmark text-[1.25rem] md:text-[1.5rem] font-medium tracking-[0.06em] text-foreground">
+          <img src={logo} alt="DeerPark icon" className="h-14 w-14 md:h-20 md:w-20 object-contain scale-[1.5] origin-left -ml-1.5" />
           <span>{"DeerPark"}<span className="text-foreground/50 font-light">.io</span></span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
@@ -91,7 +91,7 @@ const Hero = () => {
   const panelY = useTransform(scrollYProgress, [0, 1], [0, 40]);
 
   return (
-    <section className="relative min-h-[100dvh] flex flex-col justify-between pt-28 overflow-hidden">
+    <section className="relative min-h-[100dvh] flex flex-col justify-between pt-24 overflow-hidden">
       <div className="absolute inset-0 z-0" style={{
         background: "radial-gradient(ellipse 70% 80% at 80% 50%, rgba(255,255,255,0.06) 0%, transparent 65%)"
       }} />
