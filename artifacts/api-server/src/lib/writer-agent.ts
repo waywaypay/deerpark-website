@@ -2,12 +2,31 @@ import OpenAI from "openai";
 import { db, headlinesTable, postsTable, type InsertPost } from "@workspace/db";
 import { gte, desc } from "drizzle-orm";
 import { logger } from "./logger";
+import { SOURCES } from "./headline-sources";
 
 // Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
 // override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
 // (with their OpenAI-compat shim), etc.
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "claude-sonnet-4-5";
+
+// Corpus capping. The 7-day window can hold hundreds of items (arXiv alone
+// fires ~50/day); shipping all of them as input bloats per-call cost. Cap
+// at 2 per source for diversity, then top N by tier × recency.
+const CORPUS_MAX_ITEMS = 30;
+const CORPUS_PER_SOURCE_CAP = 2;
+const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
+const TIER_WEIGHTS: Record<number, number> = { 1: 4, 2: 3, 3: 2, 4: 1 };
+const HALF_LIFE_DAYS = 3;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+function scoreCorpusItem(item: CorpusItem, now: number): number {
+  const tier = SOURCE_TIER.get(item.source) ?? 4;
+  const tierWeight = TIER_WEIGHTS[tier] ?? 1;
+  const ageDays = Math.max(0, (now - item.publishedAt.getTime()) / MS_PER_DAY);
+  const decay = Math.exp((-Math.LN2 * ageDays) / HALF_LIFE_DAYS);
+  return tierWeight * decay;
+}
 
 // The writer agent reads our 7-day rolling headline corpus and produces one
 // post per day. Anti-hallucination is enforced by:
@@ -177,7 +196,22 @@ export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
     .from(headlinesTable)
     .where(gte(headlinesTable.publishedAt, since))
     .orderBy(desc(headlinesTable.publishedAt));
-  return rows;
+
+  // Per-source cap first so high-volume feeds (arXiv, HN) can't crowd out
+  // weekly-cadence labs.
+  const perSourceCount = new Map<string, number>();
+  const candidates: CorpusItem[] = [];
+  for (const row of rows) {
+    const count = perSourceCount.get(row.source) ?? 0;
+    if (count >= CORPUS_PER_SOURCE_CAP) continue;
+    perSourceCount.set(row.source, count + 1);
+    candidates.push(row);
+  }
+
+  // Then rank by tier × recency and take the top N.
+  const now = Date.now();
+  candidates.sort((a, b) => scoreCorpusItem(b, now) - scoreCorpusItem(a, now));
+  return candidates.slice(0, CORPUS_MAX_ITEMS);
 }
 
 export type WriteResult =
