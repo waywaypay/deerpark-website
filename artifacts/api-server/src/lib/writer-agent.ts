@@ -1,7 +1,13 @@
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 import { db, headlinesTable, postsTable, type InsertPost } from "@workspace/db";
 import { gte, desc } from "drizzle-orm";
 import { logger } from "./logger";
+
+// Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
+// override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
+// (with their OpenAI-compat shim), etc.
+const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
+const DEFAULT_MODEL = "claude-sonnet-4-5";
 
 // The writer agent reads our 7-day rolling headline corpus and produces one
 // post per day. Anti-hallucination is enforced by:
@@ -178,17 +184,26 @@ export type WriteResult =
   | { ok: true; postId: number; draft: Draft }
   | { ok: false; error: string };
 
+export function getModelInfo(): { model: string; baseUrl: string; configured: boolean } {
+  return {
+    model: process.env["LLM_MODEL"] ?? DEFAULT_MODEL,
+    baseUrl: process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL,
+    configured: Boolean(process.env["LLM_API_KEY"]),
+  };
+}
+
 export async function generateAndSavePost(opts: {
   agentId?: string;
   modeHint?: WriterMode | "auto";
   model?: string;
   corpusDays?: number;
 }): Promise<WriteResult> {
-  const apiKey = process.env["ANTHROPIC_API_KEY"];
-  if (!apiKey) return { ok: false, error: "ANTHROPIC_API_KEY not configured" };
+  const apiKey = process.env["LLM_API_KEY"];
+  if (!apiKey) return { ok: false, error: "LLM_API_KEY not configured" };
 
   const agentId = opts.agentId ?? "daily-writer";
-  const model = opts.model ?? "claude-sonnet-4-6";
+  const baseURL = process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL;
+  const model = opts.model ?? process.env["LLM_MODEL"] ?? DEFAULT_MODEL;
   const modeHint = opts.modeHint ?? "auto";
 
   const corpus = await loadCorpus(opts.corpusDays ?? 7);
@@ -196,7 +211,7 @@ export async function generateAndSavePost(opts: {
     return { ok: false, error: `Corpus too thin: ${corpus.length} items in window` };
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = new OpenAI({ apiKey, baseURL });
 
   const userMessage = [
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
@@ -208,35 +223,32 @@ export async function generateAndSavePost(opts: {
     formatCorpus(corpus),
   ].join("\n");
 
-  let response;
+  let responseText: string;
   try {
-    response = await client.messages.create({
+    const response = await client.chat.completions.create({
       model,
       max_tokens: 4096,
-      system: [
-        {
-          type: "text",
-          text: SYSTEM_PROMPT,
-          cache_control: { type: "ephemeral" },
-        },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
       ],
-      messages: [{ role: "user", content: userMessage }],
+      response_format: { type: "json_object" },
     });
+    responseText = response.choices[0]?.message?.content ?? "";
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error({ err: message }, "Anthropic call failed");
-    return { ok: false, error: `Anthropic call failed: ${message}` };
+    logger.error({ err: message, model, baseURL }, "LLM call failed");
+    return { ok: false, error: `LLM call failed: ${message}` };
   }
 
-  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-  if (!textBlock) return { ok: false, error: "No text content in response" };
+  if (!responseText) return { ok: false, error: "Empty response from model" };
 
-  const raw = extractJson(textBlock.text);
+  const raw = extractJson(responseText);
   if (!raw) return { ok: false, error: "Response was not valid JSON" };
 
   const validated = validateDraft(raw, corpus);
   if ("error" in validated) {
-    logger.warn({ rawLength: textBlock.text.length, ...validated }, "Draft rejected");
+    logger.warn({ rawLength: responseText.length, ...validated }, "Draft rejected");
     return { ok: false, error: validated.error };
   }
 

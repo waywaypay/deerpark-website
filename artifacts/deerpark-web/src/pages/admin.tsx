@@ -566,6 +566,7 @@ type WriterAgent = {
   displayName: string;
   description: string;
   model: string;
+  baseUrl: string;
   enabled: boolean;
   configured: boolean;
   postCount: number;
@@ -714,7 +715,10 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
                     {a.description}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.model}</td>
+                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
+                  <div>{a.model}</div>
+                  <div className="text-[10px] opacity-70 truncate max-w-[200px]">{a.baseUrl}</div>
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${

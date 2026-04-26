@@ -4,7 +4,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { adminAuth } from "../middlewares/admin-auth";
 import { SOURCES } from "../lib/headline-sources";
 import { ingestAllSources, ingestSourceById } from "../lib/ingest-headlines";
-import { generateAndSavePost, type WriterMode } from "../lib/writer-agent";
+import { generateAndSavePost, getModelInfo, type WriterMode } from "../lib/writer-agent";
 
 const router: IRouter = Router();
 
@@ -126,7 +126,7 @@ router.post("/admin/agents/:id/ingest", async (req, res) => {
 // Surfacing as a list keeps the admin UI scaffold consistent and leaves room
 // for additional writers (different angles, target audiences) later.
 router.get("/admin/writers", async (req, res) => {
-  const apiKeyConfigured = Boolean(process.env["ANTHROPIC_API_KEY"]);
+  const info = getModelInfo();
   try {
     const stats = await db
       .select({
@@ -145,9 +145,10 @@ router.get("/admin/writers", async (req, res) => {
           displayName: "Daily Writer",
           description:
             "Writes one post per day from the rolling 7-day headline corpus. Picks digest, deep dive, or free pick at its discretion. All claims must be cited from corpus URLs.",
-          model: "claude-sonnet-4-6",
-          enabled: apiKeyConfigured,
-          configured: apiKeyConfigured,
+          model: info.model,
+          baseUrl: info.baseUrl,
+          enabled: info.configured,
+          configured: info.configured,
           postCount: dailyStats?.count ?? 0,
           latestPublishedAt: dailyStats?.latestPublishedAt ?? null,
         },

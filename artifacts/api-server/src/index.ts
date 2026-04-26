@@ -32,11 +32,11 @@ app.listen(port, (err) => {
   }
 
   if (process.env["DISABLE_WRITER_SCHEDULER"] !== "1") {
-    if (process.env["ANTHROPIC_API_KEY"]) {
+    if (process.env["LLM_API_KEY"]) {
       startWriterScheduler();
       logger.info("Writer scheduler started (24h cadence)");
     } else {
-      logger.warn("ANTHROPIC_API_KEY not set — writer scheduler disabled");
+      logger.warn("LLM_API_KEY not set — writer scheduler disabled");
     }
   }
 });
