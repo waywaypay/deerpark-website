@@ -363,13 +363,35 @@ export async function generateAndSavePost(opts: {
       response_format: { type: "json_object" },
     });
     responseText = response.choices[0]?.message?.content ?? "";
+    if (!responseText) {
+      // Surface why the response is empty — finish_reason, tool calls, refusal,
+      // content filter, etc. — so we can act on it instead of guessing.
+      const choice = response.choices[0];
+      const message = choice?.message as
+        | { refusal?: unknown; tool_calls?: unknown }
+        | undefined;
+      logger.warn(
+        {
+          model,
+          baseURL,
+          finishReason: choice?.finish_reason,
+          refusal: message?.refusal,
+          toolCalls: message?.tool_calls,
+          usage: response.usage,
+          rawChoice: JSON.stringify(choice).slice(0, 1000),
+        },
+        "Empty response from model",
+      );
+      return {
+        ok: false,
+        error: `Empty response from model (finish_reason=${choice?.finish_reason ?? "?"})`,
+      };
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ err: message, model, baseURL }, "LLM call failed");
     return { ok: false, error: `LLM call failed: ${message}` };
   }
-
-  if (!responseText) return { ok: false, error: "Empty response from model" };
 
   const raw = extractJson(responseText);
   if (!raw) {
