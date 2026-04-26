@@ -4,7 +4,15 @@ import { desc, eq, sql } from "drizzle-orm";
 import { adminAuth } from "../middlewares/admin-auth";
 import { SOURCES } from "../lib/headline-sources";
 import { ingestAllSources, ingestSourceById } from "../lib/ingest-headlines";
-import { generateAndSavePost, getModelInfo, type WriterMode } from "../lib/writer-agent";
+import {
+  generateAndSavePost,
+  getModelInfo,
+  getSystemPrompt,
+  setSystemPrompt,
+  resetSystemPrompt,
+  DEFAULT_SYSTEM_PROMPT,
+  type WriterMode,
+} from "../lib/writer-agent";
 
 const router: IRouter = Router();
 
@@ -188,6 +196,51 @@ router.post("/admin/writers/:id/run", async (req, res) => {
     return res.json({ postId: result.postId, draft: result.draft });
   } catch (err) {
     req.log.error({ err, id }, "Manual writer run failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/admin/writers/:id/prompt", async (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  try {
+    const { prompt, isCustom } = await getSystemPrompt(id);
+    return res.json({
+      prompt,
+      isCustom,
+      defaultPrompt: DEFAULT_SYSTEM_PROMPT,
+    });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to load prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/writers/:id/prompt", async (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  const body = req.body as { prompt?: unknown };
+  const value = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+  if (!value) return res.status(400).json({ error: "Missing or empty prompt" });
+  if (value.length < 200) return res.status(400).json({ error: "Prompt too short (< 200 chars)" });
+  if (value.length > 20_000) return res.status(400).json({ error: "Prompt too long (> 20k chars)" });
+  try {
+    await setSystemPrompt(id, value);
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to save prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/writers/:id/prompt", async (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  try {
+    await resetSystemPrompt(id);
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to reset prompt");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

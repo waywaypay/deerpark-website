@@ -616,6 +616,15 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
   const [lastRun, setLastRun] = useState<{ ok: boolean; message: string } | null>(null);
   const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
 
+  // Prompt editor state
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptDraft, setPromptDraft] = useState<string>("");
+  const [promptIsCustom, setPromptIsCustom] = useState(false);
+  const [promptDefault, setPromptDefault] = useState<string>("");
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptSaving, setPromptSaving] = useState(false);
+  const [promptStatus, setPromptStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -660,6 +669,76 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
     }
   };
 
+  const openPromptEditor = async () => {
+    setPromptOpen(true);
+    setPromptStatus(null);
+    setPromptLoading(true);
+    try {
+      const res = await apiFetch(token, "/admin/writers/daily-writer/prompt");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as {
+        prompt: string;
+        isCustom: boolean;
+        defaultPrompt: string;
+      };
+      setPromptDraft(json.prompt);
+      setPromptIsCustom(json.isCustom);
+      setPromptDefault(json.defaultPrompt);
+    } catch (err) {
+      setPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Failed to load prompt",
+      });
+    } finally {
+      setPromptLoading(false);
+    }
+  };
+
+  const savePrompt = async () => {
+    setPromptSaving(true);
+    setPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/writers/daily-writer/prompt", {
+        method: "PUT",
+        body: JSON.stringify({ prompt: promptDraft }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (res.ok) {
+        setPromptIsCustom(true);
+        setPromptStatus({ ok: true, message: "Prompt saved. Next run will use it." });
+      } else {
+        setPromptStatus({ ok: false, message: json.error ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      setPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Save failed",
+      });
+    } finally {
+      setPromptSaving(false);
+    }
+  };
+
+  const resetPromptToDefault = async () => {
+    if (!confirm("Reset to the built-in default prompt? Your custom edits will be deleted.")) return;
+    setPromptSaving(true);
+    setPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/writers/daily-writer/prompt", { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setPromptDraft(promptDefault);
+      setPromptIsCustom(false);
+      setPromptStatus({ ok: true, message: "Reset to default." });
+    } catch (err) {
+      setPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Reset failed",
+      });
+    } finally {
+      setPromptSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -673,6 +752,13 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            onClick={() => void openPromptEditor()}
+            className="rounded-none text-xs uppercase tracking-widest"
+          >
+            <PenLine className="w-3.5 h-3.5" /> Edit prompt
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => void load()}
             disabled={loading}
             className="rounded-none text-xs uppercase tracking-widest"
@@ -681,6 +767,97 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
           </Button>
         </div>
       </div>
+
+      {promptOpen && (
+        <div className="border border-foreground/30 bg-card">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
+            <div>
+              <div className="section-label">System prompt</div>
+              <div className="text-xs text-muted-foreground font-light mt-1">
+                Controls voice, format, and rules for the Daily Writer.{" "}
+                <span className={promptIsCustom ? "text-primary" : ""}>
+                  {promptIsCustom ? "Using custom prompt." : "Using built-in default."}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPromptOpen(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+          {promptLoading ? (
+            <div className="p-6 text-xs text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="p-4 space-y-3">
+              <textarea
+                value={promptDraft}
+                onChange={(e) => setPromptDraft(e.target.value)}
+                spellCheck={false}
+                rows={20}
+                className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
+              />
+              <div className="flex items-center justify-between text-xs">
+                <div className="text-muted-foreground">
+                  {promptDraft.length.toLocaleString()} chars
+                  {promptDraft.length < 200 && (
+                    <span className="text-red-400 ml-2">— too short (min 200)</span>
+                  )}
+                  {promptDraft.length > 20_000 && (
+                    <span className="text-red-400 ml-2">— too long (max 20,000)</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => void resetPromptToDefault()}
+                    disabled={promptSaving || !promptIsCustom}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Reset to default
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPromptDraft(promptDefault)}
+                    disabled={promptSaving}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Load default into editor
+                  </Button>
+                  <Button
+                    onClick={() => void savePrompt()}
+                    disabled={
+                      promptSaving ||
+                      promptDraft.length < 200 ||
+                      promptDraft.length > 20_000
+                    }
+                    className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+                  >
+                    {promptSaving ? "Saving…" : "Save prompt"}
+                  </Button>
+                </div>
+              </div>
+              {promptStatus && (
+                <div
+                  className={`text-xs ${
+                    promptStatus.ok ? "text-primary" : "text-red-400"
+                  }`}
+                >
+                  {promptStatus.message}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
+                Saved prompts take effect on the next writer run. Anti-hallucination is enforced
+                in code regardless of prompt — the citation validator rejects drafts that
+                reference URLs not in the corpus, so even if you remove the rules from the
+                prompt, fabricated citations still won't be saved.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
