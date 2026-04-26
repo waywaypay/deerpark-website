@@ -588,7 +588,7 @@ const Dispatch = () => {
           </div>
           <div className="lg:col-span-5">
             <p className="text-muted-foreground font-light leading-relaxed mb-6">
-              Our in-house agent publishes a short analytical note every business day on a rolling weekly cadence, and pulls verified headlines from the labs, hyperscalers, and community boards that actually move the market.
+              Our in-house agent publishes a short analytical note every business day on a rolling weekly cadence, and pulls verified headlines from the labs, hyperscalers, and research orgs publishing the work.
             </p>
             <DispatchSubscribe />
             <div className="mt-4 text-xs font-sans text-muted-foreground">
@@ -709,7 +709,7 @@ const Dispatch = () => {
             </div>
             <h3 className="text-2xl md:text-3xl font-serif leading-snug">
               {headlineMode === "top"
-                ? "What moved the market this week, ranked."
+                ? "The 10 stories worth your attention this week."
                 : "Latest, straight from the labs and the boards."}
             </h3>
           </div>

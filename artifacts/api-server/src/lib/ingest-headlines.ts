@@ -228,6 +228,112 @@ async function fetchEpochBlog(source: SourceConfig): Promise<NormalizedItem[]> {
   return items;
 }
 
+async function fetchDeepSeekNews(source: SourceConfig): Promise<NormalizedItem[]> {
+  // DeepSeek's news pages live at api-docs.deepseek.com/news/news<DATE>.
+  // Their sitemap.xml lists every entry, but without lastmod — date is encoded
+  // in the slug. Old entries use 4-digit MMDD (assume 2024), modern entries
+  // use 6-digit YYMMDD. We fetch each recent page for its <h1> title.
+  const sitemapRes = await fetch(source.url, {
+    headers: { accept: "application/xml", "user-agent": USER_AGENT },
+  });
+  if (!sitemapRes.ok) throw new Error(`DeepSeek sitemap returned ${sitemapRes.status}`);
+  const xml = await sitemapRes.text();
+
+  const slugRe = /<loc>(https:\/\/api-docs\.deepseek\.com\/news\/news(\d+))<\/loc>/g;
+  const candidates: { url: string; publishedAt: Date }[] = [];
+  for (const match of xml.matchAll(slugRe)) {
+    const url = match[1]!;
+    const digits = match[2]!;
+    let publishedAt: Date;
+    if (digits.length === 6) {
+      const yy = Number(digits.slice(0, 2));
+      const mm = Number(digits.slice(2, 4));
+      const dd = Number(digits.slice(4, 6));
+      publishedAt = new Date(Date.UTC(2000 + yy, mm - 1, dd));
+    } else if (digits.length === 4) {
+      const mm = Number(digits.slice(0, 2));
+      const dd = Number(digits.slice(2, 4));
+      publishedAt = new Date(Date.UTC(2024, mm - 1, dd));
+    } else {
+      continue;
+    }
+    if (Number.isNaN(publishedAt.getTime())) continue;
+    candidates.push({ url, publishedAt });
+  }
+  candidates.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+  const recent = candidates.slice(0, 10);
+
+  const h1Re = /<h1[^>]*>([^<]+)<\/h1>/i;
+  const items = await Promise.all(
+    recent.map(async ({ url, publishedAt }): Promise<NormalizedItem | null> => {
+      try {
+        const res = await fetch(url, {
+          headers: { accept: "text/html", "user-agent": USER_AGENT },
+        });
+        if (!res.ok) return null;
+        const html = await res.text();
+        const title = (html.match(h1Re)?.[1] ?? "").trim();
+        if (!title) return null;
+        return {
+          source: source.displayName,
+          category: source.category,
+          title,
+          url,
+          urlHash: hashUrl(url),
+          publishedAt,
+        };
+      } catch {
+        return null;
+      }
+    }),
+  );
+  return items.filter((i): i is NormalizedItem => i !== null);
+}
+
+async function fetchKimiBlog(source: SourceConfig): Promise<NormalizedItem[]> {
+  // Kimi's blog index is server-rendered with one anchor per post containing
+  // h4.card-title and p.card-date (YYYY/MM/DD). The page lists each post
+  // twice (hero + grid) — dedupe on slug.
+  const res = await fetch(source.url, {
+    headers: { accept: "text/html", "user-agent": USER_AGENT },
+  });
+  if (!res.ok) throw new Error(`Kimi blog returned ${res.status}`);
+  const html = await res.text();
+
+  const cardRe =
+    /<a\s+href="(\/blog\/[a-z0-9-]+)"[^>]*>[\s\S]*?<h4[^>]*class="card-title"[^>]*>([^<]+)<\/h4>[\s\S]*?<p[^>]*class="card-date"[^>]*>([^<]+)<\/p>[\s\S]*?<\/a>/g;
+  const seen = new Set<string>();
+  const items: NormalizedItem[] = [];
+
+  for (const match of html.matchAll(cardRe)) {
+    const slug = match[1]!;
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+
+    const title = match[2]!.trim();
+    const dateRaw = match[3]!.trim();
+    const dateMatch = dateRaw.match(/(\d{4})[/\-](\d{1,2})[/\-](\d{1,2})/);
+    let publishedAt = new Date();
+    if (dateMatch) {
+      const candidate = new Date(
+        Date.UTC(Number(dateMatch[1]), Number(dateMatch[2]) - 1, Number(dateMatch[3])),
+      );
+      if (!Number.isNaN(candidate.getTime())) publishedAt = candidate;
+    }
+
+    const url = `https://www.kimi.com${slug}`;
+    items.push({
+      source: source.displayName,
+      category: source.category,
+      title,
+      url,
+      urlHash: hashUrl(url),
+      publishedAt,
+    });
+  }
+  return items;
+}
+
 async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
   switch (source.kind) {
     case "rss":
@@ -242,6 +348,10 @@ async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
       return fetchMistralNews(source);
     case "epoch-blog":
       return fetchEpochBlog(source);
+    case "deepseek-news":
+      return fetchDeepSeekNews(source);
+    case "kimi-blog":
+      return fetchKimiBlog(source);
   }
 }
 

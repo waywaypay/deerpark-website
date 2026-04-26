@@ -4,10 +4,12 @@ export type SourceKind =
   | "hf-papers"
   | "anthropic-news"
   | "mistral-news"
-  | "epoch-blog";
+  | "epoch-blog"
+  | "deepseek-news"
+  | "kimi-blog";
 
-// 1 = top tier (frontier labs, foundational evals — original-source headlines
-// that actually move the market), 4 = bottom tier (volume press + community).
+// 1 = top tier (frontier labs, foundational evals — original-source releases
+// readers shouldn't miss), 4 = bottom tier (volume press + community).
 // Used to weight the homepage "top" view; latest view ignores tier.
 export type SourceTier = 1 | 2 | 3 | 4;
 
@@ -110,6 +112,24 @@ export const SOURCES: SourceConfig[] = [
     category: "Lab",
     kind: "mistral-news",
     url: process.env["MISTRAL_FEED_URL"] ?? "https://mistral.ai/sitemap.xml",
+    enabled: true,
+    tier: 2,
+  },
+  {
+    id: "deepseek",
+    displayName: "DeepSeek",
+    category: "Lab",
+    kind: "deepseek-news",
+    url: process.env["DEEPSEEK_FEED_URL"] ?? "https://api-docs.deepseek.com/sitemap.xml",
+    enabled: true,
+    tier: 1,
+  },
+  {
+    id: "moonshot",
+    displayName: "Moonshot (Kimi)",
+    category: "Lab",
+    kind: "kimi-blog",
+    url: process.env["MOONSHOT_FEED_URL"] ?? "https://www.kimi.com/blog/",
     enabled: true,
     tier: 2,
   },
