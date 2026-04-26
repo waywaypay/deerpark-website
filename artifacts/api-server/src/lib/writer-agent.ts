@@ -85,7 +85,9 @@ Length: title ≤ 80 chars; dek 1–2 sentences (≤ 220 chars); body 250–500 
 
 Tag (pick one): "Analysis" (broader pattern), "Market" (industry/business angle), "Practice" (how-to / operating advice), "Signals" (what one event implies), "Field Notes" (observations from the wild).
 
-Output strictly this JSON shape and nothing else:
+CRITICAL output format: respond with ONE JSON object and absolutely nothing else. No prose before, no prose after, no markdown code fences (no \`\`\`), no commentary like "Here's the JSON:". The very first character of your response must be { and the very last must be }. If you include anything outside the JSON, the post is rejected and discarded.
+
+Schema:
 {
   "mode": "digest" | "deep_dive" | "free_pick",
   "tag": "Analysis" | "Market" | "Practice" | "Signals" | "Field Notes",
@@ -121,14 +123,60 @@ type RawDraft = {
   abort?: boolean;
 };
 
+// Pull the JSON object out of model output. Some providers (Venice) silently
+// drop response_format=json_object, so the model may emit prose around the
+// JSON or wrap it in code fences. Strategy: try the whole thing, then strip
+// fences, then scan for the largest brace-balanced substring.
 const extractJson = (text: string): RawDraft | null => {
-  // Claude with response_format json sometimes wraps in code fences anyway.
-  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
-  try {
-    return JSON.parse(trimmed) as RawDraft;
-  } catch {
-    return null;
+  const tryParse = (s: string): RawDraft | null => {
+    try {
+      return JSON.parse(s) as RawDraft;
+    } catch {
+      return null;
+    }
+  };
+
+  const trimmed = text.trim();
+  let r = tryParse(trimmed);
+  if (r) return r;
+
+  const defenced = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "");
+  r = tryParse(defenced);
+  if (r) return r;
+
+  // Brace-balanced scan: find the first { and walk to its matching }.
+  // Tracks string state so braces inside strings don't break the count.
+  const start = defenced.indexOf("{");
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < defenced.length; i++) {
+    const ch = defenced[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        return tryParse(defenced.slice(start, i + 1));
+      }
+    }
   }
+  return null;
 };
 
 const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | { error: string } => {
@@ -278,7 +326,13 @@ export async function generateAndSavePost(opts: {
   if (!responseText) return { ok: false, error: "Empty response from model" };
 
   const raw = extractJson(responseText);
-  if (!raw) return { ok: false, error: "Response was not valid JSON" };
+  if (!raw) {
+    logger.warn(
+      { model, baseURL, rawPreview: responseText.slice(0, 500), rawLength: responseText.length },
+      "Response was not valid JSON",
+    );
+    return { ok: false, error: "Response was not valid JSON" };
+  }
 
   const validated = validateDraft(raw, corpus);
   if ("error" in validated) {
