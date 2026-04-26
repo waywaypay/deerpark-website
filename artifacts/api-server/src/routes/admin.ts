@@ -141,6 +141,10 @@ router.get("/admin/writers", async (req, res) => {
         agentId: postsTable.agentId,
         count: sql<number>`count(*)::int`,
         latestPublishedAt: sql<Date | null>`max(${postsTable.publishedAt})`,
+        totalPromptTokens: sql<number>`coalesce(sum(${postsTable.promptTokens}), 0)::int`,
+        totalCompletionTokens: sql<number>`coalesce(sum(${postsTable.completionTokens}), 0)::int`,
+        totalTokens: sql<number>`coalesce(sum(${postsTable.totalTokens}), 0)::int`,
+        totalCostUsd: sql<string>`coalesce(sum(${postsTable.costUsd}::numeric), 0)::text`,
       })
       .from(postsTable)
       .groupBy(postsTable.agentId);
@@ -159,6 +163,10 @@ router.get("/admin/writers", async (req, res) => {
           configured: info.configured,
           postCount: dailyStats?.count ?? 0,
           latestPublishedAt: dailyStats?.latestPublishedAt ?? null,
+          totalPromptTokens: dailyStats?.totalPromptTokens ?? 0,
+          totalCompletionTokens: dailyStats?.totalCompletionTokens ?? 0,
+          totalTokens: dailyStats?.totalTokens ?? 0,
+          totalCostUsd: dailyStats?.totalCostUsd ?? "0",
         },
       ],
     });

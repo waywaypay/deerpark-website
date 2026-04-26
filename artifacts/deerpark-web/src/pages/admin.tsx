@@ -571,6 +571,10 @@ type WriterAgent = {
   configured: boolean;
   postCount: number;
   latestPublishedAt: string | null;
+  totalPromptTokens: number;
+  totalCompletionTokens: number;
+  totalTokens: number;
+  totalCostUsd: string;
 };
 
 type AdminPost = {
@@ -584,8 +588,28 @@ type AdminPost = {
   citations: string[];
   sourceHeadlineIds: number[];
   model: string;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  costUsd: string | null;
   publishedAt: string;
   createdAt: string;
+};
+
+const formatTokens = (n: number | null | undefined) => {
+  if (!n) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return n.toLocaleString();
+};
+
+const formatUsd = (s: string | number | null | undefined) => {
+  if (s === null || s === undefined || s === "") return "—";
+  const n = typeof s === "string" ? Number(s) : s;
+  if (!Number.isFinite(n) || n === 0) return "$0";
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(2)}`;
 };
 
 type EmailAgent = {
@@ -861,6 +885,55 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
+      {agents && agents.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {(() => {
+            const a = agents[0];
+            const avgCost =
+              a.postCount > 0
+                ? Number(a.totalCostUsd) / a.postCount
+                : 0;
+            const avgTokens = a.postCount > 0 ? a.totalTokens / a.postCount : 0;
+            return (
+              <>
+                <div className="border border-foreground/15 bg-card px-4 py-3">
+                  <div className="section-label text-[10px]">Total spent</div>
+                  <div className="text-xl font-serif mt-1">
+                    {formatUsd(a.totalCostUsd)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    over {a.postCount} {a.postCount === 1 ? "post" : "posts"}
+                  </div>
+                </div>
+                <div className="border border-foreground/15 bg-card px-4 py-3">
+                  <div className="section-label text-[10px]">Avg cost / post</div>
+                  <div className="text-xl font-serif mt-1">{formatUsd(avgCost)}</div>
+                  <div className="text-[10px] text-muted-foreground mt-1">running average</div>
+                </div>
+                <div className="border border-foreground/15 bg-card px-4 py-3">
+                  <div className="section-label text-[10px]">Total tokens</div>
+                  <div className="text-xl font-serif mt-1">
+                    {formatTokens(a.totalTokens)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    {formatTokens(a.totalPromptTokens)} in · {formatTokens(a.totalCompletionTokens)} out
+                  </div>
+                </div>
+                <div className="border border-foreground/15 bg-card px-4 py-3">
+                  <div className="section-label text-[10px]">Avg tokens / post</div>
+                  <div className="text-xl font-serif mt-1">
+                    {formatTokens(Math.round(avgTokens))}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground mt-1">
+                    in + out combined
+                  </div>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       {lastRun && (
         <div
           className={`border p-3 text-xs font-sans ${
@@ -971,15 +1044,45 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
                       {p.dek}
                     </div>
                   </div>
-                  <ChevronRight
-                    className={`w-4 h-4 text-muted-foreground shrink-0 mt-1 transition-transform ${
-                      expandedPostId === p.id ? "rotate-90" : ""
-                    }`}
-                  />
+                  <div className="text-right shrink-0">
+                    <div className="text-xs font-mono">{formatUsd(p.costUsd)}</div>
+                    <div className="text-[11px] text-muted-foreground font-mono">
+                      {formatTokens(p.totalTokens)} tok
+                    </div>
+                    <ChevronRight
+                      className={`w-4 h-4 text-muted-foreground mt-1 ml-auto transition-transform ${
+                        expandedPostId === p.id ? "rotate-90" : ""
+                      }`}
+                    />
+                  </div>
                 </div>
               </button>
               {expandedPostId === p.id && (
                 <div className="mt-4 space-y-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                    <div>
+                      <div className="text-[10px] section-label">Cost</div>
+                      <div className="text-sm font-mono mt-1">{formatUsd(p.costUsd)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] section-label">Total tokens</div>
+                      <div className="text-sm font-mono mt-1">
+                        {formatTokens(p.totalTokens)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] section-label">Prompt</div>
+                      <div className="text-sm font-mono mt-1">
+                        {formatTokens(p.promptTokens)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] section-label">Completion</div>
+                      <div className="text-sm font-mono mt-1">
+                        {formatTokens(p.completionTokens)}
+                      </div>
+                    </div>
+                  </div>
                   <div className="text-xs section-label">Body</div>
                   <pre className="whitespace-pre-wrap text-sm font-light text-foreground/90 leading-relaxed">
                     {p.bodyMarkdown}
