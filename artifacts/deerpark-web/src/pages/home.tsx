@@ -504,11 +504,13 @@ type HeadlineApiItem = {
   publishedAt: string;
 };
 
-function useHeadlines() {
+type HeadlineMode = "top" | "latest";
+
+function useHeadlines(mode: HeadlineMode) {
   return useQuery<Headline[]>({
-    queryKey: ["headlines"],
+    queryKey: ["headlines", mode],
     queryFn: async () => {
-      const res = await fetch("/api/headlines?limit=30");
+      const res = await fetch(`/api/headlines?mode=${mode}`);
       if (!res.ok) throw new Error(`Headlines request failed: ${res.status}`);
       const data = (await res.json()) as { items: HeadlineApiItem[] };
       return data.items.map((h) => ({
@@ -561,7 +563,8 @@ const Dispatch = () => {
   const [selectedWeekId, setSelectedWeekId] = useState(DISPATCH_WEEKS[0].id);
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
   const selectedWeek = DISPATCH_WEEKS.find((w) => w.id === selectedWeekId) ?? DISPATCH_WEEKS[0];
-  const headlinesQuery = useHeadlines();
+  const [headlineMode, setHeadlineMode] = useState<HeadlineMode>("top");
+  const headlinesQuery = useHeadlines(headlineMode);
   const headlines: Headline[] = headlinesQuery.data && headlinesQuery.data.length > 0
     ? headlinesQuery.data
     : HEADLINE_FALLBACK;
@@ -698,22 +701,44 @@ const Dispatch = () => {
       </div>
 
       <FadeIn>
-        <div className="flex items-end justify-between mb-8 border-b border-foreground/15 pb-6">
+        <div className="flex items-end justify-between mb-8 border-b border-foreground/15 pb-6 gap-6">
           <div>
             <div className="flex items-center gap-3 mb-3">
               <Rss className="w-4 h-4 text-foreground/70" />
               <span className="section-label">Headline Feed</span>
             </div>
             <h3 className="text-2xl md:text-3xl font-serif leading-snug">
-              Pulled directly from the labs and the boards, every hour.
+              {headlineMode === "top"
+                ? "What moved the market this week, ranked."
+                : "Latest, straight from the labs and the boards."}
             </h3>
           </div>
-          <div className="hidden md:block text-xs uppercase tracking-[0.18em] text-muted-foreground font-sans">
-            {headlinesQuery.isLoading
-              ? "Syncing…"
-              : headlinesQuery.isError
-                ? "Sync unavailable"
-                : `Last sync • ${lastSync ? formatRelative(lastSync) : "just now"}`}
+          <div className="flex flex-col items-end gap-3 shrink-0">
+            <div className="inline-flex border border-foreground/20" role="tablist" aria-label="Headline view">
+              {(["top", "latest"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={headlineMode === m}
+                  onClick={() => setHeadlineMode(m)}
+                  className={`px-4 py-2 text-[10px] uppercase tracking-[0.2em] font-sans transition-colors ${
+                    headlineMode === m
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {m === "top" ? "This week" : "Latest"}
+                </button>
+              ))}
+            </div>
+            <div className="hidden md:block text-xs uppercase tracking-[0.18em] text-muted-foreground font-sans">
+              {headlinesQuery.isLoading
+                ? "Syncing…"
+                : headlinesQuery.isError
+                  ? "Sync unavailable"
+                  : `Last sync • ${lastSync ? formatRelative(lastSync) : "just now"}`}
+            </div>
           </div>
         </div>
       </FadeIn>

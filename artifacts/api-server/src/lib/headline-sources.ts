@@ -6,6 +6,11 @@ export type SourceKind =
   | "mistral-news"
   | "epoch-blog";
 
+// 1 = top tier (frontier labs, foundational evals — original-source headlines
+// that actually move the market), 4 = bottom tier (volume press + community).
+// Used to weight the homepage "top" view; latest view ignores tier.
+export type SourceTier = 1 | 2 | 3 | 4;
+
 export type SourceConfig = {
   id: string;
   displayName: string;
@@ -13,6 +18,7 @@ export type SourceConfig = {
   kind: SourceKind;
   url: string;
   enabled: boolean;
+  tier: SourceTier;
 };
 
 // URLs can be overridden via env vars. Anthropic and Mistral don't publish
@@ -31,6 +37,7 @@ export const SOURCES: SourceConfig[] = [
       process.env["HN_QUERY_URL"] ??
       "https://hn.algolia.com/api/v1/search_by_date?tags=story&query=AI&hitsPerPage=30",
     enabled: true,
+    tier: 4,
   },
   {
     id: "huggingface",
@@ -39,6 +46,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "hf-papers",
     url: process.env["HF_PAPERS_URL"] ?? "https://huggingface.co/api/daily_papers",
     enabled: true,
+    tier: 2,
   },
   {
     id: "arxiv",
@@ -47,6 +55,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["ARXIV_FEED_URL"] ?? "https://rss.arxiv.org/rss/cs.AI",
     enabled: true,
+    tier: 2,
   },
   {
     id: "anthropic",
@@ -55,6 +64,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "anthropic-news",
     url: process.env["ANTHROPIC_FEED_URL"] ?? "https://www.anthropic.com/news",
     enabled: true,
+    tier: 1,
   },
   {
     id: "openai",
@@ -63,6 +73,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["OPENAI_FEED_URL"] ?? "https://openai.com/news/rss.xml",
     enabled: true,
+    tier: 1,
   },
   {
     id: "google",
@@ -71,6 +82,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["GOOGLE_AI_FEED_URL"] ?? "https://blog.google/technology/ai/rss/",
     enabled: true,
+    tier: 2,
   },
   {
     id: "deepmind",
@@ -79,6 +91,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["DEEPMIND_FEED_URL"] ?? "https://deepmind.google/blog/rss.xml",
     enabled: true,
+    tier: 1,
   },
   {
     id: "microsoft",
@@ -89,6 +102,7 @@ export const SOURCES: SourceConfig[] = [
       process.env["MICROSOFT_AI_FEED_URL"] ??
       "https://news.microsoft.com/source/topics/ai/feed/",
     enabled: true,
+    tier: 2,
   },
   {
     id: "mistral",
@@ -97,6 +111,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "mistral-news",
     url: process.env["MISTRAL_FEED_URL"] ?? "https://mistral.ai/sitemap.xml",
     enabled: true,
+    tier: 2,
   },
   {
     id: "nvidia",
@@ -105,6 +120,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["NVIDIA_FEED_URL"] ?? "https://blogs.nvidia.com/feed/",
     enabled: true,
+    tier: 3,
   },
   {
     id: "amazon",
@@ -115,6 +131,7 @@ export const SOURCES: SourceConfig[] = [
       process.env["AWS_ML_FEED_URL"] ??
       "https://aws.amazon.com/blogs/machine-learning/feed/",
     enabled: true,
+    tier: 3,
   },
   {
     id: "techcrunch-ai",
@@ -125,6 +142,7 @@ export const SOURCES: SourceConfig[] = [
       process.env["TECHCRUNCH_AI_FEED_URL"] ??
       "https://techcrunch.com/category/artificial-intelligence/feed/",
     enabled: true,
+    tier: 4,
   },
   {
     id: "verge-ai",
@@ -135,6 +153,7 @@ export const SOURCES: SourceConfig[] = [
       process.env["VERGE_AI_FEED_URL"] ??
       "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
     enabled: true,
+    tier: 4,
   },
   {
     id: "import-ai",
@@ -143,6 +162,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["IMPORT_AI_FEED_URL"] ?? "https://importai.substack.com/feed",
     enabled: true,
+    tier: 3,
   },
   {
     id: "latent-space",
@@ -151,6 +171,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["LATENT_SPACE_FEED_URL"] ?? "https://www.latent.space/feed",
     enabled: true,
+    tier: 3,
   },
   {
     id: "metr",
@@ -159,6 +180,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["METR_FEED_URL"] ?? "https://metr.org/feed.xml",
     enabled: true,
+    tier: 1,
   },
   {
     id: "lmarena",
@@ -167,6 +189,7 @@ export const SOURCES: SourceConfig[] = [
     kind: "rss",
     url: process.env["LMARENA_FEED_URL"] ?? "https://blog.lmarena.ai/feed",
     enabled: true,
+    tier: 2,
   },
   {
     id: "epoch",
@@ -175,5 +198,6 @@ export const SOURCES: SourceConfig[] = [
     kind: "epoch-blog",
     url: process.env["EPOCH_FEED_URL"] ?? "https://epoch.ai/blog",
     enabled: true,
+    tier: 2,
   },
 ];
