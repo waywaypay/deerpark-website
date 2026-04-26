@@ -45,9 +45,10 @@ router.get("/headlines", async (req, res) => {
   try {
     if (mode === "top") {
       // Weighted view: score recent items by tier × recency decay, then take
-      // the top N. Pulls a wide candidate set from the last `days` days
-      // (capped per-source so high-volume feeds can't crowd out the rest),
-      // then ranks in JS so the formula stays legible and easy to tune.
+      // the top N. Pulls a tight candidate set from the last `days` days —
+      // 2 per source so high-volume feeds (arXiv, HN) can't crowd out
+      // weekly-cadence labs even when they're freshly published — then ranks
+      // in JS so the formula stays legible and easy to tune.
       const result = await db.execute(sql`
         WITH ranked AS (
           SELECT
@@ -58,7 +59,7 @@ router.get("/headlines", async (req, res) => {
         )
         SELECT id, source, category, title, url, published_at
         FROM ranked
-        WHERE rn <= 5
+        WHERE rn <= 2
       `);
       const candidates: HeadlineRow[] = result.rows.map((r) => ({
         id: Number(r["id"]),
