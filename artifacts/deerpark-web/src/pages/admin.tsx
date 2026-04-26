@@ -565,7 +565,26 @@ type WriterAgent = {
   id: string;
   displayName: string;
   description: string;
+  model: string;
   enabled: boolean;
+  configured: boolean;
+  postCount: number;
+  latestPublishedAt: string | null;
+};
+
+type AdminPost = {
+  id: number;
+  agentId: string;
+  mode: string;
+  tag: string;
+  title: string;
+  dek: string;
+  bodyMarkdown: string;
+  citations: string[];
+  sourceHeadlineIds: number[];
+  model: string;
+  publishedAt: string;
+  createdAt: string;
 };
 
 type EmailAgent = {
@@ -575,11 +594,70 @@ type EmailAgent = {
   enabled: boolean;
 };
 
-const PLACEHOLDER_WRITER_AGENTS: WriterAgent[] = [];
 const PLACEHOLDER_EMAIL_AGENTS: EmailAgent[] = [];
 
-const WriterAgentsTab = () => {
-  const [agents] = useState<WriterAgent[]>(PLACEHOLDER_WRITER_AGENTS);
+const WRITER_MODES = [
+  { id: "auto", label: "Auto (agent picks)" },
+  { id: "digest", label: "Digest" },
+  { id: "deep_dive", label: "Deep dive" },
+  { id: "free_pick", label: "Free pick" },
+] as const;
+
+type WriterModeId = (typeof WRITER_MODES)[number]["id"];
+
+const WriterAgentsTab = ({ token }: { token: string }) => {
+  const [agents, setAgents] = useState<WriterAgent[] | null>(null);
+  const [posts, setPosts] = useState<AdminPost[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [runMode, setRunMode] = useState<WriterModeId>("auto");
+  const [lastRun, setLastRun] = useState<{ ok: boolean; message: string } | null>(null);
+  const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [aRes, pRes] = await Promise.all([
+        apiFetch(token, "/admin/writers"),
+        apiFetch(token, "/admin/posts"),
+      ]);
+      if (!aRes.ok) throw new Error(`Writers HTTP ${aRes.status}`);
+      if (!pRes.ok) throw new Error(`Posts HTTP ${pRes.status}`);
+      const aJson = (await aRes.json()) as { items: WriterAgent[] };
+      const pJson = (await pRes.json()) as { items: AdminPost[] };
+      setAgents(aJson.items);
+      setPosts(pJson.items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load writers");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const runOne = async (id: string) => {
+    setBusyId(id);
+    setLastRun(null);
+    try {
+      const res = await apiFetch(token, `/admin/writers/${id}/run?mode=${runMode}`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as { error?: string; postId?: number };
+      if (res.ok && json.postId) {
+        setLastRun({ ok: true, message: `Wrote post #${json.postId}` });
+        await load();
+      } else {
+        setLastRun({ ok: false, message: json.error ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      setLastRun({ ok: false, message: err instanceof Error ? err.message : "Run failed" });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -587,58 +665,172 @@ const WriterAgentsTab = () => {
         <div>
           <h2 className="text-2xl font-serif">Writer agents</h2>
           <p className="text-sm text-muted-foreground font-light mt-1">
-            Agents that turn ingested headlines into long-form blog posts.
+            Agents that turn ingested headlines into posts. Anti-hallucination: every citation
+            is validated against the corpus before save.
           </p>
         </div>
-        <Button
-          disabled
-          className="rounded-none text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
-        >
-          <PenLine className="w-3.5 h-3.5" /> New writer agent
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void load()}
+            disabled={loading}
+            className="rounded-none text-xs uppercase tracking-widest"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      {lastRun && (
+        <div
+          className={`border p-3 text-xs font-sans ${
+            lastRun.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"
+          }`}
+        >
+          {lastRun.message}
+        </div>
+      )}
 
       <div className="border border-foreground/15 bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left bg-background/40">
             <tr className="border-b border-foreground/10">
               <th className="px-4 py-3 section-label">Agent</th>
-              <th className="px-4 py-3 section-label">Description</th>
+              <th className="px-4 py-3 section-label">Model</th>
               <th className="px-4 py-3 section-label">Status</th>
+              <th className="px-4 py-3 section-label">Posts</th>
+              <th className="px-4 py-3 section-label">Latest</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
-            {agents.map((a) => (
+            {agents?.map((a) => (
               <tr key={a.id} className="border-b border-foreground/10 hover:bg-background/40">
-                <td className="px-4 py-3">{a.displayName}</td>
-                <td className="px-4 py-3 text-muted-foreground">{a.description}</td>
                 <td className="px-4 py-3">
-                  <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${a.enabled ? "border-primary/40 text-primary" : "border-foreground/20 text-muted-foreground"}`}>
-                    {a.enabled ? "Enabled" : "Disabled"}
+                  <div>{a.displayName}</div>
+                  <div className="text-[11px] text-muted-foreground font-light max-w-md">
+                    {a.description}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{a.model}</td>
+                <td className="px-4 py-3">
+                  <span
+                    className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${
+                      a.enabled
+                        ? "border-primary/40 text-primary"
+                        : "border-foreground/20 text-muted-foreground"
+                    }`}
+                  >
+                    {a.configured ? (a.enabled ? "Enabled" : "Disabled") : "Needs API key"}
                   </span>
                 </td>
+                <td className="px-4 py-3 text-muted-foreground">{a.postCount}</td>
+                <td className="px-4 py-3 text-muted-foreground text-xs">
+                  {formatDate(a.latestPublishedAt)}
+                </td>
                 <td className="px-4 py-3 text-right">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    <Play className="w-3 h-3" /> Run
-                  </Button>
+                  <div className="inline-flex gap-2 items-center">
+                    <select
+                      value={runMode}
+                      onChange={(e) => setRunMode(e.target.value as WriterModeId)}
+                      disabled={!a.configured || busyId !== null}
+                      className="h-8 px-2 bg-background border border-foreground/15 text-[10px] uppercase tracking-widest outline-none focus:border-primary/80 disabled:opacity-50"
+                    >
+                      {WRITER_MODES.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!a.configured || busyId !== null}
+                      onClick={() => void runOne(a.id)}
+                      className="rounded-none text-[10px] uppercase tracking-widest"
+                    >
+                      <Play className="w-3 h-3" />
+                      {busyId === a.id ? "…" : "Run"}
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))}
-            {agents.length === 0 && (
+            {agents && agents.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                  No writer agents configured yet.
+                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                  No writer agents configured.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
+      </div>
+
+      <div>
+        <div className="section-label mb-3">Recent posts ({posts?.length ?? 0})</div>
+        <div className="border border-foreground/15 bg-card divide-y divide-foreground/10">
+          {posts?.map((p) => (
+            <div key={p.id} className="px-4 py-4">
+              <button
+                type="button"
+                onClick={() => setExpandedPostId((id) => (id === p.id ? null : p.id))}
+                className="w-full text-left"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs text-muted-foreground font-mono mb-1">
+                      {formatDate(p.publishedAt)} · {p.mode} · {p.tag} ·{" "}
+                      {p.citations.length} citations
+                    </div>
+                    <div className="text-base font-serif">{p.title}</div>
+                    <div className="text-xs text-muted-foreground font-light mt-1 line-clamp-2">
+                      {p.dek}
+                    </div>
+                  </div>
+                  <ChevronRight
+                    className={`w-4 h-4 text-muted-foreground shrink-0 mt-1 transition-transform ${
+                      expandedPostId === p.id ? "rotate-90" : ""
+                    }`}
+                  />
+                </div>
+              </button>
+              {expandedPostId === p.id && (
+                <div className="mt-4 space-y-4">
+                  <div className="text-xs section-label">Body</div>
+                  <pre className="whitespace-pre-wrap text-sm font-light text-foreground/90 leading-relaxed">
+                    {p.bodyMarkdown}
+                  </pre>
+                  <div>
+                    <div className="text-xs section-label mb-2">Citations</div>
+                    <ul className="text-xs space-y-1">
+                      {p.citations.map((url) => (
+                        <li key={url}>
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 break-all"
+                          >
+                            <ExternalLink className="w-3 h-3 shrink-0" />
+                            <span>{url}</span>
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {posts && posts.length === 0 && (
+            <div className="px-4 py-10 text-center text-muted-foreground text-sm">
+              No posts yet. Hit Run to generate one.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -750,7 +942,7 @@ const DispatchView = ({ token }: { token: string }) => {
       </div>
 
       {section === "headlines" && <AgentsTab token={token} />}
-      {section === "writers" && <WriterAgentsTab />}
+      {section === "writers" && <WriterAgentsTab token={token} />}
       {section === "emails" && <EmailAgentsTab />}
     </div>
   );

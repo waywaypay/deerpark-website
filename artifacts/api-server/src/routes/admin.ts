@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { db, leadsTable, headlinesTable } from "@workspace/db";
+import { db, leadsTable, headlinesTable, postsTable } from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { adminAuth } from "../middlewares/admin-auth";
 import { SOURCES } from "../lib/headline-sources";
 import { ingestAllSources, ingestSourceById } from "../lib/ingest-headlines";
+import { generateAndSavePost, type WriterMode } from "../lib/writer-agent";
 
 const router: IRouter = Router();
 
@@ -117,6 +118,75 @@ router.post("/admin/agents/:id/ingest", async (req, res) => {
     return res.json({ result });
   } catch (err) {
     req.log.error({ err, id }, "Manual single-source ingest failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Writer agents — currently a single "Daily Writer" backed by Anthropic.
+// Surfacing as a list keeps the admin UI scaffold consistent and leaves room
+// for additional writers (different angles, target audiences) later.
+router.get("/admin/writers", async (req, res) => {
+  const apiKeyConfigured = Boolean(process.env["ANTHROPIC_API_KEY"]);
+  try {
+    const stats = await db
+      .select({
+        agentId: postsTable.agentId,
+        count: sql<number>`count(*)::int`,
+        latestPublishedAt: sql<Date | null>`max(${postsTable.publishedAt})`,
+      })
+      .from(postsTable)
+      .groupBy(postsTable.agentId);
+    const byId = new Map(stats.map((s) => [s.agentId, s]));
+    const dailyStats = byId.get("daily-writer");
+    return res.json({
+      items: [
+        {
+          id: "daily-writer",
+          displayName: "Daily Writer",
+          description:
+            "Writes one post per day from the rolling 7-day headline corpus. Picks digest, deep dive, or free pick at its discretion. All claims must be cited from corpus URLs.",
+          model: "claude-sonnet-4-6",
+          enabled: apiKeyConfigured,
+          configured: apiKeyConfigured,
+          postCount: dailyStats?.count ?? 0,
+          latestPublishedAt: dailyStats?.latestPublishedAt ?? null,
+        },
+      ],
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load writer agents");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/admin/posts", async (req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(postsTable)
+      .orderBy(desc(postsTable.publishedAt))
+      .limit(50);
+    return res.json({ items: rows });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load posts");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/admin/writers/:id/run", async (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  const modeQuery = String(req.query["mode"] ?? "auto");
+  const allowedModes: (WriterMode | "auto")[] = ["auto", "digest", "deep_dive", "free_pick"];
+  const modeHint = (allowedModes as string[]).includes(modeQuery)
+    ? (modeQuery as WriterMode | "auto")
+    : "auto";
+  try {
+    const result = await generateAndSavePost({ agentId: id, modeHint });
+    if (!result.ok) return res.status(422).json({ error: result.error });
+    return res.json({ postId: result.postId, draft: result.draft });
+  } catch (err) {
+    req.log.error({ err, id }, "Manual writer run failed");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

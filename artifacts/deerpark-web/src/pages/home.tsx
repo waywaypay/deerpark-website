@@ -1,4 +1,4 @@
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -506,6 +506,89 @@ type HeadlineApiItem = {
 
 type HeadlineMode = "top" | "latest";
 
+type PostApiItem = {
+  id: number;
+  agentId: string;
+  mode: string;
+  tag: string;
+  title: string;
+  dek: string;
+  bodyMarkdown: string;
+  citations: string[];
+  publishedAt: string;
+};
+
+function usePosts() {
+  return useQuery<PostApiItem[]>({
+    queryKey: ["posts"],
+    queryFn: async () => {
+      const res = await fetch("/api/posts?limit=35");
+      if (!res.ok) throw new Error(`Posts request failed: ${res.status}`);
+      const data = (await res.json()) as { items: PostApiItem[] };
+      return data.items;
+    },
+    refetchInterval: 30 * 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+const SHORT_DATE_FMT = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+const LONG_DATE_FMT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
+
+const isoWeekKey = (d: Date): string => {
+  // ISO week: Monday-based, Thursday determines the year.
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-w${String(weekNo).padStart(2, "0")}`;
+};
+
+const weekRangeLabel = (postsInWeek: PostApiItem[]): string => {
+  const dates = postsInWeek
+    .map((p) => new Date(p.publishedAt))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const first = dates[0];
+  const last = dates[dates.length - 1];
+  if (!first || !last) return "";
+  return `${LONG_DATE_FMT.format(first)} – ${LONG_DATE_FMT.format(last)}`;
+};
+
+const groupPostsToWeeks = (posts: PostApiItem[]): DispatchWeek[] => {
+  const buckets = new Map<string, PostApiItem[]>();
+  for (const p of posts) {
+    const key = isoWeekKey(new Date(p.publishedAt));
+    const arr = buckets.get(key);
+    if (arr) arr.push(p);
+    else buckets.set(key, [p]);
+  }
+  const weeks: DispatchWeek[] = [];
+  const keys = [...buckets.keys()].sort().reverse();
+  keys.forEach((key, idx) => {
+    const items = buckets.get(key)!.sort(
+      (a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+    );
+    const sublabel = idx === 0 ? "This week" : idx === 1 ? "Last week" : `${idx} weeks ago`;
+    weeks.push({
+      id: key,
+      label: weekRangeLabel(items),
+      sublabel,
+      entries: items.map((p) => {
+        const d = new Date(p.publishedAt);
+        return {
+          date: SHORT_DATE_FMT.format(d),
+          dateLong: LONG_DATE_FMT.format(d),
+          title: p.title,
+          dek: p.dek,
+          tag: p.tag,
+        };
+      }),
+    });
+  });
+  return weeks;
+};
+
 function useHeadlines(mode: HeadlineMode) {
   return useQuery<Headline[]>({
     queryKey: ["headlines", mode],
@@ -560,9 +643,22 @@ const DispatchSubscribe = () => {
 };
 
 const Dispatch = () => {
-  const [selectedWeekId, setSelectedWeekId] = useState(DISPATCH_WEEKS[0].id);
+  const postsQuery = usePosts();
+  const weeks: DispatchWeek[] = useMemo(() => {
+    if (postsQuery.data && postsQuery.data.length > 0) {
+      return groupPostsToWeeks(postsQuery.data);
+    }
+    return DISPATCH_WEEKS;
+  }, [postsQuery.data]);
+  const [selectedWeekId, setSelectedWeekId] = useState<string>(weeks[0]?.id ?? DISPATCH_WEEKS[0].id);
+  // If the post data arrives after first render, snap selection to the latest week.
+  useEffect(() => {
+    if (weeks.length > 0 && !weeks.some((w) => w.id === selectedWeekId)) {
+      setSelectedWeekId(weeks[0].id);
+    }
+  }, [weeks, selectedWeekId]);
   const [weekMenuOpen, setWeekMenuOpen] = useState(false);
-  const selectedWeek = DISPATCH_WEEKS.find((w) => w.id === selectedWeekId) ?? DISPATCH_WEEKS[0];
+  const selectedWeek = weeks.find((w) => w.id === selectedWeekId) ?? weeks[0] ?? DISPATCH_WEEKS[0];
   const [headlineMode, setHeadlineMode] = useState<HeadlineMode>("top");
   const headlinesQuery = useHeadlines(headlineMode);
   const headlines: Headline[] = headlinesQuery.data && headlinesQuery.data.length > 0
@@ -637,7 +733,7 @@ const Dispatch = () => {
                   Archive
                 </div>
                 <ul>
-                  {DISPATCH_WEEKS.map((week) => {
+                  {weeks.map((week) => {
                     const active = week.id === selectedWeekId;
                     return (
                       <li key={week.id}>

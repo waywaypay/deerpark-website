@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startHeadlineScheduler } from "./lib/ingest-headlines";
+import { startWriterScheduler } from "./lib/writer-agent";
 
 const rawPort = process.env["PORT"];
 
@@ -28,5 +29,14 @@ app.listen(port, (err) => {
     const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
     startHeadlineScheduler(intervalMinutes * 60 * 1000);
     logger.info({ intervalMinutes }, "Headline scheduler started");
+  }
+
+  if (process.env["DISABLE_WRITER_SCHEDULER"] !== "1") {
+    if (process.env["ANTHROPIC_API_KEY"]) {
+      startWriterScheduler();
+      logger.info("Writer scheduler started (24h cadence)");
+    } else {
+      logger.warn("ANTHROPIC_API_KEY not set — writer scheduler disabled");
+    }
   }
 });
