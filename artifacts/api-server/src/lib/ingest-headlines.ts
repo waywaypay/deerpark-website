@@ -191,6 +191,43 @@ async function fetchMistralNews(source: SourceConfig): Promise<NormalizedItem[]>
   return items.filter((i): i is NormalizedItem => i !== null);
 }
 
+async function fetchEpochBlog(source: SourceConfig): Promise<NormalizedItem[]> {
+  // Epoch AI's blog index is server-rendered HTML. Each card has the title in
+  // an <img alt=...> attribute, the date in a <span class="badge-text">, and
+  // the slug in an <a class="cover-link"> — in that order, all within ~3KB.
+  const res = await fetch(source.url, {
+    headers: { accept: "text/html", "user-agent": USER_AGENT },
+  });
+  if (!res.ok) throw new Error(`Epoch returned ${res.status}`);
+  const html = await res.text();
+
+  const cardRe =
+    /<img\s+src="[^"]*"\s+alt="([^"]+)"\s+class="card-img"[^>]*\/>[\s\S]{0,3000}?<span class="badge-text">([A-Z][a-z]{2,8}\.?\s+\d{1,2},\s+\d{4})<\/span>[\s\S]{0,800}?<a\s+href="(\/blog\/[a-z0-9-]+)"\s+class="cover-link">/g;
+
+  const seen = new Set<string>();
+  const items: NormalizedItem[] = [];
+  for (const match of html.matchAll(cardRe)) {
+    const title = match[1]!.trim();
+    const dateRaw = match[2]!.replace(/\./g, "");
+    const slug = match[3]!;
+    if (seen.has(slug)) continue;
+    seen.add(slug);
+
+    const parsed = new Date(dateRaw);
+    const publishedAt = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
+    const url = `https://epoch.ai${slug}`;
+    items.push({
+      source: source.displayName,
+      category: source.category,
+      title,
+      url,
+      urlHash: hashUrl(url),
+      publishedAt,
+    });
+  }
+  return items;
+}
+
 async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
   switch (source.kind) {
     case "rss":
@@ -203,6 +240,8 @@ async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
       return fetchAnthropicNews(source);
     case "mistral-news":
       return fetchMistralNews(source);
+    case "epoch-blog":
+      return fetchEpochBlog(source);
   }
 }
 

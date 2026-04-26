@@ -1,4 +1,10 @@
-export type SourceKind = "rss" | "hn" | "hf-papers" | "anthropic-news" | "mistral-news";
+export type SourceKind =
+  | "rss"
+  | "hn"
+  | "hf-papers"
+  | "anthropic-news"
+  | "mistral-news"
+  | "epoch-blog";
 
 export type SourceConfig = {
   id: string;
@@ -144,6 +150,30 @@ export const SOURCES: SourceConfig[] = [
     category: "Newsletter",
     kind: "rss",
     url: process.env["LATENT_SPACE_FEED_URL"] ?? "https://www.latent.space/feed",
+    enabled: true,
+  },
+  {
+    id: "metr",
+    displayName: "METR",
+    category: "Evals",
+    kind: "rss",
+    url: process.env["METR_FEED_URL"] ?? "https://metr.org/feed.xml",
+    enabled: true,
+  },
+  {
+    id: "lmarena",
+    displayName: "LMArena",
+    category: "Evals",
+    kind: "rss",
+    url: process.env["LMARENA_FEED_URL"] ?? "https://blog.lmarena.ai/feed",
+    enabled: true,
+  },
+  {
+    id: "epoch",
+    displayName: "Epoch AI",
+    category: "Evals",
+    kind: "epoch-blog",
+    url: process.env["EPOCH_FEED_URL"] ?? "https://epoch.ai/blog",
     enabled: true,
   },
 ];
