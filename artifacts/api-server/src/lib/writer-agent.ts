@@ -483,7 +483,12 @@ export async function generateAndSavePost(opts: {
     try {
       response = await client.chat.completions.create({
         model,
-        max_tokens: 8192,
+        // Claude on Venice exposes reasoning via message.reasoning_content,
+        // and that reasoning counts against max_tokens. With this prompt
+        // (~5k input tokens, 30-item corpus), reasoning observed at 7–8k
+        // tokens before the final JSON. 32768 gives 4× headroom; only used
+        // tokens are billed so the higher cap has zero average-case cost.
+        max_tokens: 32768,
         messages,
         response_format: { type: "json_object" },
       });
