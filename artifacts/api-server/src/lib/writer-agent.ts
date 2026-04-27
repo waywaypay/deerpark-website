@@ -554,6 +554,77 @@ export async function generateAndSavePost(opts: {
   return { ok: true, postId: row.id, draft: validated };
 }
 
+// Run-state for the manual writer UI — async kick-off + polling beats a
+// synchronous request that Fly's proxy will time out at 60s while Claude is
+// still reasoning. State is in-memory and lost on machine restart, which is
+// fine: the writer eventually persists the post (or doesn't) and the admin
+// can read /admin/posts directly to see results.
+type RunStatus = {
+  status: "idle" | "running" | "ok" | "error";
+  startedAt: string | null;
+  finishedAt: string | null;
+  postId: number | null;
+  error: string | null;
+  mode: string | null;
+};
+
+let runState: RunStatus = {
+  status: "idle",
+  startedAt: null,
+  finishedAt: null,
+  postId: null,
+  error: null,
+  mode: null,
+};
+
+export function getRunStatus(): RunStatus {
+  return { ...runState };
+}
+
+export function startWriterRun(opts: {
+  agentId?: string;
+  modeHint?: WriterMode | "auto";
+}): { accepted: boolean; status: RunStatus } {
+  if (runState.status === "running") {
+    return { accepted: false, status: getRunStatus() };
+  }
+  runState = {
+    status: "running",
+    startedAt: new Date().toISOString(),
+    finishedAt: null,
+    postId: null,
+    error: null,
+    mode: opts.modeHint ?? "auto",
+  };
+  // Fire and forget. The promise outlives the HTTP request that started it.
+  (async () => {
+    try {
+      const result = await generateAndSavePost(opts);
+      runState = result.ok
+        ? {
+            ...runState,
+            status: "ok",
+            finishedAt: new Date().toISOString(),
+            postId: result.postId,
+          }
+        : {
+            ...runState,
+            status: "error",
+            finishedAt: new Date().toISOString(),
+            error: result.error,
+          };
+    } catch (err) {
+      runState = {
+        ...runState,
+        status: "error",
+        finishedAt: new Date().toISOString(),
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  })();
+  return { accepted: true, status: getRunStatus() };
+}
+
 let writerHandle: NodeJS.Timeout | null = null;
 
 const WRITER_INTERVAL_MS = 24 * 60 * 60 * 1000;

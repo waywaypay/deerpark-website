@@ -5,12 +5,13 @@ import { adminAuth } from "../middlewares/admin-auth";
 import { SOURCES } from "../lib/headline-sources";
 import { ingestAllSources, ingestSourceById } from "../lib/ingest-headlines";
 import {
-  generateAndSavePost,
   getModelInfo,
   getSystemPrompt,
   setSystemPrompt,
   resetSystemPrompt,
   DEFAULT_SYSTEM_PROMPT,
+  startWriterRun,
+  getRunStatus,
   type WriterMode,
 } from "../lib/writer-agent";
 
@@ -190,7 +191,9 @@ router.get("/admin/posts", async (req, res) => {
   }
 });
 
-router.post("/admin/writers/:id/run", async (req, res) => {
+// Async kick-off: returns 202 immediately so Fly's 60s proxy timeout can't
+// kill it while Claude reasons. Frontend polls /admin/writers/:id/run-status.
+router.post("/admin/writers/:id/run", (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
   const modeQuery = String(req.query["mode"] ?? "auto");
@@ -198,14 +201,17 @@ router.post("/admin/writers/:id/run", async (req, res) => {
   const modeHint = (allowedModes as string[]).includes(modeQuery)
     ? (modeQuery as WriterMode | "auto")
     : "auto";
-  try {
-    const result = await generateAndSavePost({ agentId: id, modeHint });
-    if (!result.ok) return res.status(422).json({ error: result.error });
-    return res.json({ postId: result.postId, draft: result.draft });
-  } catch (err) {
-    req.log.error({ err, id }, "Manual writer run failed");
-    return res.status(500).json({ error: "Internal server error" });
+  const { accepted, status } = startWriterRun({ agentId: id, modeHint });
+  if (!accepted) {
+    return res.status(409).json({ error: "A run is already in progress", status });
   }
+  return res.status(202).json({ accepted: true, status });
+});
+
+router.get("/admin/writers/:id/run-status", (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  return res.json({ status: getRunStatus() });
 });
 
 router.get("/admin/writers/:id/prompt", async (req, res) => {

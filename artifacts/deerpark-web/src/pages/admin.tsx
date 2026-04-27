@@ -674,18 +674,58 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
 
   const runOne = async (id: string) => {
     setBusyId(id);
-    setLastRun(null);
+    setLastRun({ ok: true, message: "Starting run…" });
     try {
-      const res = await apiFetch(token, `/admin/writers/${id}/run?mode=${runMode}`, {
+      const kickoff = await apiFetch(token, `/admin/writers/${id}/run?mode=${runMode}`, {
         method: "POST",
       });
-      const json = (await res.json()) as { error?: string; postId?: number };
-      if (res.ok && json.postId) {
-        setLastRun({ ok: true, message: `Wrote post #${json.postId}` });
-        await load();
-      } else {
-        setLastRun({ ok: false, message: json.error ?? `HTTP ${res.status}` });
+      const kickoffText = await kickoff.text();
+      let kickoffJson: { error?: string; accepted?: boolean } | null = null;
+      try {
+        kickoffJson = JSON.parse(kickoffText);
+      } catch {
+        kickoffJson = null;
       }
+      if (!kickoff.ok && kickoff.status !== 202) {
+        const msg = kickoffJson?.error ?? `HTTP ${kickoff.status}: ${kickoffText.slice(0, 200)}`;
+        setLastRun({ ok: false, message: msg });
+        setBusyId(null);
+        return;
+      }
+
+      // Poll for up to 3 minutes. Claude reasoning + write can take 30–90s.
+      setLastRun({ ok: true, message: "Generating… (this can take up to 90 seconds)" });
+      const startedAt = Date.now();
+      const deadlineMs = 3 * 60 * 1000;
+      const pollIntervalMs = 3000;
+      while (Date.now() - startedAt < deadlineMs) {
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        const stRes = await apiFetch(token, `/admin/writers/${id}/run-status`);
+        if (!stRes.ok) continue;
+        const stJson = (await stRes.json()) as {
+          status: {
+            status: "idle" | "running" | "ok" | "error";
+            postId: number | null;
+            error: string | null;
+          };
+        };
+        const s = stJson.status;
+        if (s.status === "ok") {
+          setLastRun({ ok: true, message: `Wrote post #${s.postId}` });
+          await load();
+          setBusyId(null);
+          return;
+        }
+        if (s.status === "error") {
+          setLastRun({ ok: false, message: s.error ?? "Run failed" });
+          setBusyId(null);
+          return;
+        }
+      }
+      setLastRun({
+        ok: false,
+        message: "Timed out waiting for the run to finish (3 minutes). Check Fly logs.",
+      });
     } catch (err) {
       setLastRun({ ok: false, message: err instanceof Error ? err.message : "Run failed" });
     } finally {
