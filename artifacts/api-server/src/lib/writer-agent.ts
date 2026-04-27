@@ -459,7 +459,10 @@ export async function generateAndSavePost(opts: {
   try {
     const response = await client.chat.completions.create({
       model,
-      max_tokens: 4096,
+      // 8192 leaves headroom for hidden reasoning tokens (Claude on Venice
+      // appears to use them) plus the 250–680 word body. Smaller models
+      // ignore the unused budget — no extra cost.
+      max_tokens: 8192,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage },
