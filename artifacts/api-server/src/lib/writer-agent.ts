@@ -609,10 +609,28 @@ export async function generateAndSavePost(opts: {
           "Re-emit the FULL post (same mode, same thesis, same citations) with the offending sentence rewritten. JSON only, no prose around it.",
         ].join("\n");
       } else {
+        // Body-too-short retry — be explicit about the numbers because the
+        // user's custom system prompt may understate the actual length
+        // requirement. The validator floor is the authoritative minimum.
+        const m = result.error.match(/(\d+)\s+chars.*?≥\s*(\d+)/);
+        const wrote = m ? Number(m[1]) : null;
+        const need = m ? Number(m[2]) : null;
+        const wroteWords = wrote ? Math.round(wrote / 5) : null;
+        const needWords = need ? Math.round(need / 5) : null;
         retryPrompt = [
           `Your previous response was rejected: ${result.error}`,
+          wrote && need
+            ? `You wrote ~${wroteWords} words (${wrote} chars). The minimum for ${raw.mode} mode is ~${needWords} words (${need} chars). You need to AT LEAST DOUBLE the body length.`
+            : `The body is significantly shorter than the required minimum.`,
           "",
-          "Expand the body with more interpretation per item. Each corpus item you cite should get a meaningful 'why this matters' beat — not just attribution. If you can't fill the length from the corpus, switch modes (digest is fine for thinner weeks).",
+          "Hard requirements for this retry:",
+          `- Body MUST be at least ${need ?? 6800} characters of markdown.`,
+          "- Each corpus item you cite gets multiple paragraphs of interpretation, not a single attribution sentence.",
+          "- For each item, work through: what happened (per the corpus) → what's actually new about it → who it changes things for → which open questions it raises → how it relates to the other items you cited.",
+          "- Add a clear opening section establishing the week's framing thesis (3–5 sentences, not 1).",
+          "- Add a substantive closing section connecting the items into a single argument (3–5 sentences).",
+          "- Do NOT pad with restatement or filler. Add real interpretive content.",
+          "- If the corpus genuinely cannot support this length, set abort:true with a rationale instead of producing a short post.",
           "",
           "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
