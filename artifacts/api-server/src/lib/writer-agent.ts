@@ -127,7 +127,7 @@ Hard rules — never break:
 2. Every claim is attributed inline: "per Anthropic", "according to METR", "(via TechCrunch)".
 3. Do NOT predict, speculate, fabricate quotes, invent numbers, or describe details not in the headline title. If a headline says "Introducing GPT-5.5", you may say OpenAI introduced it on that date — you may NOT describe its capabilities, benchmarks, or architecture.
 4. If the corpus is too thin, set "abort": true with a "rationale". Don't pad.
-5. "citations" must be exactly the corpus URLs you drew from — no others, ever.
+5. CITATIONS MUST BE COPIED VERBATIM. Each value in "citations" must be an exact, character-for-character copy of a "URL:" line from the corpus. Do not construct, guess, normalize, complete, or pattern-match URLs based on the title or your training data. If the corpus has https://www.foo.com/news/bar, you write https://www.foo.com/news/bar — not https://foo.com/2026/04/25/bar. This is checked programmatically; any URL not literally present in the corpus causes the post to be rejected and discarded.
 
 THE THREE MODES ARE STRUCTURALLY DIFFERENT. Pick the one the corpus supports today, then follow its shape — different length, different structure, different cadence.
 
@@ -236,10 +236,18 @@ export async function resetSystemPrompt(agentId: string): Promise<void> {
 }
 
 const formatCorpus = (corpus: CorpusItem[]): string => {
+  // Each item formatted on its own block with URL on its own line. The
+  // explicit "URL:" prefix and the structure make it harder for the model
+  // to invent a URL by pattern-matching the title — it has to copy the
+  // exact string from the line above.
   return corpus
     .map((c) => {
       const date = c.publishedAt.toISOString().slice(0, 10);
-      return `[id=${c.id}] (${date}) [${c.source} · ${c.category}] ${c.title} — ${c.url}`;
+      return `--- id=${c.id} ---
+Date: ${date}
+Source: ${c.source} (${c.category})
+Title: ${c.title}
+URL: ${c.url}`;
     })
     .join("\n");
 };
@@ -452,45 +460,50 @@ export async function generateAndSavePost(opts: {
     formatCorpus(corpus),
   ].join("\n");
 
-  let responseText: string;
+  // Multi-turn so we can give the model targeted feedback if validation fails
+  // on hallucinated URLs and let it correct citations using the actual corpus.
+  // Hard cap at 2 attempts (initial + 1 retry) so a stubbornly hallucinating
+  // model can't burn unbounded tokens.
+  const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
+    { role: "system", content: systemPrompt },
+    { role: "user", content: userMessage },
+  ];
+
+  let responseText = "";
   let promptTokens = 0;
   let completionTokens = 0;
   let totalTokens = 0;
-  let tokenSource: "provider" | "estimated" = "provider";
-  try {
-    const response = await client.chat.completions.create({
-      model,
-      // 8192 leaves headroom for hidden reasoning tokens (Claude on Venice
-      // appears to use them) plus the 250–680 word body. Smaller models
-      // ignore the unused budget — no extra cost.
-      max_tokens: 8192,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessage },
-      ],
-      response_format: { type: "json_object" },
-    });
-    responseText = response.choices[0]?.message?.content ?? "";
+  let validated: Draft | null = null;
+  let lastValidationError: string | null = null;
+
+  const corpusUrlsList = corpus.map((c) => c.url);
+
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    let response;
+    try {
+      response = await client.chat.completions.create({
+        model,
+        max_tokens: 8192,
+        messages,
+        response_format: { type: "json_object" },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logger.error({ err: message, model, baseURL, attempt }, "LLM call failed");
+      return { ok: false, error: `LLM call failed: ${message}` };
+    }
+
+    const turnText = response.choices[0]?.message?.content ?? "";
     logger.info(
-      { model, usage: response.usage ?? null },
+      { model, attempt, usage: response.usage ?? null },
       "LLM response usage",
     );
-    promptTokens = response.usage?.prompt_tokens ?? 0;
-    completionTokens = response.usage?.completion_tokens ?? 0;
-    totalTokens = response.usage?.total_tokens ?? promptTokens + completionTokens;
-    // Some providers (Venice in particular) don't always populate `usage`.
-    // Fall back to a 4-chars-per-token estimate so the cost dashboard isn't
-    // perpetually empty. Mark the source so we can flag the estimate in UI.
-    if (totalTokens === 0) {
-      tokenSource = "estimated";
-      const estTokens = (s: string) => Math.max(1, Math.ceil(s.length / 4));
-      promptTokens = estTokens(systemPrompt) + estTokens(userMessage);
-      completionTokens = estTokens(responseText);
-      totalTokens = promptTokens + completionTokens;
-    }
-    if (!responseText) {
-      // Surface why the response is empty — finish_reason, tool calls, refusal,
-      // content filter, etc. — so we can act on it instead of guessing.
+    promptTokens += response.usage?.prompt_tokens ?? 0;
+    completionTokens += response.usage?.completion_tokens ?? 0;
+    totalTokens += response.usage?.total_tokens ?? 0;
+    responseText = turnText;
+
+    if (!turnText) {
       const choice = response.choices[0];
       const message = choice?.message as
         | { refusal?: unknown; tool_calls?: unknown }
@@ -499,6 +512,7 @@ export async function generateAndSavePost(opts: {
         {
           model,
           baseURL,
+          attempt,
           finishReason: choice?.finish_reason,
           refusal: message?.refusal,
           toolCalls: message?.tool_calls,
@@ -512,25 +526,56 @@ export async function generateAndSavePost(opts: {
         error: `Empty response from model (finish_reason=${choice?.finish_reason ?? "?"})`,
       };
     }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    logger.error({ err: message, model, baseURL }, "LLM call failed");
-    return { ok: false, error: `LLM call failed: ${message}` };
+
+    const raw = extractJson(turnText);
+    if (!raw) {
+      logger.warn(
+        { model, baseURL, attempt, rawPreview: turnText.slice(0, 500), rawLength: turnText.length },
+        "Response was not valid JSON",
+      );
+      return { ok: false, error: "Response was not valid JSON" };
+    }
+
+    const result = validateDraft(raw, corpus);
+    if (!("error" in result)) {
+      validated = result;
+      break;
+    }
+
+    lastValidationError = result.error;
+    logger.warn({ attempt, ...result }, "Draft rejected");
+
+    // Only retry on hallucinated URL errors — other validation failures
+    // (missing fields, wrong tag, body too short) won't be fixed by feedback.
+    const isHallucinatedUrls = result.error.startsWith("Hallucinated URLs");
+    if (attempt === 1 && isHallucinatedUrls) {
+      messages.push({ role: "assistant", content: turnText });
+      messages.push({
+        role: "user",
+        content: [
+          `Your previous response cited URLs that are NOT in the corpus. ${result.error}`,
+          "",
+          "These are the ONLY valid URL strings you may use in citations — copy them character-for-character:",
+          ...corpusUrlsList.map((u) => `  ${u}`),
+          "",
+          "Re-emit the SAME post with citations replaced by valid corpus URLs (and sourceHeadlineIds matching). Same JSON schema, no prose around it.",
+        ].join("\n"),
+      });
+      continue;
+    }
+    return { ok: false, error: result.error };
   }
 
-  const raw = extractJson(responseText);
-  if (!raw) {
-    logger.warn(
-      { model, baseURL, rawPreview: responseText.slice(0, 500), rawLength: responseText.length },
-      "Response was not valid JSON",
-    );
-    return { ok: false, error: "Response was not valid JSON" };
+  if (!validated) {
+    return { ok: false, error: lastValidationError ?? "Validation failed after retries" };
   }
 
-  const validated = validateDraft(raw, corpus);
-  if ("error" in validated) {
-    logger.warn({ rawLength: responseText.length, ...validated }, "Draft rejected");
-    return { ok: false, error: validated.error };
+  // Token estimation fallback when the provider didn't populate usage.
+  if (totalTokens === 0) {
+    const estTokens = (s: string) => Math.max(1, Math.ceil(s.length / 4));
+    promptTokens = estTokens(systemPrompt) + estTokens(userMessage);
+    completionTokens = estTokens(responseText);
+    totalTokens = promptTokens + completionTokens;
   }
 
   const costUsd = computeCost(model, promptTokens, completionTokens);
