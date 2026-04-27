@@ -131,9 +131,9 @@ Hard rules — never break:
 
 THE THREE MODES ARE STRUCTURALLY DIFFERENT. Pick the one the corpus supports today, then follow its shape — different length, different structure, different cadence.
 
-LENGTH DISCIPLINE. These posts are LONG (1,400–2,500 words). That length only works if every paragraph carries weight. If you're padding to hit the floor, the corpus is too thin and you should switch modes (digest is fine for sparse weeks; deep_dive needs deep material). Symptoms of padding to avoid: restating the same point in two ways, summarizing what you said two paragraphs ago, ending sections with platitudes about "what to watch", listing items just to fill space. Cut every sentence that doesn't introduce a new claim, a new piece of attribution, or a new implication.
+LENGTH DISCIPLINE. Posts are 700–1,250 words. That length only works if every paragraph carries weight. If you're padding to hit the floor, the corpus is too thin and you should switch modes. Symptoms of padding to avoid: restating the same point in two ways, summarizing what you said two paragraphs ago, ending sections with platitudes about "what to watch", listing items just to fill space. Cut every sentence that doesn't introduce a new claim, a new piece of attribution, or a new implication.
 
-==== digest (1,400–1,900 words) ====
+==== digest (700–950 words) ====
 Goal: cover 3–6 of the week's most consequential corpus items, tied together by a single short framing thesis at the top.
 Structure:
   - Opening: 1–2 sentences naming what the week was about. State the thesis as a claim, not a summary.
@@ -145,7 +145,7 @@ Structure:
   - Close: one sentence noting what to watch. Not a prediction — a question or a tension worth tracking.
 Voice: brisk, scannable, expository. Senior analyst's morning email.
 
-==== deep_dive (2,000–2,500 words) ====
+==== deep_dive (1,000–1,250 words) ====
 Goal: one corpus item or one tight cluster (max 3 items on the same subject), examined thoroughly. Not a survey of the week.
 Structure:
   - Hook: 1 short paragraph (≤ 3 sentences). The concrete thing that happened, anchored.
@@ -154,9 +154,9 @@ Structure:
   - Who it changes things for: 1 paragraph. Specific reader segment.
   - Close: 1 paragraph. The remaining open question.
 Voice: investigative, careful at the sentence level, comfortable holding a single idea for several paragraphs. Stratechery brief.
-This mode MUST be substantially longer than digest. If you can't fill 2,000 words from the corpus, switch modes — don't pad.
+This mode MUST be substantially longer than digest. If you can't fill 1,000 words from the corpus, switch modes — don't pad.
 
-==== free_pick (1,500–2,200 words) ====
+==== free_pick (750–1,100 words) ====
 Goal: a pattern, contradiction, or conspicuous absence visible across multiple corpus items.
 Structure:
   - State the pattern in the opening line.
@@ -363,9 +363,9 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | { error: st
   // the validator rejects genuinely-too-short pieces but not posts that
   // land at the lower end of the requested range.
   const minByMode: Record<string, number> = {
-    digest: 6800,    // ~1360 words (floor ≈ 1400)
-    deep_dive: 9700, // ~1940 words (floor ≈ 2000)
-    free_pick: 7300, // ~1460 words (floor ≈ 1500)
+    digest: 3300,    // ~660 words (floor ≈ 700)
+    deep_dive: 4700, // ~940 words (floor ≈ 1,000)
+    free_pick: 3500, // ~700 words (floor ≈ 750)
   };
   const minLen = minByMode[String(raw.mode)] ?? 1200;
   if (bodyLen < minLen) {
