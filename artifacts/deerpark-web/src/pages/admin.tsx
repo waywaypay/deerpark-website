@@ -693,11 +693,15 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
         return;
       }
 
-      // Poll for up to 3 minutes. Claude reasoning + write can take 30–90s.
-      setLastRun({ ok: true, message: "Generating… (this can take up to 90 seconds)" });
+      // Poll for up to 8 minutes. With 1,400–2,500 word posts plus a possible
+      // retry on length-validator rejection, Claude reasoning can run 4–6 min.
+      setLastRun({
+        ok: true,
+        message: "Generating… (this can take 3–6 minutes for long posts with retry)",
+      });
       const startedAt = Date.now();
-      const deadlineMs = 3 * 60 * 1000;
-      const pollIntervalMs = 3000;
+      const deadlineMs = 8 * 60 * 1000;
+      const pollIntervalMs = 4000;
       while (Date.now() - startedAt < deadlineMs) {
         await new Promise((r) => setTimeout(r, pollIntervalMs));
         const stRes = await apiFetch(token, `/admin/writers/${id}/run-status`);
@@ -724,7 +728,8 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
       }
       setLastRun({
         ok: false,
-        message: "Timed out waiting for the run to finish (3 minutes). Check Fly logs.",
+        message:
+          "Timed out waiting for the run to finish (8 minutes). The run may have completed — refresh the page and check Recent posts before re-running.",
       });
     } catch (err) {
       setLastRun({ ok: false, message: err instanceof Error ? err.message : "Run failed" });
