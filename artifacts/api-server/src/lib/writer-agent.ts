@@ -186,7 +186,16 @@ Dek (1–2 sentences, ≤ 220 chars): state the thesis directly. Not a teaser.
 
 Forbidden patterns — these are dead giveaways that an LLM wrote the piece. Avoid every one:
 
-- The "not just X, it's Y" parallelism. ANY variant: "It isn't just a model release, it's a market signal" / "Not only A but also B" / "More than just X, this is Y" / "This isn't about X — it's about Y." This is the most overused AI pattern in business writing. If you catch yourself building it, restructure the sentence completely. Just say what you mean.
+- The NEGATION PIVOT. Any sentence shaped like "[subject] [is/was/aren't/weren't/isn't] [scope-limiter] X — [it's/they're] [bigger thing] Y". The most overused AI pattern in business writing, and the one our validator hammers hardest. Variants include:
+  - "It isn't just a model release, it's a market signal."
+  - "Not only A but also B."
+  - "More than just X, this is Y."
+  - "This isn't about X — it's about Y."
+  - "Anthropic's releases weren't model launches alone." ← post-positioned 'alone' is the same pattern in disguise.
+  - "OpenAI's strategy isn't limited to consumer products."
+  - "The week wasn't only about pricing; it was about positioning."
+  - "These announcements aren't just technical, they're strategic."
+  Stop building the rhetorical seesaw. If you mean "the week was about positioning", just write that sentence. If you mean "the announcements were strategic", write that. The bigger thing is the only thing that matters; cut the smaller-thing setup.
 - Tricolons ("X, Y, and Z") used for emphasis when only one of the three is doing real work.
 - "What's striking is…" / "What's interesting is…" / "What's worth noting is…" / "What's clear is…" — all throat-clearing. Replace with the actual observation.
 - "On one hand… on the other hand…" / "While X, Y" pivots when used to manufacture balance the corpus doesn't support.
@@ -362,16 +371,27 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | { error: st
   if (bodyLen < minLen) {
     return { error: `Body too short for ${raw.mode}: ${bodyLen} chars (need ≥ ${minLen})` };
   }
-  // AI-tell pattern check: the "not just X, it's Y" parallelism is the most
-  // common LLM giveaway. Catch its variants and reject so the model has to
-  // restructure on retry.
+  // AI-tell pattern check: the "negation pivot" (some flavor of "not just X,
+  // it's Y") is the most common LLM giveaway. Catches its variants and rejects
+  // so the model has to restructure rather than just rephrase.
   const aiTellPatterns: { pattern: RegExp; label: string }[] = [
-    { pattern: /\b(?:it|this|that|here)['’]?s?\s+(?:not|isn['’]t|isn t)\s+just\s+/i, label: "'not just X, it's Y'" },
-    { pattern: /\bnot\s+only\s+\b[^.,;!?]{1,80}\b\s+but\s+also\s+/i, label: "'not only X, but also Y'" },
-    { pattern: /\bmore\s+than\s+just\s+/i, label: "'more than just X'" },
-    { pattern: /\bthis\s+isn['’]?t\s+about\s+\b[^.,;!?]{1,80}\b\s+[—-]\s*it['’]?s\s+about\s+/i, label: "'this isn't about X — it's about Y'" },
-    { pattern: /\bwhat['’]?s\s+(?:striking|interesting|worth\s+noting|clear|notable|telling)\s+(?:is|here)\b/i, label: "'what's striking/interesting/etc is...'" },
-    { pattern: /\bin\s+(?:a\s+world|an\s+era|a\s+landscape)\s+where\b/i, label: "'in a world/era/landscape where...'" },
+    // Pre-positioned negation: "isn't just / not just / not only / not merely / not simply"
+    { pattern: /\b(?:isn['’]?t|wasn['’]?t|aren['’]?t|weren['’]?t|are\s+not|is\s+not|was\s+not|were\s+not)\s+(?:just|only|merely|simply|solely)\b/i, label: "negation + 'just/only/merely/simply' (e.g. 'isn't just a release')" },
+    { pattern: /\bnot\s+(?:just|only|merely|simply|solely)\s+(?:a|an|the|that|this|these|those)?\s*\w/i, label: "'not just/only/merely X'" },
+    { pattern: /\bnot\s+only\s+\b[^.,;!?]{1,80}\b\s+but\s+(?:also\s+)?/i, label: "'not only X but [also] Y'" },
+    { pattern: /\bmore\s+than\s+just\b/i, label: "'more than just X'" },
+    // Post-positioned 'alone' / 'by itself' — the variant the user just
+    // flagged: "the week's announcements weren't model launches alone".
+    { pattern: /\b(?:isn['’]?t|wasn['’]?t|aren['’]?t|weren['’]?t|is\s+not|was\s+not|are\s+not|were\s+not)\s+\b[^.,;!?]{1,80}\b\s+(?:alone|by\s+(?:itself|themselves))\b/i, label: "'X weren't [Y] alone' / 'X wasn't [Y] by itself'" },
+    // Scope-limit pivots: "limited to", "confined to", "restricted to", "about"
+    { pattern: /\b(?:isn['’]?t|aren['’]?t|wasn['’]?t|weren['’]?t|is\s+not|are\s+not|was\s+not|were\s+not)\s+(?:limited|confined|restricted)\s+to\b/i, label: "'X isn't limited/confined/restricted to Y'" },
+    { pattern: /\bthis\s+(?:isn['’]?t|wasn['’]?t)\s+about\s+\b[^.,;!?]{1,80}\b\s+[—-]\s*it['’]?s\s+about\b/i, label: "'this isn't about X — it's about Y'" },
+    // "What's striking / interesting / etc" throat-clearing
+    { pattern: /\bwhat['’]?s\s+(?:striking|interesting|worth\s+noting|clear|notable|telling|remarkable|surprising)\s+(?:is|here)\b/i, label: "'what's striking/interesting/etc is...'" },
+    // "In a world where..." / "In an era of..."
+    { pattern: /\bin\s+(?:a\s+world|an\s+era|a\s+landscape|a\s+time|an\s+age)\s+where\b/i, label: "'in a world/era/landscape where...'" },
+    // "Speaks volumes / sends a clear message"
+    { pattern: /\bspeaks\s+volumes\b|\bsends?\s+a\s+(?:clear|strong|powerful)\s+(?:message|signal)\b/i, label: "'speaks volumes' / 'sends a clear message'" },
   ];
   for (const { pattern, label } of aiTellPatterns) {
     if (pattern.test(raw.bodyMarkdown)) {
