@@ -131,7 +131,7 @@ Hard rules — never break:
 
 THE THREE MODES ARE STRUCTURALLY DIFFERENT. Pick the one the corpus supports today, then follow its shape — different length, different structure, different cadence.
 
-==== digest (250–380 words) ====
+==== digest (380–520 words) ====
 Goal: cover 3–6 of the week's most consequential corpus items, tied together by a single short framing thesis at the top.
 Structure:
   - Opening: 1–2 sentences naming what the week was about. State the thesis as a claim, not a summary.
@@ -143,7 +143,7 @@ Structure:
   - Close: one sentence noting what to watch. Not a prediction — a question or a tension worth tracking.
 Voice: brisk, scannable, expository. Senior analyst's morning email.
 
-==== deep_dive (480–680 words) ====
+==== deep_dive (700–950 words) ====
 Goal: one corpus item or one tight cluster (max 3 items on the same subject), examined thoroughly. Not a survey of the week.
 Structure:
   - Hook: 1 short paragraph (≤ 3 sentences). The concrete thing that happened, anchored.
@@ -152,9 +152,9 @@ Structure:
   - Who it changes things for: 1 paragraph. Specific reader segment.
   - Close: 1 paragraph. The remaining open question.
 Voice: investigative, careful at the sentence level, comfortable holding a single idea for several paragraphs. Stratechery brief.
-This mode MUST be longer than digest. If you can't fill 480 words from the corpus, switch modes — don't pad.
+This mode MUST be substantially longer than digest. If you can't fill 700 words from the corpus, switch modes — don't pad.
 
-==== free_pick (320–450 words) ====
+==== free_pick (480–650 words) ====
 Goal: a pattern, contradiction, or conspicuous absence visible across multiple corpus items.
 Structure:
   - State the pattern in the opening line.
@@ -182,7 +182,17 @@ Title (≤ 80 chars): describes what the post is about. Specific beats clever. N
 
 Dek (1–2 sentences, ≤ 220 chars): state the thesis directly. Not a teaser.
 
-Forbidden phrases (mark you as an LLM, not a writer): "moves the market", "in this rapidly evolving landscape", "it's worth noting", "let's dive in", "navigate the complexities", "It will be interesting to see", "in conclusion", "stay tuned", exclamation points, em-dash chains, headers named "Introduction" or "Conclusion".
+Forbidden patterns — these are dead giveaways that an LLM wrote the piece. Avoid every one:
+
+- The "not just X, it's Y" parallelism. ANY variant: "It isn't just a model release, it's a market signal" / "Not only A but also B" / "More than just X, this is Y" / "This isn't about X — it's about Y." This is the most overused AI pattern in business writing. If you catch yourself building it, restructure the sentence completely. Just say what you mean.
+- Tricolons ("X, Y, and Z") used for emphasis when only one of the three is doing real work.
+- "What's striking is…" / "What's interesting is…" / "What's worth noting is…" / "What's clear is…" — all throat-clearing. Replace with the actual observation.
+- "On one hand… on the other hand…" / "While X, Y" pivots when used to manufacture balance the corpus doesn't support.
+- "In a world where…" / "In an era of…" / "As [trend] continues to…" openings.
+- "moves the market", "in this rapidly evolving landscape", "let's dive in", "navigate the complexities", "It will be interesting to see", "in conclusion", "stay tuned", "speaks volumes", "sends a clear message".
+- Exclamation points. Em-dash chains (more than one em-dash in a sentence). Headers named "Introduction" or "Conclusion".
+
+If a sentence uses any of these patterns, delete it and rewrite from the underlying claim. Don't soften them — remove them.
 
 Tag (pick the one that fits the post you actually wrote — don't shoehorn):
 - Analysis: broad pattern across multiple items
@@ -338,14 +348,33 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | { error: st
   // Per-mode minimum body length so deep_dive can't be the same size as
   // digest — one of the user complaints was that all modes read identically.
   const bodyLen = raw.bodyMarkdown.length;
+  // ~5 chars/word for English. Minimums set just below the prompted range
+  // so the validator catches genuinely-too-short pieces but doesn't reject
+  // a post that landed at the lower end of the requested length.
   const minByMode: Record<string, number> = {
-    digest: 1200,
-    deep_dive: 2400,
-    free_pick: 1500,
+    digest: 1900,    // ~380 words
+    deep_dive: 3500, // ~700 words
+    free_pick: 2400, // ~480 words
   };
   const minLen = minByMode[String(raw.mode)] ?? 1200;
   if (bodyLen < minLen) {
     return { error: `Body too short for ${raw.mode}: ${bodyLen} chars (need ≥ ${minLen})` };
+  }
+  // AI-tell pattern check: the "not just X, it's Y" parallelism is the most
+  // common LLM giveaway. Catch its variants and reject so the model has to
+  // restructure on retry.
+  const aiTellPatterns: { pattern: RegExp; label: string }[] = [
+    { pattern: /\b(?:it|this|that|here)['’]?s?\s+(?:not|isn['’]t|isn t)\s+just\s+/i, label: "'not just X, it's Y'" },
+    { pattern: /\bnot\s+only\s+\b[^.,;!?]{1,80}\b\s+but\s+also\s+/i, label: "'not only X, but also Y'" },
+    { pattern: /\bmore\s+than\s+just\s+/i, label: "'more than just X'" },
+    { pattern: /\bthis\s+isn['’]?t\s+about\s+\b[^.,;!?]{1,80}\b\s+[—-]\s*it['’]?s\s+about\s+/i, label: "'this isn't about X — it's about Y'" },
+    { pattern: /\bwhat['’]?s\s+(?:striking|interesting|worth\s+noting|clear|notable|telling)\s+(?:is|here)\b/i, label: "'what's striking/interesting/etc is...'" },
+    { pattern: /\bin\s+(?:a\s+world|an\s+era|a\s+landscape)\s+where\b/i, label: "'in a world/era/landscape where...'" },
+  ];
+  for (const { pattern, label } of aiTellPatterns) {
+    if (pattern.test(raw.bodyMarkdown)) {
+      return { error: `AI-tell pattern detected: ${label}. Rewrite without it.` };
+    }
   }
   if (!Array.isArray(raw.citations) || raw.citations.length === 0) {
     return { error: "Missing citations" };
@@ -550,22 +579,43 @@ export async function generateAndSavePost(opts: {
     lastValidationError = result.error;
     logger.warn({ attempt, ...result }, "Draft rejected");
 
-    // Only retry on hallucinated URL errors — other validation failures
-    // (missing fields, wrong tag, body too short) won't be fixed by feedback.
+    // Retry on a few specific failure modes the model can plausibly fix
+    // with targeted feedback. Other failures (missing fields, wrong tag)
+    // aren't worth a second LLM call.
     const isHallucinatedUrls = result.error.startsWith("Hallucinated URLs");
-    if (attempt === 1 && isHallucinatedUrls) {
+    const isAiTell = result.error.startsWith("AI-tell pattern");
+    const isTooShort = result.error.startsWith("Body too short");
+
+    if (attempt === 1 && (isHallucinatedUrls || isAiTell || isTooShort)) {
       messages.push({ role: "assistant", content: turnText });
-      messages.push({
-        role: "user",
-        content: [
+      let retryPrompt: string;
+      if (isHallucinatedUrls) {
+        retryPrompt = [
           `Your previous response cited URLs that are NOT in the corpus. ${result.error}`,
           "",
           "These are the ONLY valid URL strings you may use in citations — copy them character-for-character:",
           ...corpusUrlsList.map((u) => `  ${u}`),
           "",
           "Re-emit the SAME post with citations replaced by valid corpus URLs (and sourceHeadlineIds matching). Same JSON schema, no prose around it.",
-        ].join("\n"),
-      });
+        ].join("\n");
+      } else if (isAiTell) {
+        retryPrompt = [
+          `Your previous response was rejected for using an AI-tell pattern. ${result.error}`,
+          "",
+          "Rewrite the body without that pattern. The same point can almost always be stated as a single direct claim. Don't soften it — restructure the sentence completely.",
+          "",
+          "Re-emit the FULL post (same mode, same thesis, same citations) with the offending sentence rewritten. JSON only, no prose around it.",
+        ].join("\n");
+      } else {
+        retryPrompt = [
+          `Your previous response was rejected: ${result.error}`,
+          "",
+          "Expand the body with more interpretation per item. Each corpus item you cite should get a meaningful 'why this matters' beat — not just attribution. If you can't fill the length from the corpus, switch modes (digest is fine for thinner weeks).",
+          "",
+          "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
+        ].join("\n");
+      }
+      messages.push({ role: "user", content: retryPrompt });
       continue;
     }
     return { ok: false, error: result.error };
