@@ -456,6 +456,7 @@ export async function generateAndSavePost(opts: {
   let promptTokens = 0;
   let completionTokens = 0;
   let totalTokens = 0;
+  let tokenSource: "provider" | "estimated" = "provider";
   try {
     const response = await client.chat.completions.create({
       model,
@@ -470,9 +471,23 @@ export async function generateAndSavePost(opts: {
       response_format: { type: "json_object" },
     });
     responseText = response.choices[0]?.message?.content ?? "";
+    logger.info(
+      { model, usage: response.usage ?? null },
+      "LLM response usage",
+    );
     promptTokens = response.usage?.prompt_tokens ?? 0;
     completionTokens = response.usage?.completion_tokens ?? 0;
     totalTokens = response.usage?.total_tokens ?? promptTokens + completionTokens;
+    // Some providers (Venice in particular) don't always populate `usage`.
+    // Fall back to a 4-chars-per-token estimate so the cost dashboard isn't
+    // perpetually empty. Mark the source so we can flag the estimate in UI.
+    if (totalTokens === 0) {
+      tokenSource = "estimated";
+      const estTokens = (s: string) => Math.max(1, Math.ceil(s.length / 4));
+      promptTokens = estTokens(systemPrompt) + estTokens(userMessage);
+      completionTokens = estTokens(responseText);
+      totalTokens = promptTokens + completionTokens;
+    }
     if (!responseText) {
       // Surface why the response is empty — finish_reason, tool calls, refusal,
       // content filter, etc. — so we can act on it instead of guessing.
@@ -554,11 +569,9 @@ export async function generateAndSavePost(opts: {
   return { ok: true, postId: row.id, draft: validated };
 }
 
-// Run-state for the manual writer UI — async kick-off + polling beats a
-// synchronous request that Fly's proxy will time out at 60s while Claude is
-// still reasoning. State is in-memory and lost on machine restart, which is
-// fine: the writer eventually persists the post (or doesn't) and the admin
-// can read /admin/posts directly to see results.
+// Run-state for the manual writer UI. Persisted in the settings table so
+// both Fly machines share the same view — without this, a POST /run on
+// machine A and a GET /run-status on machine B would disagree.
 type RunStatus = {
   status: "idle" | "running" | "ok" | "error";
   startedAt: string | null;
@@ -568,7 +581,10 @@ type RunStatus = {
   mode: string | null;
 };
 
-let runState: RunStatus = {
+const RUN_STATE_KEY = "writer.daily-writer.run-state";
+const STALE_RUN_MS = 5 * 60 * 1000; // 5 min: anything older counts as crashed
+
+const IDLE_STATE: RunStatus = {
   status: "idle",
   startedAt: null,
   finishedAt: null,
@@ -577,18 +593,59 @@ let runState: RunStatus = {
   mode: null,
 };
 
-export function getRunStatus(): RunStatus {
-  return { ...runState };
+async function readRunState(): Promise<RunStatus> {
+  const [row] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.key, RUN_STATE_KEY))
+    .limit(1);
+  if (!row?.value) return { ...IDLE_STATE };
+  try {
+    return JSON.parse(row.value) as RunStatus;
+  } catch {
+    return { ...IDLE_STATE };
+  }
 }
 
-export function startWriterRun(opts: {
+async function writeRunState(state: RunStatus): Promise<void> {
+  await db
+    .insert(settingsTable)
+    .values({ key: RUN_STATE_KEY, value: JSON.stringify(state) })
+    .onConflictDoUpdate({
+      target: settingsTable.key,
+      set: { value: JSON.stringify(state), updatedAt: new Date() },
+    });
+}
+
+export async function getRunStatus(): Promise<RunStatus> {
+  const state = await readRunState();
+  // If a run claims to still be running but started >5min ago, surface it as
+  // stale so the UI can recover instead of being stuck on a crashed process.
+  if (state.status === "running" && state.startedAt) {
+    const age = Date.now() - new Date(state.startedAt).getTime();
+    if (age > STALE_RUN_MS) {
+      const stale: RunStatus = {
+        ...state,
+        status: "error",
+        finishedAt: new Date().toISOString(),
+        error: `Run stalled — started ${Math.round(age / 1000)}s ago with no result. Likely a crash mid-run.`,
+      };
+      await writeRunState(stale);
+      return stale;
+    }
+  }
+  return state;
+}
+
+export async function startWriterRun(opts: {
   agentId?: string;
   modeHint?: WriterMode | "auto";
-}): { accepted: boolean; status: RunStatus } {
-  if (runState.status === "running") {
-    return { accepted: false, status: getRunStatus() };
+}): Promise<{ accepted: boolean; status: RunStatus }> {
+  const current = await getRunStatus();
+  if (current.status === "running") {
+    return { accepted: false, status: current };
   }
-  runState = {
+  const startState: RunStatus = {
     status: "running",
     startedAt: new Date().toISOString(),
     finishedAt: null,
@@ -596,33 +653,42 @@ export function startWriterRun(opts: {
     error: null,
     mode: opts.modeHint ?? "auto",
   };
+  await writeRunState(startState);
+
   // Fire and forget. The promise outlives the HTTP request that started it.
   (async () => {
     try {
       const result = await generateAndSavePost(opts);
-      runState = result.ok
+      const final: RunStatus = result.ok
         ? {
-            ...runState,
+            ...startState,
             status: "ok",
             finishedAt: new Date().toISOString(),
             postId: result.postId,
           }
         : {
-            ...runState,
+            ...startState,
             status: "error",
             finishedAt: new Date().toISOString(),
             error: result.error,
           };
+      await writeRunState(final);
     } catch (err) {
-      runState = {
-        ...runState,
+      await writeRunState({
+        ...startState,
         status: "error",
         finishedAt: new Date().toISOString(),
         error: err instanceof Error ? err.message : String(err),
-      };
+      });
     }
   })();
-  return { accepted: true, status: getRunStatus() };
+  return { accepted: true, status: startState };
+}
+
+// Manual reset for the case where state is genuinely stuck (5-min stale
+// detection should usually catch this automatically).
+export async function clearRunState(): Promise<void> {
+  await writeRunState({ ...IDLE_STATE });
 }
 
 let writerHandle: NodeJS.Timeout | null = null;

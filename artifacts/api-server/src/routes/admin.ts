@@ -12,6 +12,7 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   startWriterRun,
   getRunStatus,
+  clearRunState,
   type WriterMode,
 } from "../lib/writer-agent";
 
@@ -193,7 +194,7 @@ router.get("/admin/posts", async (req, res) => {
 
 // Async kick-off: returns 202 immediately so Fly's 60s proxy timeout can't
 // kill it while Claude reasons. Frontend polls /admin/writers/:id/run-status.
-router.post("/admin/writers/:id/run", (req, res) => {
+router.post("/admin/writers/:id/run", async (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
   const modeQuery = String(req.query["mode"] ?? "auto");
@@ -201,17 +202,42 @@ router.post("/admin/writers/:id/run", (req, res) => {
   const modeHint = (allowedModes as string[]).includes(modeQuery)
     ? (modeQuery as WriterMode | "auto")
     : "auto";
-  const { accepted, status } = startWriterRun({ agentId: id, modeHint });
-  if (!accepted) {
-    return res.status(409).json({ error: "A run is already in progress", status });
+  try {
+    const { accepted, status } = await startWriterRun({ agentId: id, modeHint });
+    if (!accepted) {
+      return res.status(409).json({ error: "A run is already in progress", status });
+    }
+    return res.status(202).json({ accepted: true, status });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to start writer run");
+    return res.status(500).json({ error: "Internal server error" });
   }
-  return res.status(202).json({ accepted: true, status });
 });
 
-router.get("/admin/writers/:id/run-status", (req, res) => {
+router.get("/admin/writers/:id/run-status", async (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
-  return res.json({ status: getRunStatus() });
+  try {
+    const status = await getRunStatus();
+    return res.json({ status });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to read run status");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Manual reset for stuck state — should rarely be needed since getRunStatus
+// auto-clears anything older than 5 minutes.
+router.post("/admin/writers/:id/run-status/reset", async (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  try {
+    await clearRunState();
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to reset run state");
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 router.get("/admin/writers/:id/prompt", async (req, res) => {
