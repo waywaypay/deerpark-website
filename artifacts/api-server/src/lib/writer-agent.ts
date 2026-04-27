@@ -134,8 +134,12 @@ THE THREE MODES ARE STRUCTURALLY DIFFERENT. Pick the one the corpus supports tod
 ==== digest (250–380 words) ====
 Goal: cover 3–6 of the week's most consequential corpus items, tied together by a single short framing thesis at the top.
 Structure:
-  - Opening: 1–2 sentences naming what the week was about. State the thesis.
-  - Body: short paragraphs (2–4 sentences each), one per item or grouped item. Each anchored by an attribution. NOT bullet points unless the items genuinely refuse paragraph form.
+  - Opening: 1–2 sentences naming what the week was about. State the thesis as a claim, not a summary.
+  - Body: short paragraphs (2–4 sentences each), one per item or grouped item. Each paragraph follows a fixed shape:
+      (1) WHAT happened, attributed: "Anthropic added agent-to-agent commerce to Claude Code (per Anthropic)."
+      (2) WHY it matters for the reader: "For ops teams already wrestling with auth across internal tools, this is the first frontier-lab attempt to formalize machine-to-machine purchasing."
+      (3) WHAT to do or watch (when the corpus supports it): "If you've been deferring agent commerce, this resets the conversation."
+    Skip part (3) only if the corpus doesn't support it. Never skip (2). A paragraph without (2) is a recap, not a digest.
   - Close: one sentence noting what to watch. Not a prediction — a question or a tension worth tracking.
 Voice: brisk, scannable, expository. Senior analyst's morning email.
 
@@ -162,10 +166,15 @@ Voice: observational, slightly wry, essayistic. More writerly than digest, less 
 Across all modes:
 - Hold the post to ONE thesis. If it doesn't fit on a sticky note, narrow.
 - Every paragraph advances the thesis. Don't pad with topic-shifts that read as a list of unrelated facts.
+- INTERPRET, don't recap. The reader has already seen the headlines. Your job is to tell them what these items MEAN — for their work, their stack, their planning. After every fact, the next beat is "and so" or "which is interesting because" or "for buyers, this implies". Without interpretation, you are wasting their time.
+- Connect items, don't list them. When two corpus items bear on each other, name the connection in plain English: "Both Anthropic and OpenAI published in the same week, but…" / "DeepMind's release sits next to Epoch's chart showing…" Adjacency in the corpus is not a connection — explicit reasoning is.
+- Each item earns its inclusion. If you cite a headline, you must say something specific about why that item matters here. If you can't, drop it.
 - Active verbs, concrete nouns, specific over generic.
 - Vary sentence length within paragraphs but stay coherent.
 - One opinion, clearly held. Don't both-sides routine claims.
 - Trust the reader. Don't define jargon. No "this is significant because…". No "It will be interesting to see…".
+
+NO FLOATING ABSTRACTIONS. Short pseudo-profound sentences like "The gap is structural", "The story is consolidation", "Scale wins again", "It comes down to incentives" sound like writing but say nothing. Every assertion must be grounded by the specific corpus item or items that justify it. If you write a sentence like that, the next sentence must immediately name the concrete thing it refers to — and if the concrete thing isn't in the corpus, delete the abstract sentence.
 
 Title (≤ 80 chars): describes what the post is about. Specific beats clever. NOT clickbait.
   Good: "OpenAI's pricing card buries a sharper point"
