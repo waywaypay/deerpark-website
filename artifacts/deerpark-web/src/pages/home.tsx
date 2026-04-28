@@ -200,6 +200,13 @@ const SERVICE_PILLARS = [
   },
 ];
 
+const TIMELINE_PHASES: { phase: string; title: string; icon: typeof ScanSearch; start: number; span: number }[] = [
+  { phase: "01", title: "Assess", icon: ScanSearch, start: 1, span: 2 },
+  { phase: "02", title: "Build", icon: Layers, start: 2, span: 4 },
+  { phase: "03", title: "Deploy", icon: Rocket, start: 6, span: 2 },
+  { phase: "04", title: "Train", icon: GraduationCap, start: 1, span: 8 },
+];
+
 const Services = () => (
   <section id="services" className="py-32 border-t border-foreground/10">
     <div className="max-w-7xl mx-auto px-6">
@@ -209,9 +216,40 @@ const Services = () => (
           <span className="section-label">Practice Areas</span>
         </div>
         <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">Four pillars. One continuous engagement.</h2>
-        <p className="text-lg text-muted-foreground font-light max-w-2xl mb-20">
+        <p className="text-lg text-muted-foreground font-light max-w-2xl mb-12">
           Every engagement moves through assessment, build, deployment, and training — each pillar rolls up specific practice areas your organization will see on the plan.
         </p>
+      </FadeIn>
+
+      <FadeIn delay={0.1}>
+        <div className="hidden md:block mb-20 border border-foreground/15 bg-foreground/[0.02] p-8">
+          <div className="flex items-baseline justify-between mb-6">
+            <span className="section-label">Engagement timeline</span>
+            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-sans">6–8 weeks · kickoff to handoff</span>
+          </div>
+          <div className="grid grid-cols-8 gap-px mb-3 border-b border-foreground/10 pb-3">
+            {Array.from({ length: 8 }, (_, i) => (
+              <div key={i} className="text-center">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">Wk</div>
+                <div className="text-sm font-serif text-foreground">{i + 1}</div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-2">
+            {TIMELINE_PHASES.map((p) => (
+              <div key={p.phase} className="grid grid-cols-8 gap-px">
+                <div
+                  className="h-10 bg-foreground/[0.06] border border-foreground/10 flex items-center gap-3 px-4 hover:bg-foreground/[0.1] transition-colors"
+                  style={{ gridColumnStart: p.start, gridColumnEnd: p.start + p.span }}
+                >
+                  <p.icon className="w-4 h-4 text-primary shrink-0" />
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground font-sans">{p.phase}</span>
+                  <span className="text-sm font-serif text-foreground">{p.title}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </FadeIn>
 
       <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
@@ -273,16 +311,36 @@ const CaseStudy = () => (
           <p className="text-background/70 font-light leading-relaxed">
             We took it from the first Figma frame to production in six to eight weeks: product design, full stack, AI layer, training, and handoff. After the internal demo landed, the operator rolled the same app across their active client base.
           </p>
-          <dl className="grid grid-cols-2 gap-4 mt-10 border-t border-background/20 pt-8">
-            <div>
-              <dt className="text-xs uppercase tracking-[0.15em] text-background/40">Kickoff to prod</dt>
-              <dd className="text-2xl font-serif mt-2">6-8 wks</dd>
+          <div className="mt-10 border-t border-background/20 pt-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-background/15 border border-background/15 mb-6">
+              <div className="bg-foreground p-5">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 mb-3 font-sans">Before</div>
+                <div className="text-base font-serif text-background/55 leading-snug">
+                  Spreadsheets and group chats. Every manager losing hours each week to coverage edits and time-off back-and-forth.
+                </div>
+              </div>
+              <div className="bg-foreground p-5">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-primary mb-3 font-sans">After</div>
+                <div className="text-base font-serif text-background leading-snug">
+                  One web app. A single source of truth across every site, with AI handling the routine edits and conflict checks.
+                </div>
+              </div>
             </div>
-            <div>
-              <dt className="text-xs uppercase tracking-[0.15em] text-background/40">Handoff</dt>
-              <dd className="text-2xl font-serif mt-2">100%</dd>
-            </div>
-          </dl>
+            <dl className="grid grid-cols-3 gap-4">
+              <div>
+                <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">Kickoff to prod</dt>
+                <dd className="text-xl md:text-2xl font-serif mt-2">6–8 wks</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">Handoff</dt>
+                <dd className="text-xl md:text-2xl font-serif mt-2">100%</dd>
+              </div>
+              <div>
+                <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">Rolled out</dt>
+                <dd className="text-xl md:text-2xl font-serif mt-2">40+ clients</dd>
+              </div>
+            </dl>
+          </div>
         </FadeIn>
 
         <FadeIn delay={0.15} className="lg:col-span-8">
