@@ -158,7 +158,7 @@ router.get("/admin/writers", async (req, res) => {
           id: "daily-writer",
           displayName: "Daily Writer",
           description:
-            "Writes one post per day from the rolling 7-day headline corpus. Picks digest, deep dive, or free pick at its discretion. All claims must be cited from corpus URLs.",
+            "Writes a deeper analytical piece (deep dive or free pick) when the corpus supports a real angle — typically 2–3 posts/week. Aborts on thin days rather than publishing recap slop. All claims cited from corpus URLs.",
           model: info.model,
           baseUrl: info.baseUrl,
           enabled: info.configured,
@@ -198,7 +198,7 @@ router.post("/admin/writers/:id/run", async (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
   const modeQuery = String(req.query["mode"] ?? "auto");
-  const allowedModes: (WriterMode | "auto")[] = ["auto", "digest", "deep_dive", "free_pick"];
+  const allowedModes: (WriterMode | "auto")[] = ["auto", "deep_dive", "free_pick"];
   const modeHint = (allowedModes as string[]).includes(modeQuery)
     ? (modeQuery as WriterMode | "auto")
     : "auto";

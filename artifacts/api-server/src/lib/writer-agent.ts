@@ -93,7 +93,7 @@ function scoreCorpusItem(item: CorpusItem, now: number): number {
 //      Y) rather than free-form analysis with no source.
 
 const ALLOWED_TAGS = ["Analysis", "Market", "Practice", "Signals", "Field Notes"] as const;
-const ALLOWED_MODES = ["digest", "deep_dive", "free_pick"] as const;
+const ALLOWED_MODES = ["deep_dive", "free_pick"] as const;
 
 export type WriterMode = (typeof ALLOWED_MODES)[number];
 export type WriterTag = (typeof ALLOWED_TAGS)[number];
@@ -129,21 +129,11 @@ Hard rules — never break:
 4. If the corpus is too thin, set "abort": true with a "rationale". Don't pad.
 5. CITATIONS MUST BE COPIED VERBATIM. Each value in "citations" must be an exact, character-for-character copy of a "URL:" line from the corpus. Do not construct, guess, normalize, complete, or pattern-match URLs based on the title or your training data. If the corpus has https://www.foo.com/news/bar, you write https://www.foo.com/news/bar — not https://foo.com/2026/04/25/bar. This is checked programmatically; any URL not literally present in the corpus causes the post to be rejected and discarded.
 
-THE THREE MODES ARE STRUCTURALLY DIFFERENT. Pick the one the corpus supports today, then follow its shape — different length, different structure, different cadence.
+YOU PUBLISH ONLY WHEN YOU HAVE A REAL ANGLE. The headline feed already shows readers what happened. Your job is what it MEANS — and you only publish on days when the corpus actually supports a piece worth reading. There is no "digest" or roundup mode. If you don't have a specific point of view that the corpus can support, set "abort": true with a one-sentence rationale and don't publish today. Aborting is a normal, expected outcome.
 
-LENGTH DISCIPLINE. Posts are 700–1,250 words. That length only works if every paragraph carries weight. If you're padding to hit the floor, the corpus is too thin and you should switch modes. Symptoms of padding to avoid: restating the same point in two ways, summarizing what you said two paragraphs ago, ending sections with platitudes about "what to watch", listing items just to fill space. Cut every sentence that doesn't introduce a new claim, a new piece of attribution, or a new implication.
+THE TWO MODES. Pick the one the corpus supports today, then follow its shape — different length, different structure, different cadence.
 
-==== digest (700–950 words) ====
-Goal: cover 3–6 of the week's most consequential corpus items, tied together by a single short framing thesis at the top.
-Structure:
-  - Opening: 1–2 sentences naming what the week was about. State the thesis as a claim, not a summary.
-  - Body: short paragraphs (2–4 sentences each), one per item or grouped item. Each paragraph follows a fixed shape:
-      (1) WHAT happened, attributed: "Anthropic added agent-to-agent commerce to Claude Code (per Anthropic)."
-      (2) WHY it matters for the reader: "For ops teams already wrestling with auth across internal tools, this is the first frontier-lab attempt to formalize machine-to-machine purchasing."
-      (3) WHAT to do or watch (when the corpus supports it): "If you've been deferring agent commerce, this resets the conversation."
-    Skip part (3) only if the corpus doesn't support it. Never skip (2). A paragraph without (2) is a recap, not a digest.
-  - Close: one sentence noting what to watch. Not a prediction — a question or a tension worth tracking.
-Voice: brisk, scannable, expository. Senior analyst's morning email.
+LENGTH DISCIPLINE. Posts are 750–1,250 words. That length only works if every paragraph carries weight. If you're padding to hit the floor, the corpus is too thin — abort instead. Symptoms of padding to avoid: restating the same point in two ways, summarizing what you said two paragraphs ago, ending sections with platitudes about "what to watch", listing items just to fill space. Cut every sentence that doesn't introduce a new claim, a new piece of attribution, or a new implication.
 
 ==== deep_dive (1,000–1,250 words) ====
 Goal: one corpus item or one tight cluster (max 3 items on the same subject), examined thoroughly. Not a survey of the week.
@@ -216,7 +206,7 @@ CRITICAL output format: respond with ONE JSON object and absolutely nothing else
 
 Schema:
 {
-  "mode": "digest" | "deep_dive" | "free_pick",
+  "mode": "deep_dive" | "free_pick",
   "tag": "Analysis" | "Market" | "Practice" | "Signals" | "Field Notes",
   "title": string,
   "dek": string,
@@ -363,11 +353,10 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | { error: st
   // the validator rejects genuinely-too-short pieces but not posts that
   // land at the lower end of the requested range.
   const minByMode: Record<string, number> = {
-    digest: 3300,    // ~660 words (floor ≈ 700)
     deep_dive: 4700, // ~940 words (floor ≈ 1,000)
     free_pick: 3500, // ~700 words (floor ≈ 750)
   };
-  const minLen = minByMode[String(raw.mode)] ?? 1200;
+  const minLen = minByMode[String(raw.mode)] ?? 3500;
   if (bodyLen < minLen) {
     return { error: `Body too short for ${raw.mode}: ${bodyLen} chars (need ≥ ${minLen})` };
   }
@@ -713,11 +702,12 @@ export async function generateAndSavePost(opts: {
 // both Fly machines share the same view — without this, a POST /run on
 // machine A and a GET /run-status on machine B would disagree.
 type RunStatus = {
-  status: "idle" | "running" | "ok" | "error";
+  status: "idle" | "running" | "ok" | "error" | "aborted";
   startedAt: string | null;
   finishedAt: string | null;
   postId: number | null;
   error: string | null;
+  rationale: string | null;
   mode: string | null;
 };
 
@@ -730,6 +720,7 @@ const IDLE_STATE: RunStatus = {
   finishedAt: null,
   postId: null,
   error: null,
+  rationale: null,
   mode: null,
 };
 
@@ -791,6 +782,7 @@ export async function startWriterRun(opts: {
     finishedAt: null,
     postId: null,
     error: null,
+    rationale: null,
     mode: opts.modeHint ?? "auto",
   };
   await writeRunState(startState);
@@ -799,19 +791,32 @@ export async function startWriterRun(opts: {
   (async () => {
     try {
       const result = await generateAndSavePost(opts);
-      const final: RunStatus = result.ok
-        ? {
-            ...startState,
-            status: "ok",
-            finishedAt: new Date().toISOString(),
-            postId: result.postId,
-          }
-        : {
-            ...startState,
-            status: "error",
-            finishedAt: new Date().toISOString(),
-            error: result.error,
-          };
+      let final: RunStatus;
+      if (result.ok) {
+        final = {
+          ...startState,
+          status: "ok",
+          finishedAt: new Date().toISOString(),
+          postId: result.postId,
+        };
+      } else if (result.error.startsWith("Agent aborted:")) {
+        // Abort is an expected clean outcome — corpus too thin to support
+        // a real piece, no point publishing slop. Surface as "aborted" so
+        // the admin can show it as informational, not a failure.
+        final = {
+          ...startState,
+          status: "aborted",
+          finishedAt: new Date().toISOString(),
+          rationale: result.error.replace(/^Agent aborted:\s*/, "").trim() || null,
+        };
+      } else {
+        final = {
+          ...startState,
+          status: "error",
+          finishedAt: new Date().toISOString(),
+          error: result.error,
+        };
+      }
       await writeRunState(final);
     } catch (err) {
       await writeRunState({
@@ -833,10 +838,15 @@ export async function clearRunState(): Promise<void> {
 
 let writerHandle: NodeJS.Timeout | null = null;
 
-const WRITER_INTERVAL_MS = 24 * 60 * 60 * 1000;
+// Tick every 12h, but only attempt a new post if the last one is older than
+// the floor. With a 36h floor, that produces roughly 2 posts per 3 days when
+// the corpus supports it (and fewer on thin weeks since the agent will abort
+// rather than publish slop).
+const WRITER_TICK_MS = 12 * 60 * 60 * 1000;
+const WRITER_FLOOR_MS = 36 * 60 * 60 * 1000;
 
-async function hasPostInLast24h(): Promise<boolean> {
-  const since = new Date(Date.now() - WRITER_INTERVAL_MS);
+async function hasPostInLastFloor(): Promise<boolean> {
+  const since = new Date(Date.now() - WRITER_FLOOR_MS);
   const rows = await db
     .select({ id: postsTable.id })
     .from(postsTable)
@@ -845,18 +855,26 @@ async function hasPostInLast24h(): Promise<boolean> {
   return rows.length > 0;
 }
 
-export function startWriterScheduler(intervalMs = WRITER_INTERVAL_MS): void {
+export function startWriterScheduler(intervalMs = WRITER_TICK_MS): void {
   if (writerHandle) return;
 
   const tick = async () => {
     try {
-      if (await hasPostInLast24h()) {
-        logger.info("Writer tick: post already exists in last 24h, skipping");
+      if (await hasPostInLastFloor()) {
+        logger.info("Writer tick: recent post within floor, skipping");
         return;
       }
       logger.info("Writer tick: generating post");
       const result = await generateAndSavePost({});
-      if (!result.ok) logger.warn({ error: result.error }, "Writer tick failed");
+      if (!result.ok) {
+        // Abort (corpus too thin to write a real piece) is the expected
+        // clean outcome on slow days. Log at info, not warn.
+        if (result.error.startsWith("Agent aborted:")) {
+          logger.info({ rationale: result.error }, "Writer tick aborted (clean)");
+        } else {
+          logger.warn({ error: result.error }, "Writer tick failed");
+        }
+      }
     } catch (err) {
       logger.error({ err }, "Writer tick threw");
     }

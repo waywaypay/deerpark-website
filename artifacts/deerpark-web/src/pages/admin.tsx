@@ -623,7 +623,6 @@ const PLACEHOLDER_EMAIL_AGENTS: EmailAgent[] = [];
 
 const WRITER_MODES = [
   { id: "auto", label: "Auto (agent picks)" },
-  { id: "digest", label: "Digest" },
   { id: "deep_dive", label: "Deep dive" },
   { id: "free_pick", label: "Free pick" },
 ] as const;
@@ -708,15 +707,26 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
         if (!stRes.ok) continue;
         const stJson = (await stRes.json()) as {
           status: {
-            status: "idle" | "running" | "ok" | "error";
+            status: "idle" | "running" | "ok" | "error" | "aborted";
             postId: number | null;
             error: string | null;
+            rationale: string | null;
           };
         };
         const s = stJson.status;
         if (s.status === "ok") {
           setLastRun({ ok: true, message: `Wrote post #${s.postId}` });
           await load();
+          setBusyId(null);
+          return;
+        }
+        if (s.status === "aborted") {
+          // Clean outcome: agent decided the corpus doesn't support a real
+          // piece today. Surface as informational, not an error.
+          setLastRun({
+            ok: true,
+            message: `No post today — agent aborted: ${s.rationale ?? "corpus too thin for a real piece"}`,
+          });
           setBusyId(null);
           return;
         }

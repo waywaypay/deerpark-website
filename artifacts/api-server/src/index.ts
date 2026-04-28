@@ -34,7 +34,7 @@ app.listen(port, (err) => {
   if (process.env["DISABLE_WRITER_SCHEDULER"] !== "1") {
     if (process.env["LLM_API_KEY"]) {
       startWriterScheduler();
-      logger.info("Writer scheduler started (24h cadence)");
+      logger.info("Writer scheduler started (12h tick, 36h floor — ~2-3 posts/week when corpus supports)");
     } else {
       logger.warn("LLM_API_KEY not set — writer scheduler disabled");
     }
