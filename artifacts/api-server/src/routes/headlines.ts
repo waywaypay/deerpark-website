@@ -15,6 +15,18 @@ type HeadlineRow = {
   publishedAt: Date;
 };
 
+/** Map SQL row keys from Drizzle execute() payload to HeadlineRow. */
+const mapSqlRowToHeadline = (
+  row: Record<string, unknown>,
+): HeadlineRow => ({
+  id: Number(row["id"]),
+  source: String(row["source"]),
+  category: String(row["category"]),
+  title: String(row["title"]),
+  url: String(row["url"]),
+  publishedAt: new Date(row["published_at"] as string | Date),
+});
+
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
 // Tier 1 → weight 4, Tier 4 → weight 1. Linear by design — easy to read,
 // easy to override per-row if we ever add per-headline overrides.
@@ -90,14 +102,9 @@ router.get("/headlines", async (req, res) => {
       ORDER BY published_at DESC
       LIMIT ${limit}
     `);
-    const rows: HeadlineRow[] = result.rows.map((r) => ({
-      id: Number(r["id"]),
-      source: String(r["source"]),
-      category: String(r["category"]),
-      title: String(r["title"]),
-      url: String(r["url"]),
-      publishedAt: new Date(r["published_at"] as string | Date),
-    }));
+    const rows: HeadlineRow[] = result.rows.map((r) =>
+      mapSqlRowToHeadline(r as Record<string, unknown>),
+    );
     res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
     return res.json({ items: rows, mode });
   } catch (err) {
