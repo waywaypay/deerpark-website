@@ -6,7 +6,8 @@ export type SourceKind =
   | "mistral-news"
   | "epoch-blog"
   | "deepseek-news"
-  | "kimi-blog";
+  | "kimi-blog"
+  | "earnings-transcripts";
 
 // 1 = top tier (frontier labs, foundational evals — original-source releases
 // readers shouldn't miss), 4 = bottom tier (volume press + community).
@@ -29,6 +30,10 @@ export type SourceConfig = {
 // omitted: ai.meta.com returns 400 and x.ai returns 403 even with a real
 // browser UA — they actively block server-to-server scrapers and would
 // silently return zero items.
+//
+// `earnings-transcripts` pulls a broad equities RSS (default Seeking Alpha)
+// then keeps transcript-style headlines that mention mega-cap tech / AI
+// themes so the feed stays on-topic vs the full index.
 export const SOURCES: SourceConfig[] = [
   {
     id: "hacker-news",
@@ -219,5 +224,16 @@ export const SOURCES: SourceConfig[] = [
     url: process.env["EPOCH_FEED_URL"] ?? "https://epoch.ai/blog",
     enabled: true,
     tier: 2,
+  },
+  {
+    id: "earnings-transcripts",
+    displayName: "Earnings transcripts",
+    category: "Markets",
+    kind: "earnings-transcripts",
+    url:
+      process.env["EARNINGS_TRANSCRIPTS_RSS_URL"] ??
+      "https://seekingalpha.com/feed.xml",
+    enabled: true,
+    tier: 4,
   },
 ];

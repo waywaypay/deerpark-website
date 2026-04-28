@@ -28,6 +28,52 @@ const isAiRelevant = (title: string) => {
   return AI_KEYWORDS.some((kw) => lower.includes(kw));
 };
 
+/** True for Seeking Alpha–style earnings materials we treat as “transcript” rows. */
+function isTranscriptStyleTitle(title: string): boolean {
+  const t = title.toLowerCase();
+  if (t.includes("earnings call transcript") || t.includes("prepared remarks transcript")) return true;
+  if (/\bshareholder\/analyst call transcript\b/i.test(title)) return true;
+  if (t.includes("transcript")) {
+    return (
+      /\bearnings\b|\bresults\b|\bcall\b|conference|investor|analyst\b/i.test(title) ||
+      /\([A-Z]{1,5}(?::[A-Z]+)?\)/.test(title)
+    );
+  }
+  return false;
+}
+
+// Semis, hyperscalers & software names where AI materially moves the needle (ticker + select names).
+const EARNINGS_AI_TICKER_OR_CO =
+  /\((?:NVDA|MSFT|META|GOOGL|GOOG|AMZN|AAPL|AMD|INTC|AVGO|CRM|NOW|SNOW|PLTR|CRWD|MRVL|PANW|ZS|NET|ADBE|IBM|ORCL|QCOM|TSM|ASML|ARM|INTU|ADSK|SHOP|SPOT|U|DDOG|DOCN|ESTC|CFLT|SNPS|CDNS|ANET)\)/i;
+
+const EARNINGS_AI_NAMES =
+  /\b(NVIDIA|Microsoft|Alphabet|Meta Platforms|Amazon\.com|Apple|Intel|Advanced Micro Devices|Broadcom|Palantir|Snowflake|Salesforce|ServiceNow|Adobe|Oracle|IBM|Qualcomm|TSMC|ASML|Arm Holdings|Autodesk|Datadog|Elastic|Confluent|Synopsys|Cadence|Arista)\b/i;
+
+const EARNINGS_AI_TOPICS =
+  /\b(artificial intelligence|machine learning|\bai\b|\bgpu\b|data\s*center|hyperscaler|llm|openai|anthropic|gemini|copilot|azure\s+ai|aws\s+ai|foundry|inference|accelerator|CUDA|H100|H200|Blackwell|Rubin)\b/i;
+
+function shouldIncludeEarningsTranscript(title: string): boolean {
+  if (!isTranscriptStyleTitle(title)) return false;
+  if (EARNINGS_AI_TICKER_OR_CO.test(title)) return true;
+  if (EARNINGS_AI_NAMES.test(title)) return true;
+  if (EARNINGS_AI_TOPICS.test(title)) return true;
+  return false;
+}
+
+async function fetchEarningsTranscripts(source: SourceConfig): Promise<NormalizedItem[]> {
+  const feed = await parser.parseURL(source.url);
+  return (feed.items ?? [])
+    .filter((item) => item.link && item.title && shouldIncludeEarningsTranscript(item.title!))
+    .map((item) => ({
+      source: source.displayName,
+      category: source.category,
+      title: item.title!.trim(),
+      url: item.link!,
+      urlHash: hashUrl(item.link!),
+      publishedAt: item.isoDate ? new Date(item.isoDate) : new Date(),
+    }));
+}
+
 async function fetchRss(source: SourceConfig): Promise<NormalizedItem[]> {
   const feed = await parser.parseURL(source.url);
   return (feed.items ?? [])
@@ -352,6 +398,8 @@ async function fetchSource(source: SourceConfig): Promise<NormalizedItem[]> {
       return fetchDeepSeekNews(source);
     case "kimi-blog":
       return fetchKimiBlog(source);
+    case "earnings-transcripts":
+      return fetchEarningsTranscripts(source);
   }
 }
 
