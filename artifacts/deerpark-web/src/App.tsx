@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Dispatch from "@/pages/dispatch";
+import DispatchArchive from "@/pages/dispatch-archive";
+import DispatchPost from "@/pages/dispatch-post";
 import CapitalDesk from "@/pages/capital-desk";
 import Admin from "@/pages/admin";
 
@@ -14,6 +16,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/dispatch" component={Dispatch} />
+      <Route path="/dispatch/archive" component={DispatchArchive} />
+      <Route path="/dispatch/:id" component={DispatchPost} />
       <Route path="/capital-desk" component={CapitalDesk} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
