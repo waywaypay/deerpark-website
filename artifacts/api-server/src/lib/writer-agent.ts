@@ -335,7 +335,33 @@ const extractJson = (text: string): RawDraft | null => {
   return null;
 };
 
-const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | { error: string } => {
+// Walks back/forward from a match index to the surrounding sentence so the
+// retry prompt can quote the exact offending sentence to the model. Without
+// this, the retry says "you used a banned pattern somewhere" and the model
+// often rewrites the wrong half of the post and trips a different banned
+// pattern on the next attempt.
+const extractSentence = (text: string, idx: number): string => {
+  let start = idx;
+  while (start > 0) {
+    const ch = text[start - 1];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") break;
+    start--;
+  }
+  let end = idx;
+  while (end < text.length) {
+    const ch = text[end];
+    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
+      if (ch === "." || ch === "!" || ch === "?") end++;
+      break;
+    }
+    end++;
+  }
+  return text.slice(start, end).trim();
+};
+
+type ValidationError = { error: string; offendingSentence?: string };
+
+const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | ValidationError => {
   if (raw.abort) {
     return { error: `Agent aborted: ${raw.rationale ?? "no rationale"}` };
   }
@@ -387,8 +413,13 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | { error: st
     { pattern: /\bspeaks\s+volumes\b|\bsends?\s+a\s+(?:clear|strong|powerful)\s+(?:message|signal)\b/i, label: "'speaks volumes' / 'sends a clear message'" },
   ];
   for (const { pattern, label } of aiTellPatterns) {
-    if (pattern.test(raw.bodyMarkdown)) {
-      return { error: `AI-tell pattern detected: ${label}. Rewrite without it.` };
+    const match = pattern.exec(raw.bodyMarkdown);
+    if (match) {
+      const offending = extractSentence(raw.bodyMarkdown, match.index);
+      return {
+        error: `AI-tell pattern detected: ${label}. Rewrite without it.`,
+        offendingSentence: offending,
+      };
     }
   }
   if (!Array.isArray(raw.citations) || raw.citations.length === 0) {
@@ -506,8 +537,11 @@ export async function generateAndSavePost(opts: {
 
   // Multi-turn so we can give the model targeted feedback if validation fails
   // on hallucinated URLs and let it correct citations using the actual corpus.
-  // Hard cap at 2 attempts (initial + 1 retry) so a stubbornly hallucinating
-  // model can't burn unbounded tokens.
+  // Hard cap so a stubbornly broken model can't burn unbounded tokens, but
+  // generous enough that AI-tell rewrites don't fail user-facing — the model
+  // sometimes trips a *different* banned pattern on its first rewrite, so it
+  // needs more than one shot.
+  const MAX_VALIDATION_ATTEMPTS = 4;
   const messages: { role: "system" | "user" | "assistant"; content: string }[] = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userMessage },
@@ -522,7 +556,7 @@ export async function generateAndSavePost(opts: {
 
   const corpusUrlsList = corpus.map((c) => c.url);
 
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= MAX_VALIDATION_ATTEMPTS; attempt++) {
     let response;
     try {
       response = await client.chat.completions.create({
@@ -601,7 +635,7 @@ export async function generateAndSavePost(opts: {
     const isAiTell = result.error.startsWith("AI-tell pattern");
     const isTooShort = result.error.startsWith("Body too short");
 
-    if (attempt === 1 && (isHallucinatedUrls || isAiTell || isTooShort)) {
+    if (attempt < MAX_VALIDATION_ATTEMPTS && (isHallucinatedUrls || isAiTell || isTooShort)) {
       messages.push({ role: "assistant", content: turnText });
       let retryPrompt: string;
       if (isHallucinatedUrls) {
@@ -614,12 +648,31 @@ export async function generateAndSavePost(opts: {
           "Re-emit the SAME post with citations replaced by valid corpus URLs (and sourceHeadlineIds matching). Same JSON schema, no prose around it.",
         ].join("\n");
       } else if (isAiTell) {
+        const offending = result.offendingSentence;
         retryPrompt = [
           `Your previous response was rejected for using an AI-tell pattern. ${result.error}`,
           "",
-          "Rewrite the body without that pattern. The same point can almost always be stated as a single direct claim. Don't soften it — restructure the sentence completely.",
+          ...(offending
+            ? [
+                "The exact sentence that tripped the validator:",
+                "",
+                `> ${offending}`,
+                "",
+                "Rewrite ONLY that sentence. Keep every other sentence in the body verbatim — same words, same order, same paragraph breaks. State the underlying claim as a direct assertion.",
+              ]
+            : ["Rewrite the offending sentence as a direct claim. Keep the rest of the body verbatim."]),
           "",
-          "Re-emit the FULL post (same mode, same thesis, same citations) with the offending sentence rewritten. JSON only, no prose around it.",
+          "The rewrite must NOT introduce any of these other banned patterns:",
+          "  - 'not just X but Y' / 'not only X but Y' / 'more than just X'",
+          "  - 'isn't merely / isn't simply / isn't limited to'",
+          "  - 'X weren't Y alone' / 'X wasn't Y by itself'",
+          "  - 'this isn't about X — it's about Y'",
+          "  - 'what's striking/interesting/worth noting/clear/notable is...'",
+          "  - 'in a world/era/landscape/age where...'",
+          "  - 'speaks volumes' / 'sends a clear message'",
+          "  - exclamation points, em-dash chains (more than one — per sentence)",
+          "",
+          "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
       } else {
         // Body-too-short retry — be explicit about the numbers because the
