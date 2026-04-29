@@ -28,7 +28,7 @@ export type DispatchWeek = {
   entries: DispatchEntry[];
 };
 
-export const SUBSTACK_URL = "https://deerpark.substack.com";
+export const SUBSTACK_URL = "https://deerparkai.substack.com";
 
 export const DISPATCH_WEEKS: DispatchWeek[] = [
   {
