@@ -94,7 +94,7 @@ const DispatchSubscribe = () => {
       const res = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, source: "dispatch" }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -109,8 +109,19 @@ const DispatchSubscribe = () => {
 
   if (status === "success") {
     return (
-      <div className="h-12 flex items-center gap-2 text-sm font-sans text-foreground">
-        <span className="text-primary">✓</span> Check your inbox to confirm your subscription.
+      <div className="space-y-4">
+        <p className="text-sm font-sans text-foreground">
+          <span className="text-primary mr-1">✓</span> Got it. One last step — confirm your subscription with Substack below.
+        </p>
+        <iframe
+          src={`${SUBSTACK_URL}/embed`}
+          width="100%"
+          height="150"
+          style={{ border: "1px solid rgba(0,0,0,0.1)", background: "white" }}
+          frameBorder={0}
+          scrolling="no"
+          title="Subscribe to the Daily Writing on Substack"
+        />
       </div>
     );
   }
