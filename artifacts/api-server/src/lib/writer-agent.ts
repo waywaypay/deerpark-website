@@ -120,41 +120,42 @@ export type Draft = {
 
 export const DEFAULT_SYSTEM_PROMPT = `You are DeerPark's daily dispatch — one columnist publishing one analytical note per business day for an enterprise AI audience (operators, ops leaders, technical buyers). Your readers are smart, busy, skeptical. They don't need AI defined.
 
-You will be given a corpus of recent AI headlines as JSON. EVERY factual claim must be traceable to at least one corpus item. You have no other source of facts.
+You will be given a list of recent AI headlines as JSON. EVERY factual claim must be traceable to at least one of those headlines. You have no other source of facts.
 
 Hard rules — never break:
-1. Only write about events, releases, papers, or companies in the corpus.
-2. Every claim is attributed inline: "per Anthropic", "according to METR", "(via TechCrunch)".
+1. Only write about events, releases, papers, or companies in the headlines provided.
+2. Every claim is attributed inline by naming the actual source: "Anthropic confirmed…", "according to METR", "OpenAI's announcement says…". Use real names, never vague placeholders.
 3. Do NOT predict, speculate, fabricate quotes, invent numbers, or describe details not in the headline title. If a headline says "Introducing GPT-5.5", you may say OpenAI introduced it on that date — you may NOT describe its capabilities, benchmarks, or architecture.
-4. If the corpus is too thin, set "abort": true with a "rationale". Don't pad.
-5. CITATIONS MUST BE COPIED VERBATIM. Each value in "citations" must be an exact, character-for-character copy of a "URL:" line from the corpus. Do not construct, guess, normalize, complete, or pattern-match URLs based on the title or your training data. If the corpus has https://www.foo.com/news/bar, you write https://www.foo.com/news/bar — not https://foo.com/2026/04/25/bar. This is checked programmatically; any URL not literally present in the corpus causes the post to be rejected and discarded.
+4. If the headlines are too thin, set "abort": true with a "rationale". Don't pad.
+5. CITATIONS MUST BE COPIED VERBATIM. Each value in "citations" must be an exact, character-for-character copy of a "URL:" line from the headlines. Do not construct, guess, normalize, complete, or pattern-match URLs based on the title or your training data. If a headline has https://www.foo.com/news/bar, you write https://www.foo.com/news/bar — not https://foo.com/2026/04/25/bar. This is checked programmatically; any URL not literally present causes the post to be rejected and discarded.
+6. NEVER refer to your source material as "the corpus", "the feed", "the headlines", "the dispatch list", "the items above/below", "the data set", or any similar meta-reference. The reader does not know you have a structured input. Refer only to the publishers and outlets by name (Anthropic, OpenAI, TechCrunch, METR, etc.). If you find yourself writing "(per the corpus)", "(per the headlines)", "per the feed", or any "(per …)" with an elided / vague subject, delete it — name the actual outlet or remove the parenthetical entirely.
 
-YOU PUBLISH ONLY WHEN YOU HAVE A REAL ANGLE. The headline feed already shows readers what happened. Your job is what it MEANS — and you only publish on days when the corpus actually supports a piece worth reading. There is no "digest" or roundup mode.
+YOU PUBLISH ONLY WHEN YOU HAVE A REAL ANGLE. The headline list already shows readers what happened. Your job is what it MEANS — and you only publish on days when the headlines actually support a piece worth reading. There is no "digest" or roundup mode.
 
-Aborting is RARE. It is justified ONLY when fewer than 3 corpus items are substantive (product launch, paper, deal, hire, policy move from a notable player) OR when all items duplicate a single story. A product launch you lack pricing for is still a launch worth interpreting. A research result you lack methodology for is still a result worth situating. If a major lab shipped a product, opened a region, or named a partnership, you have an angle — your job is what it MEANS, not what's inside the box. DO NOT abort because headline titles lack operational detail (pricing, capabilities, restrictions, specific models). Those details would never appear in a headline title; that is the format, not a corpus deficiency. If you find yourself writing an abort rationale that complains about missing detail "needed to tell readers what these moves mean," stop — that detail is precisely what your interpretation supplies. If you abort, set "abort": true with a one-sentence rationale.
+Aborting is RARE. It is justified ONLY when fewer than 3 headlines are substantive (product launch, paper, deal, hire, policy move from a notable player) OR when all items duplicate a single story. A product launch you lack pricing for is still a launch worth interpreting. A research result you lack methodology for is still a result worth situating. If a major lab shipped a product, opened a region, or named a partnership, you have an angle — your job is what it MEANS, not what's inside the box. DO NOT abort because headline titles lack operational detail (pricing, capabilities, restrictions, specific models). Those details would never appear in a headline title; that is the format, not a deficiency in the input. If you find yourself writing an abort rationale that complains about missing detail "needed to tell readers what these moves mean," stop — that detail is precisely what your interpretation supplies. If you abort, set "abort": true with a one-sentence rationale.
 
-WHAT INTERPRETATION LOOKS LIKE WHEN HEADLINES ARE SPARSE. When a headline names a thing but withholds detail ("Anthropic launches design product", "OpenAI introduces managed agents"), you cannot describe the product. You CAN write about: who it's aimed at, what category it stakes a claim in, why now, what it implies about the lab's prior positioning, which adjacent vendors it puts pressure on, what gap in the market it suggests the lab sees, how it relates to other corpus items the same week. That is the interpretive layer — it is sourced from the fact OF the launch plus public context about the players, not from product details you don't have.
+WHAT INTERPRETATION LOOKS LIKE WHEN HEADLINES ARE SPARSE. When a headline names a thing but withholds detail ("Anthropic launches design product", "OpenAI introduces managed agents"), you cannot describe the product. You CAN write about: who it's aimed at, what category it stakes a claim in, why now, what it implies about the lab's prior positioning, which adjacent vendors it puts pressure on, what gap in the market it suggests the lab sees, how it relates to other items the same week. That is the interpretive layer — it is sourced from the fact OF the launch plus public context about the players, not from product details you don't have.
 
-THE TWO MODES. Pick the one the corpus supports today, then follow its shape — different length, different structure, different cadence.
+THE TWO MODES. Pick the one the headlines support today, then follow its shape — different length, different structure, different cadence.
 
-LENGTH DISCIPLINE. Posts are 750–1,250 words. That length only works if every paragraph carries weight. If you're padding to hit the floor, the corpus is too thin — abort instead. Symptoms of padding to avoid: restating the same point in two ways, summarizing what you said two paragraphs ago, ending sections with platitudes about "what to watch", listing items just to fill space. Cut every sentence that doesn't introduce a new claim, a new piece of attribution, or a new implication.
+LENGTH DISCIPLINE. Posts are 750–1,250 words. That length only works if every paragraph carries weight. If you're padding to hit the floor, the headlines are too thin — abort instead. Symptoms of padding to avoid: restating the same point in two ways, summarizing what you said two paragraphs ago, ending sections with platitudes about "what to watch", listing items just to fill space. Cut every sentence that doesn't introduce a new claim, a new piece of attribution, or a new implication.
 
 ==== deep_dive (1,000–1,250 words) ====
-Goal: one corpus item or one tight cluster (max 3 items on the same subject), examined thoroughly. Not a survey of the week.
+Goal: one item or one tight cluster (max 3 items on the same subject), examined thoroughly. Not a survey of the week.
 Structure:
   - Hook: 1 short paragraph (≤ 3 sentences). The concrete thing that happened, anchored.
-  - What happened: 1 paragraph. Attributed details from the corpus.
+  - What happened: 1 paragraph. Attributed details from the source publishers.
   - What's actually new about it: 1–2 paragraphs. The interpretation. Why this matters that the headline alone doesn't carry.
   - Who it changes things for: 1 paragraph. Specific reader segment.
   - Close: 1 paragraph. The remaining open question.
 Voice: investigative, careful at the sentence level, comfortable holding a single idea for several paragraphs. Stratechery brief.
-This mode MUST be substantially longer than digest. If you can't fill 1,000 words from the corpus, switch modes — don't pad.
+This mode MUST be substantially longer than digest. If you can't fill 1,000 words from the available material, switch modes — don't pad.
 
 ==== free_pick (750–1,100 words) ====
-Goal: a pattern, contradiction, or conspicuous absence visible across multiple corpus items.
+Goal: a pattern, contradiction, or conspicuous absence visible across multiple items.
 Structure:
   - State the pattern in the opening line.
-  - Cite the items that show it (each attributed).
+  - Cite the items that show it (each attributed by publisher name).
   - Say why it's interesting / what it reveals.
   - Resist the urge to predict.
 Voice: observational, slightly wry, essayistic. More writerly than digest, less depth than deep_dive.
@@ -163,17 +164,19 @@ Across all modes:
 - Hold the post to ONE thesis. If it doesn't fit on a sticky note, narrow.
 - Every paragraph advances the thesis. Don't pad with topic-shifts that read as a list of unrelated facts.
 - INTERPRET, don't recap. The reader has already seen the headlines. Your job is to tell them what these items MEAN — for their work, their stack, their planning. After every fact, the next beat is "and so" or "which is interesting because" or "for buyers, this implies". Without interpretation, you are wasting their time.
-- Connect items, don't list them. When two corpus items bear on each other, name the connection in plain English: "Both Anthropic and OpenAI published in the same week, but…" / "DeepMind's release sits next to Epoch's chart showing…" Adjacency in the corpus is not a connection — explicit reasoning is.
+- Connect items, don't list them. When two items bear on each other, name the connection in plain English: "Both Anthropic and OpenAI published in the same week, but…" / "DeepMind's release sits next to Epoch's chart showing…" Adjacency on the page is not a connection — explicit reasoning is.
 - Each item earns its inclusion. If you cite a headline, you must say something specific about why that item matters here. If you can't, drop it.
 - Active verbs, concrete nouns, specific over generic.
 - Vary sentence length within paragraphs but stay coherent.
 - One opinion, clearly held. Don't both-sides routine claims.
 - Trust the reader. Don't define jargon. No "this is significant because…". No "It will be interesting to see…".
 
-NO FLOATING ABSTRACTIONS. Short pseudo-profound sentences like "The gap is structural", "The story is consolidation", "Scale wins again", "It comes down to incentives" sound like writing but say nothing. Every assertion must be grounded by the specific corpus item or items that justify it. If you write a sentence like that, the next sentence must immediately name the concrete thing it refers to — and if the concrete thing isn't in the corpus, delete the abstract sentence.
+NO FLOATING ABSTRACTIONS. Short pseudo-profound sentences like "The gap is structural", "The story is consolidation", "Scale wins again", "It comes down to incentives" sound like writing but say nothing. Every assertion must be grounded by the specific item or items that justify it. If you write a sentence like that, the next sentence must immediately name the concrete thing it refers to — and if the concrete thing isn't in the headlines, delete the abstract sentence.
 
-Title (≤ 80 chars): describes what the post is about. Specific beats clever. NOT clickbait.
+TITLE — sentence case ONLY. Capitalize the first word and proper nouns; everything else stays lowercase. ≤ 80 chars. Specific beats clever. NOT clickbait. Do NOT use Title Case (capitalizing every word).
   Good: "OpenAI's pricing card buries a sharper point"
+  Good: "Anthropic ships Claude Code 2.0 to enterprise"
+  Bad: "OpenAI's Pricing Card Buries A Sharper Point" (Title Case)
   Bad: "OpenAI Drops Bombshell" (clickbait), "Model Releases Pile Up" (too vague), "What GPT-5.5 Means For You" (LLM cliché)
 
 Dek (1–2 sentences, ≤ 220 chars): state the thesis directly. Not a teaser.
@@ -192,10 +195,11 @@ Forbidden patterns — these are dead giveaways that an LLM wrote the piece. Avo
   Stop building the rhetorical seesaw. If you mean "the week was about positioning", just write that sentence. If you mean "the announcements were strategic", write that. The bigger thing is the only thing that matters; cut the smaller-thing setup.
 - Tricolons ("X, Y, and Z") used for emphasis when only one of the three is doing real work.
 - "What's striking is…" / "What's interesting is…" / "What's worth noting is…" / "What's clear is…" — all throat-clearing. Replace with the actual observation.
-- "On one hand… on the other hand…" / "While X, Y" pivots when used to manufacture balance the corpus doesn't support.
+- "On one hand… on the other hand…" / "While X, Y" pivots when used to manufacture balance the material doesn't support.
 - "In a world where…" / "In an era of…" / "As [trend] continues to…" openings.
 - "moves the market", "in this rapidly evolving landscape", "let's dive in", "navigate the complexities", "It will be interesting to see", "in conclusion", "stay tuned", "speaks volumes", "sends a clear message".
 - Exclamation points. Em-dash chains (more than one em-dash in a sentence). Headers named "Introduction" or "Conclusion".
+- "(per …)" with an elided/vague subject, "per the corpus", "per the feed", "per the headlines", "per our list", or any meta-reference to your input. Use the actual publisher name or no parenthetical at all.
 
 If a sentence uses any of these patterns, delete it and rewrite from the underlying claim. Don't soften them — remove them.
 
@@ -220,7 +224,7 @@ Schema:
   "rationale": string
 }
 
-Or, if the corpus is too thin:
+Or, if the headlines are too thin:
 { "abort": true, "rationale": string }`;
 
 const promptKeyFor = (agentId: string) => `writer.${agentId}.system_prompt`;
@@ -376,6 +380,69 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | ValidationE
   if (typeof raw.bodyMarkdown !== "string") {
     return { error: "Missing bodyMarkdown" };
   }
+
+  // Title must be sentence case, not Title Case. Two heuristics:
+  //   (1) any capitalized small word ("The", "Of", "A", "And", ...) after the
+  //       first token is a hard signal of Title Case.
+  //   (2) if 2+ non-first tokens are plain capitalized words (Cap-then-lower,
+  //       not proper nouns) and zero non-first tokens are lowercase, also
+  //       Title Case.
+  // The first token is exempt because sentence case capitalizes it. Tokens
+  // that look like brand names (OpenAI, GPT, Claude Code, GPT-5) are skipped
+  // by the regex filters in (2).
+  const TITLE_CASE_SMALL = new Set([
+    "The","Of","In","On","And","Or","Nor","But","Yet","So","A","An","To","For","With","By","From","As","At","Up","Down","Out","Over","Under","Into","Onto","Off","About","Via","Than","Vs","If",
+  ]);
+  const titleTokens = raw.title.trim().split(/\s+/);
+  let plainCapCount = 0;
+  let lowerCount = 0;
+  for (let i = 1; i < titleTokens.length; i++) {
+    const tok = titleTokens[i];
+    if (!tok) continue;
+    const stripped = tok.replace(/^[^A-Za-z]+|[^A-Za-z]+$/g, "");
+    if (TITLE_CASE_SMALL.has(stripped)) {
+      return {
+        error: `Title looks like Title Case (capitalized small word "${stripped}"). Use sentence case — only the first word and proper nouns capitalized.`,
+      };
+    }
+    if (stripped.length < 2) continue;
+    if (/\d/.test(tok)) continue; // contains a digit — likely brand/version (GPT-5, 4o)
+    if (/^[A-Z]{2,}$/.test(stripped)) continue; // all-caps acronym (GPT, AI)
+    if (/[A-Z]/.test(stripped.slice(1))) continue; // internal capital (OpenAI, DeepMind)
+    if (/^[A-Z][a-z]+$/.test(stripped)) plainCapCount++;
+    else if (/^[a-z]/.test(stripped)) lowerCount++;
+  }
+  if (plainCapCount >= 2 && lowerCount === 0) {
+    return {
+      error: `Title looks like Title Case (${plainCapCount} plain words capitalized, 0 lowercase). Use sentence case — only the first word and proper nouns capitalized.`,
+    };
+  }
+
+  // Forbidden meta-references. The reader should never see the word "corpus"
+  // or any "(per the corpus / headlines / feed)" elided attribution. Run on
+  // title + dek + body so it catches every visible field.
+  const visibleText = `${raw.title}\n${raw.dek}\n${raw.bodyMarkdown}`;
+  if (/\bcorpus\b/i.test(visibleText)) {
+    return {
+      error: "Output contains the word 'corpus'. Refer to publishers by name; never use the word 'corpus'.",
+      offendingSentence: extractSentence(visibleText, visibleText.search(/\bcorpus\b/i)),
+    };
+  }
+  const metaAttribPatterns: { pattern: RegExp; label: string }[] = [
+    { pattern: /\(\s*per\s*\.{2,}\s*\)/i, label: "literal '(per…)' with elided source" },
+    { pattern: /\(\s*per\s*\)/i, label: "empty '(per)' parenthetical" },
+    { pattern: /\bper\s+(?:the|our|this)\s+(?:corpus|feed|headlines?|dispatch|list|items?|data\s*set|round\s*up|digest|sources?)\b/i, label: "'per the corpus / feed / headlines / list / etc.'" },
+    { pattern: /\baccording\s+to\s+(?:the|our|this)\s+(?:corpus|feed|headlines?|dispatch|list|items?|data\s*set|round\s*up|digest|sources?)\b/i, label: "'according to the corpus / feed / headlines / etc.'" },
+  ];
+  for (const { pattern, label } of metaAttribPatterns) {
+    const match = pattern.exec(visibleText);
+    if (match) {
+      return {
+        error: `Meta-reference attribution detected: ${label}. Attribute by publisher name (e.g. "Anthropic", "OpenAI", "TechCrunch"), or remove the parenthetical.`,
+        offendingSentence: extractSentence(visibleText, match.index),
+      };
+    }
+  }
   // Per-mode minimum body length so deep_dive can't be the same size as
   // digest — one of the user complaints was that all modes read identically.
   const bodyLen = raw.bodyMarkdown.length;
@@ -437,7 +504,7 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | ValidationE
 
   const badUrls = citations.filter((u) => !corpusUrls.has(u));
   if (badUrls.length > 0) {
-    return { error: `Hallucinated URLs not in corpus: ${badUrls.join(", ")}` };
+    return { error: `Hallucinated URLs not in the provided headlines: ${badUrls.join(", ")}` };
   }
   const badIds = ids.filter((id) => !corpusIds.has(id));
   if (badIds.length > 0) {
@@ -528,10 +595,10 @@ export async function generateAndSavePost(opts: {
   const userMessage = [
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
     modeHint === "auto"
-      ? "Pick whichever mode the corpus best supports."
-      : `Mode hint: ${modeHint}. (You may override if the corpus doesn't support it — explain in rationale.)`,
+      ? "Pick whichever mode the headlines best support."
+      : `Mode hint: ${modeHint}. (You may override if the headlines don't support it — explain in rationale.)`,
     "",
-    `Corpus (${corpus.length} headlines from the last ${opts.corpusDays ?? 7} days):`,
+    `Headlines (${corpus.length} items from the last ${opts.corpusDays ?? 7} days):`,
     formatCorpus(corpus),
   ].join("\n");
 
@@ -634,18 +701,24 @@ export async function generateAndSavePost(opts: {
     const isHallucinatedUrls = result.error.startsWith("Hallucinated URLs");
     const isAiTell = result.error.startsWith("AI-tell pattern");
     const isTooShort = result.error.startsWith("Body too short");
+    const isTitleCase = result.error.startsWith("Title looks like Title Case");
+    const isCorpusWord = result.error.startsWith("Output contains the word 'corpus'");
+    const isMetaAttrib = result.error.startsWith("Meta-reference attribution detected");
 
-    if (attempt < MAX_VALIDATION_ATTEMPTS && (isHallucinatedUrls || isAiTell || isTooShort)) {
+    if (
+      attempt < MAX_VALIDATION_ATTEMPTS &&
+      (isHallucinatedUrls || isAiTell || isTooShort || isTitleCase || isCorpusWord || isMetaAttrib)
+    ) {
       messages.push({ role: "assistant", content: turnText });
       let retryPrompt: string;
       if (isHallucinatedUrls) {
         retryPrompt = [
-          `Your previous response cited URLs that are NOT in the corpus. ${result.error}`,
+          `Your previous response cited URLs that are NOT in the provided headlines. ${result.error}`,
           "",
           "These are the ONLY valid URL strings you may use in citations — copy them character-for-character:",
           ...corpusUrlsList.map((u) => `  ${u}`),
           "",
-          "Re-emit the SAME post with citations replaced by valid corpus URLs (and sourceHeadlineIds matching). Same JSON schema, no prose around it.",
+          "Re-emit the SAME post with citations replaced by valid URLs from the list above (and sourceHeadlineIds matching). Same JSON schema, no prose around it.",
         ].join("\n");
       } else if (isAiTell) {
         const offending = result.offendingSentence;
@@ -674,6 +747,33 @@ export async function generateAndSavePost(opts: {
           "",
           "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
+      } else if (isTitleCase) {
+        retryPrompt = [
+          `Your previous response was rejected: ${result.error}`,
+          "",
+          `The title you submitted: "${raw.title}"`,
+          "",
+          "Rewrite ONLY the title in sentence case. Capitalize the first word and proper nouns (OpenAI, Anthropic, Claude, GPT-5, etc.); everything else stays lowercase. Articles and prepositions like 'the', 'of', 'a', 'and', 'to', 'for' must be lowercase when they appear mid-title.",
+          "",
+          "Keep the dek and bodyMarkdown verbatim — same words, same order, same paragraph breaks. Re-emit the FULL post in the SAME JSON schema, no prose around it.",
+        ].join("\n");
+      } else if (isCorpusWord || isMetaAttrib) {
+        const offending = result.offendingSentence;
+        retryPrompt = [
+          `Your previous response was rejected: ${result.error}`,
+          "",
+          ...(offending
+            ? [
+                "The exact sentence that tripped the validator:",
+                "",
+                `> ${offending}`,
+                "",
+              ]
+            : []),
+          "Readers do not know you have a structured input. Never refer to your sources collectively as 'the corpus', 'the feed', 'the headlines', 'the dispatch', 'our list', or any similar meta-reference. Attribute by the actual publisher name (Anthropic, OpenAI, METR, TechCrunch, etc.) or remove the parenthetical. Replace any literal '(per …)' / '(per the corpus)' / 'per the headlines' phrasing with named attribution or no parenthetical at all.",
+          "",
+          "Rewrite ONLY the offending phrasing wherever it appears in the title, dek, or body. Keep every other sentence verbatim. Re-emit the FULL post in the SAME JSON schema, no prose around it.",
+        ].join("\n");
       } else {
         // Body-too-short retry — be explicit about the numbers because the
         // user's custom system prompt may understate the actual length
@@ -691,12 +791,12 @@ export async function generateAndSavePost(opts: {
           "",
           "Hard requirements for this retry:",
           `- Body MUST be at least ${need ?? 6800} characters of markdown.`,
-          "- Each corpus item you cite gets multiple paragraphs of interpretation, not a single attribution sentence.",
-          "- For each item, work through: what happened (per the corpus) → what's actually new about it → who it changes things for → which open questions it raises → how it relates to the other items you cited.",
+          "- Each item you cite gets multiple paragraphs of interpretation, not a single attribution sentence.",
+          "- For each item, work through: what the publisher reported → what's actually new about it → who it changes things for → which open questions it raises → how it relates to the other items you cited. Attribute by publisher name (Anthropic, OpenAI, etc.), never by meta-references like 'the corpus' or 'the headlines'.",
           "- Add a clear opening section establishing the week's framing thesis (3–5 sentences, not 1).",
           "- Add a substantive closing section connecting the items into a single argument (3–5 sentences).",
           "- Do NOT pad with restatement or filler. Add real interpretive content.",
-          "- If the corpus genuinely cannot support this length, set abort:true with a rationale instead of producing a short post.",
+          "- If the available material genuinely cannot support this length, set abort:true with a rationale instead of producing a short post.",
           "",
           "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
