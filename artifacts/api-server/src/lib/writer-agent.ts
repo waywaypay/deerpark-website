@@ -588,7 +588,11 @@ export async function generateAndSavePost(opts: {
     return { ok: false, error: `Corpus too thin: ${corpus.length} items in window` };
   }
 
-  const client = new OpenAI({ apiKey, baseURL });
+  // Per-request timeout. Without this, a hung Venice connection leaves the
+  // run Promise pending forever and state stays "running" indefinitely.
+  // 8 min is generous: Claude reasoning + body output runs ~4–6 min; this
+  // gives ~30% headroom before forcing a clear error.
+  const client = new OpenAI({ apiKey, baseURL, timeout: 8 * 60 * 1000 });
 
   const { prompt: systemPrompt } = await getSystemPrompt(agentId);
 
@@ -881,6 +885,9 @@ type RunStatus = {
   status: "idle" | "running" | "ok" | "error" | "aborted";
   startedAt: string | null;
   finishedAt: string | null;
+  // Updated periodically while a run is in flight. Lets the stale check
+  // distinguish a long-running healthy job from a crashed one.
+  lastHeartbeatAt: string | null;
   postId: number | null;
   error: string | null;
   rationale: string | null;
@@ -888,12 +895,18 @@ type RunStatus = {
 };
 
 const RUN_STATE_KEY = "writer.daily-writer.run-state";
-const STALE_RUN_MS = 5 * 60 * 1000; // 5 min: anything older counts as crashed
+// Heartbeat cadence + stale window. Heartbeats fire every 30s while a run
+// is alive; if 90s elapse without one (3 missed beats), the run is treated
+// as crashed and surfaced as an error. The previous absolute-age check at
+// 5 min false-positived on healthy 5–6 min Claude reasoning runs.
+const HEARTBEAT_INTERVAL_MS = 30 * 1000;
+const STALE_RUN_MS = 90 * 1000;
 
 const IDLE_STATE: RunStatus = {
   status: "idle",
   startedAt: null,
   finishedAt: null,
+  lastHeartbeatAt: null,
   postId: null,
   error: null,
   rationale: null,
@@ -926,22 +939,41 @@ async function writeRunState(state: RunStatus): Promise<void> {
 
 export async function getRunStatus(): Promise<RunStatus> {
   const state = await readRunState();
-  // If a run claims to still be running but started >5min ago, surface it as
-  // stale so the UI can recover instead of being stuck on a crashed process.
-  if (state.status === "running" && state.startedAt) {
-    const age = Date.now() - new Date(state.startedAt).getTime();
-    if (age > STALE_RUN_MS) {
-      const stale: RunStatus = {
-        ...state,
-        status: "error",
-        finishedAt: new Date().toISOString(),
-        error: `Run stalled — started ${Math.round(age / 1000)}s ago with no result. Likely a crash mid-run.`,
-      };
-      await writeRunState(stale);
-      return stale;
+  // Heartbeat-based stale check. A healthy long-running job keeps writing
+  // lastHeartbeatAt; a crashed/restarted process stops. If no heartbeat in
+  // STALE_RUN_MS, surface the run as crashed so the UI can recover.
+  // Falls back to startedAt for runs from before the heartbeat field existed.
+  if (state.status === "running") {
+    const lastSeen = state.lastHeartbeatAt ?? state.startedAt;
+    if (lastSeen) {
+      const age = Date.now() - new Date(lastSeen).getTime();
+      if (age > STALE_RUN_MS) {
+        const stale: RunStatus = {
+          ...state,
+          status: "error",
+          finishedAt: new Date().toISOString(),
+          error: `Run died — no heartbeat in ${Math.round(age / 1000)}s. The API container likely restarted mid-run.`,
+        };
+        await writeRunState(stale);
+        return stale;
+      }
     }
   }
   return state;
+}
+
+// Bump the heartbeat for the run that started at startedAt. Bails out if a
+// different run has since started, so a leftover heartbeat from an older run
+// can't overwrite a newer run's state.
+async function bumpHeartbeat(startedAt: string): Promise<void> {
+  try {
+    const current = await readRunState();
+    if (current.status !== "running") return;
+    if (current.startedAt !== startedAt) return;
+    await writeRunState({ ...current, lastHeartbeatAt: new Date().toISOString() });
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.message : String(err) }, "Heartbeat write failed");
+  }
 }
 
 export async function startWriterRun(opts: {
@@ -952,10 +984,12 @@ export async function startWriterRun(opts: {
   if (current.status === "running") {
     return { accepted: false, status: current };
   }
+  const startedAt = new Date().toISOString();
   const startState: RunStatus = {
     status: "running",
-    startedAt: new Date().toISOString(),
+    startedAt,
     finishedAt: null,
+    lastHeartbeatAt: startedAt,
     postId: null,
     error: null,
     rationale: null,
@@ -964,7 +998,12 @@ export async function startWriterRun(opts: {
   await writeRunState(startState);
 
   // Fire and forget. The promise outlives the HTTP request that started it.
+  // Heartbeat ticks update lastHeartbeatAt every 30s so a healthy long run
+  // doesn't trip the stale check; the interval is cleared on completion.
   (async () => {
+    const heartbeat = setInterval(() => {
+      void bumpHeartbeat(startedAt);
+    }, HEARTBEAT_INTERVAL_MS);
     try {
       const result = await generateAndSavePost(opts);
       let final: RunStatus;
@@ -995,19 +1034,25 @@ export async function startWriterRun(opts: {
       }
       await writeRunState(final);
     } catch (err) {
+      logger.error(
+        { err: err instanceof Error ? err.message : String(err), stack: err instanceof Error ? err.stack : undefined },
+        "Writer run threw — surfacing as error",
+      );
       await writeRunState({
         ...startState,
         status: "error",
         finishedAt: new Date().toISOString(),
         error: err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      clearInterval(heartbeat);
     }
   })();
   return { accepted: true, status: startState };
 }
 
-// Manual reset for the case where state is genuinely stuck (5-min stale
-// detection should usually catch this automatically).
+// Manual reset for the case where state is genuinely stuck (the heartbeat
+// stale check should usually catch this automatically within ~90s).
 export async function clearRunState(): Promise<void> {
   await writeRunState({ ...IDLE_STATE });
 }
