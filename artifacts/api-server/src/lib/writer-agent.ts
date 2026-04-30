@@ -679,11 +679,44 @@ export async function generateAndSavePost(opts: {
 
     const raw = extractJson(turnText);
     if (!raw) {
+      const finishReason = response.choices[0]?.finish_reason ?? "?";
+      const wasTruncated = finishReason === "length";
       logger.warn(
-        { model, baseURL, attempt, rawPreview: turnText.slice(0, 500), rawLength: turnText.length },
+        {
+          model,
+          baseURL,
+          attempt,
+          finishReason,
+          rawHead: turnText.slice(0, 500),
+          rawTail: turnText.slice(-500),
+          rawLength: turnText.length,
+        },
         "Response was not valid JSON",
       );
-      return { ok: false, error: "Response was not valid JSON" };
+
+      if (attempt < MAX_VALIDATION_ATTEMPTS) {
+        messages.push({ role: "assistant", content: turnText });
+        const retryPrompt = wasTruncated
+          ? [
+              "Your previous response was truncated before the JSON closed (the API returned finish_reason=length). The post you were writing was too long for the token budget.",
+              "",
+              "Re-emit the post but keep the body to ~750–900 words (≈ 4,500 chars) so the JSON closes cleanly. Same JSON schema, no prose around it. The body must still be a complete, finished piece — just tighter.",
+            ].join("\n")
+          : [
+              "Your previous response could not be parsed as JSON. It either contained prose around the JSON, used unescaped characters, or was malformed.",
+              "",
+              "Re-emit ONLY the JSON object. First character must be `{`, last must be `}`. No prose, no markdown fences, no commentary. Same schema as before.",
+            ].join("\n");
+        messages.push({ role: "user", content: retryPrompt });
+        continue;
+      }
+
+      return {
+        ok: false,
+        error: wasTruncated
+          ? "Response was truncated by max_tokens — model wrote past the budget. Try a shorter post or raise max_tokens."
+          : "Response was not valid JSON",
+      };
     }
 
     const result = validateDraft(raw, corpus);
