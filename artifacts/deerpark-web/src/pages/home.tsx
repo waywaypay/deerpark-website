@@ -509,7 +509,7 @@ const LeadCapture = () => {
     <section id="assessment" className="py-32 border-t border-foreground/15 bg-card">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-12 items-start">
-          <FadeIn>
+          <FadeIn className="min-w-0">
             <div className="flex items-center gap-3 mb-8">
               <div className="h-[1px] w-12 bg-primary"></div>
               <span className="section-label">Lead Capture</span>
@@ -543,7 +543,7 @@ const LeadCapture = () => {
             </div>
           </FadeIn>
 
-          <FadeIn delay={0.1}>
+          <FadeIn delay={0.1} className="min-w-0">
             {status.state === "success" ? (
               <div className="border border-primary/40 bg-background p-10 text-center">
                 <div className="inline-block p-3 border border-primary/40 bg-primary/10 mb-6">
@@ -555,7 +555,7 @@ const LeadCapture = () => {
                 </p>
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="border border-foreground/15 bg-background p-8 space-y-5">
+              <form onSubmit={handleSubmit} className="border border-foreground/15 bg-background p-6 md:p-8 space-y-5">
                 <div>
                   <label htmlFor="name" className="section-label block mb-2">Name</label>
                   <input id="name" name="name" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
@@ -572,7 +572,7 @@ const LeadCapture = () => {
                   <label htmlFor="challenge" className="section-label block mb-2">Biggest Workflow Challenge</label>
                   <textarea id="challenge" name="challenge" rows={4} required disabled={submitting} className="w-full bg-card border border-foreground/15 px-4 py-3 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
                 </div>
-                <Button type="submit" size="lg" disabled={submitting} className="w-full rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
+                <Button type="submit" size="lg" disabled={submitting} className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
                   {submitting ? "Submitting…" : (
                     <>
                       Send My Scorecard Request <ArrowRight className="ml-2 w-4 h-4" />
