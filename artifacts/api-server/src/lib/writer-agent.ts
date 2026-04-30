@@ -693,29 +693,15 @@ export async function generateAndSavePost(opts: {
         },
         "Response was not valid JSON",
       );
-
-      if (attempt < MAX_VALIDATION_ATTEMPTS) {
-        messages.push({ role: "assistant", content: turnText });
-        const retryPrompt = wasTruncated
-          ? [
-              "Your previous response was truncated before the JSON closed (the API returned finish_reason=length). The post you were writing was too long for the token budget.",
-              "",
-              "Re-emit the post but keep the body to ~750–900 words (≈ 4,500 chars) so the JSON closes cleanly. Same JSON schema, no prose around it. The body must still be a complete, finished piece — just tighter.",
-            ].join("\n")
-          : [
-              "Your previous response could not be parsed as JSON. It either contained prose around the JSON, used unescaped characters, or was malformed.",
-              "",
-              "Re-emit ONLY the JSON object. First character must be `{`, last must be `}`. No prose, no markdown fences, no commentary. Same schema as before.",
-            ].join("\n");
-        messages.push({ role: "user", content: retryPrompt });
-        continue;
-      }
-
+      // Fast-fail. Each Claude call on Venice is 4–6 min of reasoning, so a
+      // multi-attempt retry blows past the 8-min frontend timeout while
+      // burning tokens on the same failure mode each time. Better to surface
+      // a clear cause and let the user re-run.
       return {
         ok: false,
         error: wasTruncated
-          ? "Response was truncated by max_tokens — model wrote past the budget. Try a shorter post or raise max_tokens."
-          : "Response was not valid JSON",
+          ? `Response was truncated by max_tokens (finish_reason=length). The post ran past the token budget — try shortening the system prompt or raising max_tokens.`
+          : `Response was not valid JSON (finish_reason=${finishReason}). The model emitted output the JSON parser couldn't recover. See logs for head/tail of the raw response.`,
       };
     }
 
