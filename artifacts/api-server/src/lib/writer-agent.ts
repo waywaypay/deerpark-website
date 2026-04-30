@@ -286,7 +286,9 @@ type RawDraft = {
 // Pull the JSON object out of model output. Some providers (Venice) silently
 // drop response_format=json_object, so the model may emit prose around the
 // JSON or wrap it in code fences. Strategy: try the whole thing, then strip
-// fences, then scan for the largest brace-balanced substring.
+// fences, then scan for the largest brace-balanced substring, then try the
+// lenient repair pass (escapes raw newlines/tabs/control chars inside string
+// values — the most common Claude failure on long markdown bodies).
 const extractJson = (text: string): RawDraft | null => {
   const tryParse = (s: string): RawDraft | null => {
     try {
@@ -296,14 +298,58 @@ const extractJson = (text: string): RawDraft | null => {
     }
   };
 
+  // Walk the text and escape any control character (\n, \r, \t, etc.) that
+  // appears INSIDE a JSON string. Strict JSON disallows raw control chars in
+  // strings, but Claude regularly writes literal newlines inside multi-line
+  // markdown bodies. This is a one-pass repair: outside strings, leave
+  // whitespace alone; inside strings, replace raw control chars with their
+  // escape sequences.
+  const repairControlChars = (s: string): string => {
+    let out = "";
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i]!;
+      if (escaped) {
+        out += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        out += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        out += ch;
+        inString = !inString;
+        continue;
+      }
+      if (inString) {
+        if (ch === "\n") { out += "\\n"; continue; }
+        if (ch === "\r") { out += "\\r"; continue; }
+        if (ch === "\t") { out += "\\t"; continue; }
+        // Strip other C0 control chars (0x00–0x1f) that aren't \n/\r/\t.
+        const code = ch.charCodeAt(0);
+        if (code < 0x20) continue;
+      }
+      out += ch;
+    }
+    return out;
+  };
+
+  const tryAll = (s: string): RawDraft | null => {
+    return tryParse(s) ?? tryParse(repairControlChars(s));
+  };
+
   const trimmed = text.trim();
-  let r = tryParse(trimmed);
+  let r = tryAll(trimmed);
   if (r) return r;
 
   const defenced = trimmed
     .replace(/^```(?:json)?\s*/i, "")
     .replace(/\s*```$/i, "");
-  r = tryParse(defenced);
+  r = tryAll(defenced);
   if (r) return r;
 
   // Brace-balanced scan: find the first { and walk to its matching }.
@@ -332,7 +378,7 @@ const extractJson = (text: string): RawDraft | null => {
     else if (ch === "}") {
       depth--;
       if (depth === 0) {
-        return tryParse(defenced.slice(start, i + 1));
+        return tryAll(defenced.slice(start, i + 1));
       }
     }
   }
@@ -685,12 +731,22 @@ export async function generateAndSavePost(opts: {
     if (!raw) {
       const finishReason = response.choices[0]?.finish_reason ?? "?";
       const wasTruncated = finishReason === "length";
+      // Quote the strict-parse error so we can see exactly where parsing
+      // breaks (e.g. "Bad control character in string literal at position
+      // 1234"). This is the difference between guessing and knowing.
+      let parseError: string | null = null;
+      try {
+        JSON.parse(turnText.trim());
+      } catch (err) {
+        parseError = err instanceof Error ? err.message : String(err);
+      }
       logger.warn(
         {
           model,
           baseURL,
           attempt,
           finishReason,
+          parseError,
           rawHead: turnText.slice(0, 500),
           rawTail: turnText.slice(-500),
           rawLength: turnText.length,
