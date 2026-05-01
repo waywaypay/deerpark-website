@@ -256,7 +256,7 @@ export const ScorecardFAB = () => {
         className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
       >
         <MessageSquare className="w-3.5 h-3.5" />
-        Text Scorecard
+        Text
       </a>
     );
   }
