@@ -21,6 +21,10 @@ router.get("/admin/sms/conversations", async (req, res) => {
   const limit = Math.min(parseInt(String(req.query.limit ?? "50"), 10) || 50, 200);
   const offset = parseInt(String(req.query.offset ?? "0"), 10) || 0;
 
+  // LEFT JOIN + GROUP BY beats a correlated subquery here: simpler SQL,
+  // single index scan on sms_messages, and avoids drizzle's quirky template
+  // interpolation when the same table appears in both the outer and inner
+  // query. Rows with no messages just yield COUNT=0 and SUM=NULL → 0.
   const rows = await db
     .select({
       id: smsConversationsTable.id,
@@ -33,16 +37,15 @@ router.get("/admin/sms/conversations", async (req, res) => {
       lastOutboundAt: smsConversationsTable.lastOutboundAt,
       createdAt: smsConversationsTable.createdAt,
       updatedAt: smsConversationsTable.updatedAt,
-      messageCount: sql<number>`(
-        SELECT COUNT(*)::int FROM ${smsMessagesTable}
-        WHERE ${smsMessagesTable.conversationId} = ${smsConversationsTable.id}
-      )`,
-      totalCostUsd: sql<number>`COALESCE((
-        SELECT SUM(${smsMessagesTable.costUsd}) FROM ${smsMessagesTable}
-        WHERE ${smsMessagesTable.conversationId} = ${smsConversationsTable.id}
-      ), 0)`,
+      messageCount: sql<number>`COUNT(${smsMessagesTable.id})::int`,
+      totalCostUsd: sql<number>`COALESCE(SUM(${smsMessagesTable.costUsd}), 0)::float8`,
     })
     .from(smsConversationsTable)
+    .leftJoin(
+      smsMessagesTable,
+      eq(smsMessagesTable.conversationId, smsConversationsTable.id),
+    )
+    .groupBy(smsConversationsTable.id)
     .orderBy(desc(smsConversationsTable.updatedAt))
     .limit(limit)
     .offset(offset);

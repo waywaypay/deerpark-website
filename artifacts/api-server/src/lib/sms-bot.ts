@@ -203,10 +203,11 @@ export async function generateSmsReply(
     throw new Error("Model response missing 'reply' string");
   }
 
-  // Trim aggressively — Twilio segments at 160/153 chars. We tolerate up to
-  // ~3 segments but cap at ~480 chars to keep cost predictable and replies
-  // tight.
-  const reply = parsed.reply.slice(0, 480);
+  // Twilio segments at 160 chars (or 153 each in a multipart message). The
+  // qualified turn legitimately needs ~600 chars (60-second sketch + Cal.com
+  // link + email fallback), so cap at 720 (≈5 segments). Discovery turns
+  // run well under that on their own.
+  const reply = parsed.reply.slice(0, 720);
 
   return {
     reply,
