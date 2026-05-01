@@ -466,7 +466,7 @@ const LeadsTab = ({ token }: { token: string }) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-2xl font-serif">Scorecard inquiries</h2>
+          <h2 className="text-2xl font-serif">Assessment inquiries</h2>
           <p className="text-sm text-muted-foreground font-light mt-1">
             Submissions from the lead-capture form on the homepage.
           </p>
@@ -1311,7 +1311,7 @@ const HOME_TILES: Tile<"agents" | "leads">[] = [
   },
   {
     id: "leads",
-    label: "Scorecard leads",
+    label: "Assessment leads",
     description: "Submissions from the homepage lead-capture form.",
     Icon: Mail,
   },
@@ -1385,7 +1385,7 @@ const AgentsHome = ({ onSelect }: { onSelect: (view: "dispatch") => void }) => (
 const VIEW_LABELS: Record<Exclude<View, "home">, string> = {
   agents: "Agents",
   dispatch: "Dispatch",
-  leads: "Scorecard leads",
+  leads: "Assessment leads",
 };
 
 const breadcrumbFor = (view: View): Exclude<View, "home">[] => {

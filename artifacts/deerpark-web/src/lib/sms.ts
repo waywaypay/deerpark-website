@@ -1,5 +1,5 @@
 /**
- * SMS scorecard concierge config.
+ * SMS assessment concierge config.
  *
  * Set `VITE_SMS_NUMBER` in the build env to a full E.164 phone number
  * (e.g. "+15551234567"). When unset, all SMS CTAs render nothing — that's
@@ -28,7 +28,7 @@ export function formatSmsNumber(e164: string): string {
  * `?body=` — the `?` form works on both modern stacks; iOS quietly accepts
  * either. We keep it simple and use `?body=`.
  */
-export function smsHref(e164: string, body = "Hi, scorecard please."): string {
+export function smsHref(e164: string, body = "Hi, assessment please."): string {
   return `sms:${e164}?body=${encodeURIComponent(body)}`;
 }
 

@@ -148,7 +148,7 @@ export const Navbar = () => {
           </a>
           <a href="/#assessment">
             <Button className="font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-              Free Scorecard
+              Free Assessment
             </Button>
           </a>
         </nav>
@@ -174,7 +174,7 @@ export const Navbar = () => {
             </a>
             <a href="/#assessment" onClick={() => setOpen(false)}>
               <Button className="w-full font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-                Free Scorecard
+                Free Assessment
               </Button>
             </a>
           </nav>
@@ -225,7 +225,7 @@ export const Footer = () => (
               </li>
             ))}
             <li><a href="/#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
-            <li><a href="/#assessment" className="hover:text-foreground transition-colors">Free Scorecard</a></li>
+            <li><a href="/#assessment" className="hover:text-foreground transition-colors">Free Assessment</a></li>
             <li><a href="mailto:contact@deerpark.io" className="hover:text-foreground transition-colors">Contact</a></li>
           </ul>
         </div>
@@ -241,8 +241,8 @@ export const Footer = () => (
   </footer>
 );
 
-export const ScorecardFAB = () => {
-  // When SMS is live, the "Text" pill replaces the "Get Free Scorecard" pill
+export const AssessmentFAB = () => {
+  // When SMS is live, the "Text" pill replaces the "Get Free Assessment" pill
   // on mobile entirely — texting converts higher than the form for the
   // top-of-funnel "I'm curious" cohort, and stacking two FABs ate too much
   // viewport. The Lead Capture section still has the form CTA inline for
@@ -264,7 +264,7 @@ export const ScorecardFAB = () => {
       href="/#assessment"
       className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
     >
-      Get Free Scorecard
+      Get Free Assessment
     </a>
   );
 };

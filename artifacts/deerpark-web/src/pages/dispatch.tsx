@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ExternalLink, Rss } from "lucide-react";
-import { FadeIn, Footer, Navbar, ScorecardFAB } from "@/components/site-layout";
+import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
 import { DispatchList } from "@/components/dispatch-list";
 import {
   DISPATCH_WEEKS,
@@ -327,7 +327,7 @@ export default function Dispatch() {
         <DispatchSection />
         <HeadlineFeed />
       </main>
-      <ScorecardFAB />
+      <AssessmentFAB />
       <Footer />
     </div>
   );
