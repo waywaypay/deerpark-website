@@ -66,7 +66,7 @@ const Hero = () => {
               </a>
             </div>
             {SMS_ENABLED && SMS_NUMBER_E164 && (
-              <p className="mt-5 text-sm text-muted-foreground font-light">
+              <p className="mt-5 text-sm text-muted-foreground font-light md:hidden">
                 Or text our concierge:{" "}
                 <a
                   href={smsHref(SMS_NUMBER_E164)}
@@ -77,6 +77,16 @@ const Hero = () => {
                 <span className="text-muted-foreground/70"> — 60-second scorecard, no form.</span>
               </p>
             )}
+            <p className="mt-5 text-sm text-muted-foreground font-light hidden md:block">
+              Or email us:{" "}
+              <a
+                href="mailto:contact@deerpark.io"
+                className="text-foreground underline underline-offset-4 hover:text-foreground/70"
+              >
+                contact@deerpark.io
+              </a>
+              <span className="text-muted-foreground/70"> — 60-second scorecard, no form.</span>
+            </p>
           </FadeIn>
 
           <FadeIn delay={0.4}>
@@ -680,7 +690,7 @@ const LeadCapture = () => {
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
               {SMS_ENABLED && SMS_NUMBER_E164 && (
-                <p className="text-sm text-muted-foreground font-light mt-3">
+                <p className="text-sm text-muted-foreground font-light mt-3 md:hidden">
                   Or text our concierge bot at{" "}
                   <a
                     href={smsHref(SMS_NUMBER_E164)}
@@ -691,7 +701,7 @@ const LeadCapture = () => {
                   {" — "}quick back-and-forth, scorecard in two messages.
                 </p>
               )}
-              <p className="text-xs text-muted-foreground font-light mt-3">
+              <p className="text-xs text-muted-foreground font-light mt-3 hidden md:block">
                 Or email <a href="mailto:contact@deerpark.io" className="underline underline-offset-2 hover:text-foreground">contact@deerpark.io</a>.
               </p>
             </div>
