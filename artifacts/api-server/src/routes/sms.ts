@@ -5,9 +5,8 @@ import {
   smsMessagesTable,
   leadsTable,
   type SmsConversation,
-  type SmsMessage,
 } from "@workspace/db";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import {
   generateSmsReply,
   isStopKeyword,
@@ -20,7 +19,9 @@ import {
   verifyTwilioSignature,
   twimlMessage,
   isE164,
+  sendTwilioSms,
 } from "../lib/twilio";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -41,20 +42,22 @@ function externalUrl(req: import("express").Request): string {
 /**
  * POST /api/sms/inbound
  *
- * Twilio webhook for incoming SMS. Returns TwiML that Twilio uses to send
- * the reply — keeping the round-trip in-band avoids needing outbound
- * Twilio API credentials at all for the MVP.
+ * Twilio webhook for incoming SMS.
  *
- * Critical correctness requirements:
- *   - Verify signature in production. Without this anyone can post messages
- *     into our DB and trigger LLM calls on our dime.
- *   - Dedupe on MessageSid. Twilio retries on 5xx; without dedupe we'd
- *     double-bill ourselves and confuse the conversation.
- *   - Always return 200 with TwiML, even on internal errors. A 5xx triggers
- *     Twilio's retry storm.
+ * Reply pattern: ASYNCHRONOUS. Twilio's webhook deadline is 15s, but
+ * a Sonnet call with a multi-turn history can run 30–60s on a cold cache.
+ * To stay inside the deadline we:
+ *   1. Verify signature, dedupe, store the inbound, return 200 with
+ *      empty TwiML — all under ~200ms.
+ *   2. Fire-and-forget the LLM call; on completion, push the reply via
+ *      Twilio's REST API.
+ *
+ * Requirements for outbound delivery:
+ *   - TWILIO_ACCOUNT_SID + TWILIO_AUTH_TOKEN + TWILIO_FROM_NUMBER set.
+ *   - If TWILIO_FROM_NUMBER is unset, we still log the bot reply but
+ *     don't ship it (development mode).
  */
 router.post("/sms/inbound", async (req, res) => {
-  // Force the response shape — Twilio expects XML, not JSON.
   res.type("application/xml");
 
   const params = req.body as Record<string, string>;
@@ -62,9 +65,7 @@ router.post("/sms/inbound", async (req, res) => {
   const fromRaw = params.From;
   const body = (params.Body ?? "").trim();
 
-  // Signature verification. Skipped only when explicitly disabled (dev/local).
-  // We intentionally fail-closed: if TWILIO_AUTH_TOKEN is unset and skip is
-  // not enabled, we 403 rather than accept unsigned traffic.
+  // ── 1. Signature verification ──────────────────────────────────────────
   const skipVerify = process.env["TWILIO_SKIP_VERIFY"] === "1";
   const authToken = process.env["TWILIO_AUTH_TOKEN"];
   if (!skipVerify) {
@@ -99,20 +100,19 @@ router.post("/sms/inbound", async (req, res) => {
     }
   }
 
+  // ── 2. Validation ──────────────────────────────────────────────────────
   if (!fromRaw || !isE164(fromRaw)) {
     req.log.warn({ fromRaw, messageSid }, "sms: invalid From");
     res.status(200).send(twimlMessage(null));
     return;
   }
-
   if (!body) {
     res.status(200).send(twimlMessage(null));
     return;
   }
-
   const phone = fromRaw;
 
-  // Dedupe: if we've already stored this MessageSid, do nothing.
+  // ── 3. Dedupe on MessageSid ────────────────────────────────────────────
   if (messageSid) {
     const existing = await db
       .select({ id: smsMessagesTable.id })
@@ -126,11 +126,8 @@ router.post("/sms/inbound", async (req, res) => {
     }
   }
 
-  // Upsert conversation row.
-  let conversation = await getOrCreateConversation(phone);
-
-  // Record the inbound first — even if everything downstream blows up, we
-  // still have the message in the DB for evals.
+  // ── 4. Get/create conversation, store inbound ──────────────────────────
+  const conversation = await getOrCreateConversation(phone);
   await db.insert(smsMessagesTable).values({
     conversationId: conversation.id,
     phoneE164: phone,
@@ -144,15 +141,13 @@ router.post("/sms/inbound", async (req, res) => {
     .set({ lastInboundAt: new Date(), updatedAt: new Date() })
     .where(eq(smsConversationsTable.id, conversation.id));
 
-  // STOP / HELP short-circuits. STOP mutes the conversation forever.
+  // ── 5. STOP / HELP / muted — synchronous, no LLM call ──────────────────
   if (isStopKeyword(body)) {
     await db
       .update(smsConversationsTable)
       .set({ muted: true, updatedAt: new Date() })
       .where(eq(smsConversationsTable.id, conversation.id));
-    await recordOutbound(conversation.id, phone, STOP_REPLY, {
-      sent: true,
-    });
+    await recordOutbound(conversation.id, phone, STOP_REPLY, { sent: true });
     res.status(200).send(twimlMessage(STOP_REPLY));
     return;
   }
@@ -161,12 +156,41 @@ router.post("/sms/inbound", async (req, res) => {
     res.status(200).send(twimlMessage(HELP_REPLY));
     return;
   }
-
-  // If muted, silently drop — no reply, no LLM call.
   if (conversation.muted) {
     res.status(200).send(twimlMessage(null));
     return;
   }
+
+  // ── 6. ACK Twilio immediately, kick off async reply ────────────────────
+  // Empty <Response/> tells Twilio "I got your message, no inline reply
+  // needed." We then run the LLM call after returning, and ship the reply
+  // via the REST API. Twilio's 15s deadline only covers steps 1-5.
+  res.status(200).send(twimlMessage(null));
+
+  // Fire-and-forget. We attach a .catch so an unhandled rejection doesn't
+  // crash the process — every error path inside `handleAsyncReply` already
+  // records the failure to sms_messages, so the catch is just belt-and-
+  // suspenders for anything we forgot to wrap.
+  void handleAsyncReply({ conversation, phone, body, requestLogger: req.log }).catch(
+    (err) => {
+      logger.error({ err, phone }, "sms: async reply task crashed");
+    },
+  );
+});
+
+/**
+ * The slow path: build history, call the LLM, send the reply via Twilio's
+ * REST API. Runs after the webhook has already returned 200.
+ */
+async function handleAsyncReply(args: {
+  conversation: SmsConversation;
+  phone: string;
+  body: string;
+  requestLogger: typeof logger;
+}) {
+  const { phone, body } = args;
+  // Re-fetch conversation in case it changed between webhook and async run.
+  const conversation = args.conversation;
 
   // Build history from the DB (chronological, last 20 turns).
   const historyRows = await db
@@ -179,10 +203,6 @@ router.post("/sms/inbound", async (req, res) => {
     .orderBy(desc(smsMessagesTable.createdAt))
     .limit(20);
 
-  // We pulled DESC; flip to chronological and drop the just-inserted inbound
-  // (the bot gets it as the explicit `inbound` argument). The DB column is
-  // typed as `string` from drizzle's enum, so narrow it here to the literal
-  // union the bot expects.
   type Turn = { direction: "inbound" | "outbound"; body: string };
   const trimmedHistory: Turn[] = historyRows
     .reverse()
@@ -193,7 +213,19 @@ router.post("/sms/inbound", async (req, res) => {
     );
 
   let replyText: string;
-  let qualifiedThisTurn: boolean | null = null;
+  let llmMeta: {
+    model?: string;
+    rawModelResponse?: string;
+    promptTokens?: number;
+    completionTokens?: number;
+    costUsd?: number;
+    latencyMs?: number;
+    qualifiedThisTurn?: boolean | null;
+  } = {};
+  let summaryUpdate: string | null = null;
+  let qualifiedThisTurn = false;
+  let leadFields: { name?: string; company?: string; workflow?: string } = {};
+
   try {
     const out = await generateSmsReply({
       history: trimmedHistory,
@@ -201,73 +233,106 @@ router.post("/sms/inbound", async (req, res) => {
       priorSummary: conversation.summary,
     });
     replyText = out.reply;
+    summaryUpdate = out.summary;
     qualifiedThisTurn = out.qualified;
-
-    await recordOutbound(conversation.id, phone, out.reply, {
-      sent: true,
+    llmMeta = {
       model: out.model,
       rawModelResponse: out.raw,
       promptTokens: out.promptTokens,
       completionTokens: out.completionTokens,
       costUsd: out.costUsd,
       latencyMs: out.latencyMs,
-      qualifiedThisTurn,
-    });
-
-    // Update conversation summary + qualification + push lead if qualified.
-    const updates: Partial<typeof smsConversationsTable.$inferInsert> = {
-      lastOutboundAt: new Date(),
-      updatedAt: new Date(),
+      qualifiedThisTurn: out.qualified,
     };
-    if (out.summary) updates.summary = out.summary;
-    if (out.qualified && !conversation.qualified) {
-      updates.qualified = true;
-      // Push to leads table so the existing lead pipeline picks it up.
-      // We use null email because SMS leads don't have one yet — the
-      // leads schema requires it though, so we synthesize a placeholder
-      // and stash the phone+workflow in `challenge`. The bot prompt asks
-      // for email at the qualified turn, and the next inbound that
-      // contains an email will be re-pushed by the eval/admin reviewer.
-      const name = out.name?.slice(0, 200) || "(SMS lead, name unknown)";
-      const company = out.company?.slice(0, 200) || "(unknown)";
-      const challenge =
-        (out.workflow ? `Workflow: ${out.workflow}\n\n` : "") +
-        `Phone: ${phone}\n` +
-        `Summary: ${out.summary ?? "(no summary)"}`;
-      try {
-        const [lead] = await db
-          .insert(leadsTable)
-          .values({
-            name,
-            email: `${phone.replace(/\D/g, "")}@sms.deerpark.io`,
-            company,
-            challenge: challenge.slice(0, 5000),
-          })
-          .returning({ id: leadsTable.id });
-        updates.leadId = lead.id;
-        req.log.info(
-          { phone, leadId: lead.id },
-          "sms: qualified, lead captured",
-        );
-      } catch (err) {
-        req.log.error({ err, phone }, "sms: failed to insert qualified lead");
-      }
-    }
-    await db
-      .update(smsConversationsTable)
-      .set(updates)
-      .where(eq(smsConversationsTable.id, conversation.id));
+    leadFields = {
+      name: out.name ?? undefined,
+      company: out.company ?? undefined,
+      workflow: out.workflow ?? undefined,
+    };
   } catch (err) {
-    req.log.error({ err, phone }, "sms: bot reply failed, sending fallback");
+    logger.error({ err, phone }, "sms: bot reply failed, sending fallback");
     replyText = FALLBACK_REPLY;
-    await recordOutbound(conversation.id, phone, FALLBACK_REPLY, {
-      sent: true,
-      sendError: err instanceof Error ? err.message.slice(0, 500) : String(err),
-    });
+    llmMeta = {
+      rawModelResponse:
+        err instanceof Error ? err.message.slice(0, 500) : String(err),
+    };
   }
 
-  res.status(200).send(twimlMessage(replyText));
-});
+  // Send via Twilio REST API. If outbound credentials are missing, we still
+  // record the reply for evals but mark it unsent.
+  const accountSid = process.env["TWILIO_ACCOUNT_SID"];
+  const authToken = process.env["TWILIO_AUTH_TOKEN"];
+  const from = process.env["TWILIO_FROM_NUMBER"];
+  let sent = false;
+  let sendError: string | null = null;
+  let sentSid: string | null = null;
+  if (accountSid && authToken && from) {
+    try {
+      const result = await sendTwilioSms({
+        accountSid,
+        authToken,
+        from,
+        to: phone,
+        body: replyText,
+      });
+      sent = true;
+      sentSid = result.sid;
+    } catch (err) {
+      sendError =
+        err instanceof Error ? err.message.slice(0, 500) : String(err);
+      logger.error({ err, phone }, "sms: outbound send failed");
+    }
+  } else {
+    sendError =
+      "Outbound credentials missing (TWILIO_ACCOUNT_SID / TWILIO_FROM_NUMBER)";
+    logger.warn(
+      { phone, hasSid: Boolean(accountSid), hasFrom: Boolean(from) },
+      "sms: skipping outbound — credentials missing",
+    );
+  }
+
+  await recordOutbound(conversation.id, phone, replyText, {
+    ...llmMeta,
+    twilioSid: sentSid,
+    sent,
+    sendError,
+  });
+
+  // Update conversation summary + qualification + push lead if qualified.
+  const updates: Partial<typeof smsConversationsTable.$inferInsert> = {
+    lastOutboundAt: new Date(),
+    updatedAt: new Date(),
+  };
+  if (summaryUpdate) updates.summary = summaryUpdate;
+  if (qualifiedThisTurn && !conversation.qualified) {
+    updates.qualified = true;
+    const name = leadFields.name?.slice(0, 200) || "(SMS lead, name unknown)";
+    const company = leadFields.company?.slice(0, 200) || "(unknown)";
+    const challenge =
+      (leadFields.workflow ? `Workflow: ${leadFields.workflow}\n\n` : "") +
+      `Phone: ${phone}\n` +
+      `Summary: ${summaryUpdate ?? "(no summary)"}`;
+    try {
+      const [lead] = await db
+        .insert(leadsTable)
+        .values({
+          name,
+          email: `${phone.replace(/\D/g, "")}@sms.deerpark.io`,
+          company,
+          challenge: challenge.slice(0, 5000),
+        })
+        .returning({ id: leadsTable.id });
+      updates.leadId = lead.id;
+      logger.info({ phone, leadId: lead.id }, "sms: qualified, lead captured");
+    } catch (err) {
+      logger.error({ err, phone }, "sms: failed to insert qualified lead");
+    }
+  }
+  await db
+    .update(smsConversationsTable)
+    .set(updates)
+    .where(eq(smsConversationsTable.id, conversation.id));
+}
 
 async function getOrCreateConversation(
   phone: string,

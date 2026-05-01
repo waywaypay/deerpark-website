@@ -62,3 +62,50 @@ export function twimlMessage(body: string | null): string {
 export function isE164(s: string): boolean {
   return /^\+[1-9]\d{6,14}$/.test(s);
 }
+
+/**
+ * Send an SMS via Twilio's REST API. Used for asynchronous replies — when
+ * the LLM call would exceed Twilio's 15s webhook deadline, we respond to
+ * the webhook with empty TwiML and call this afterwards to deliver the
+ * actual reply.
+ *
+ * Returns the message SID on success, throws on failure.
+ */
+export async function sendTwilioSms(args: {
+  accountSid: string;
+  authToken: string;
+  from: string;
+  to: string;
+  body: string;
+}): Promise<{ sid: string }> {
+  const { accountSid, authToken, from, to, body } = args;
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
+  const auth = Buffer.from(`${accountSid}:${authToken}`).toString("base64");
+
+  const params = new URLSearchParams();
+  params.append("From", from);
+  params.append("To", to);
+  params.append("Body", body);
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: params.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      `Twilio send failed (${res.status}): ${text.slice(0, 500)}`,
+    );
+  }
+
+  const json = (await res.json()) as { sid?: string };
+  if (!json.sid) {
+    throw new Error("Twilio send returned no SID");
+  }
+  return { sid: json.sid };
+}

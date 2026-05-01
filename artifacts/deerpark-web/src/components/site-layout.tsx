@@ -242,23 +242,30 @@ export const Footer = () => (
   </footer>
 );
 
-export const ScorecardFAB = () => (
-  <div className="fixed bottom-4 right-4 z-50 md:hidden flex items-stretch gap-2">
-    {SMS_ENABLED && SMS_NUMBER_E164 && (
+export const ScorecardFAB = () => {
+  // When SMS is live, the "Text" pill replaces the "Get Free Scorecard" pill
+  // on mobile entirely — texting converts higher than the form for the
+  // top-of-funnel "I'm curious" cohort, and stacking two FABs ate too much
+  // viewport. The Lead Capture section still has the form CTA inline for
+  // anyone who scrolls down.
+  if (SMS_ENABLED && SMS_NUMBER_E164) {
+    return (
       <a
         href={smsHref(SMS_NUMBER_E164)}
         aria-label="Text our concierge"
-        className="rounded-none bg-background text-foreground border border-foreground/30 px-4 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
+        className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
       >
         <MessageSquare className="w-3.5 h-3.5" />
-        Text
+        Text Scorecard
       </a>
-    )}
+    );
+  }
+  return (
     <a
       href="/#assessment"
-      className="rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
+      className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
     >
       Get Free Scorecard
     </a>
-  </div>
-);
+  );
+};
