@@ -73,14 +73,27 @@ router.post("/sms/inbound", async (req, res) => {
       res.status(503).send(twimlMessage(null));
       return;
     }
+    const reconstructedUrl = externalUrl(req);
     const ok = verifyTwilioSignature({
       authToken,
       signatureHeader: req.headers["x-twilio-signature"] as string | undefined,
-      fullUrl: externalUrl(req),
+      fullUrl: reconstructedUrl,
       params,
     });
     if (!ok) {
-      req.log.warn({ messageSid }, "sms: signature verification failed");
+      req.log.warn(
+        {
+          messageSid,
+          reconstructedUrl,
+          xfProto: req.headers["x-forwarded-proto"],
+          xfHost: req.headers["x-forwarded-host"],
+          host: req.headers.host,
+          originalUrl: req.originalUrl,
+          paramKeys: Object.keys(params).sort(),
+          sigPresent: Boolean(req.headers["x-twilio-signature"]),
+        },
+        "sms: signature verification failed",
+      );
       res.status(403).send(twimlMessage(null));
       return;
     }
