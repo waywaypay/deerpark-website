@@ -94,6 +94,37 @@ function priceFor(model: string) {
   return PRICING[model] ?? { input: 1, output: 3 };
 }
 
+/**
+ * Some OpenAI-compatible providers (Venice, OpenRouter shims) ignore the
+ * `response_format: json_object` request and wrap the JSON in a Markdown
+ * code fence anyway. Strip the fence before parsing rather than failing.
+ *
+ * Handles:
+ *   ```json\n{...}\n```
+ *   ```\n{...}\n```
+ *   {...}                 (no fence — passthrough)
+ */
+function stripJsonFence(s: string): string {
+  const trimmed = s.trim();
+  // Fast path: clean JSON.
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) return trimmed;
+
+  // Fenced: ```json\n...\n``` or ```\n...\n```
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
+  if (fenceMatch) return fenceMatch[1].trim();
+
+  // Last-resort: extract the first balanced {...} block. We slice from
+  // the first '{' to the last '}' — good enough since the model is asked
+  // for one object only.
+  const first = trimmed.indexOf("{");
+  const last = trimmed.lastIndexOf("}");
+  if (first !== -1 && last > first) {
+    return trimmed.slice(first, last + 1);
+  }
+
+  return trimmed;
+}
+
 function computeCost(
   model: string,
   promptTokens: number,
@@ -159,7 +190,7 @@ export async function generateSmsReply(
 
   let parsed: Partial<SmsBotOutput> = {};
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(stripJsonFence(raw));
   } catch (err) {
     logger.warn(
       { err, raw: raw.slice(0, 200) },
