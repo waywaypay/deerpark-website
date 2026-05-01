@@ -317,7 +317,8 @@ async function handleAsyncReply(args: {
         .insert(leadsTable)
         .values({
           name,
-          email: `${phone.replace(/\D/g, "")}@sms.deerpark.io`,
+          contact: phone,
+          contactType: "sms",
           company,
           challenge: challenge.slice(0, 5000),
         })
