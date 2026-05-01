@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Link } from "wouter";
 import { ArrowLeft } from "lucide-react";
-import { FadeIn, Footer, Navbar, ScorecardFAB } from "@/components/site-layout";
+import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
 import { DispatchList } from "@/components/dispatch-list";
 import { DISPATCH_WEEKS, groupPostsToWeeks, usePosts } from "@/lib/dispatch";
 
@@ -62,7 +62,7 @@ export default function DispatchArchive() {
           ))}
         </div>
       </main>
-      <ScorecardFAB />
+      <AssessmentFAB />
       <Footer />
     </div>
   );

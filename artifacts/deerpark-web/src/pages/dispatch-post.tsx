@@ -1,7 +1,7 @@
 import { Link, useRoute } from "wouter";
 import ReactMarkdown from "react-markdown";
 import { ArrowLeft, ExternalLink } from "lucide-react";
-import { FadeIn, Footer, Navbar, ScorecardFAB } from "@/components/site-layout";
+import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
 import { usePosts } from "@/lib/dispatch";
 
 const POST_DATE_FMT = new Intl.DateTimeFormat("en-US", {
@@ -90,7 +90,7 @@ export default function DispatchPost() {
           )}
         </article>
       </main>
-      <ScorecardFAB />
+      <AssessmentFAB />
       <Footer />
     </div>
   );

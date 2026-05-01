@@ -2,7 +2,7 @@ import React, { FormEvent, useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar } from "lucide-react";
-import { FadeIn, Navbar, Footer, ScorecardFAB } from "@/components/site-layout";
+import { FadeIn, Navbar, Footer, AssessmentFAB } from "@/components/site-layout";
 import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
 
 const TICKER_ITEMS = [
@@ -56,7 +56,7 @@ const Hero = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <a href="#assessment">
                 <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90">
-                  Get Free Scorecard <ArrowRight className="ml-2 w-4 h-4" />
+                  Get Free Assessment <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </a>
               <a href="#case-study">
@@ -74,7 +74,6 @@ const Hero = () => {
                 >
                   {formatSmsNumber(SMS_NUMBER_E164)}
                 </a>
-                <span className="text-muted-foreground/70"> — 60-second scorecard, no form.</span>
               </p>
             )}
             <p className="mt-5 text-sm text-muted-foreground font-light hidden md:block">
@@ -85,7 +84,6 @@ const Hero = () => {
               >
                 contact@deerpark.io
               </a>
-              <span className="text-muted-foreground/70"> — 60-second scorecard, no form.</span>
             </p>
           </FadeIn>
 
@@ -667,10 +665,10 @@ const LeadCapture = () => {
               <span className="section-label">Lead Capture</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-serif mb-6">
-              Get a free AI Workflow Scorecard.
+              Get a free AI Workflow Assessment.
             </h2>
             <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6 max-w-xl">
-              Share your workflow constraints and we will send a scorecard with estimated savings, rollout risk, and a recommended first deployment sequence.
+              Share your workflow constraints and we will send an assessment with estimated savings, rollout risk, and a recommended first deployment sequence.
             </p>
             <div className="space-y-3 text-sm text-muted-foreground font-light">
               <p>&bull; Delivery target: 2 business days.</p>
@@ -698,7 +696,7 @@ const LeadCapture = () => {
                   >
                     {formatSmsNumber(SMS_NUMBER_E164)}
                   </a>
-                  {" — "}quick back-and-forth, scorecard in two messages.
+                  {" — "}quick back-and-forth, assessment in two messages.
                 </p>
               )}
               <p className="text-xs text-muted-foreground font-light mt-3 hidden md:block">
@@ -715,7 +713,7 @@ const LeadCapture = () => {
                 </div>
                 <h3 className="text-2xl font-serif mb-4">Request received.</h3>
                 <p className="text-muted-foreground font-light leading-relaxed max-w-sm mx-auto">
-                  A DeerPark strategist will be in touch within two business days with your scorecard. Check your inbox — including spam — for a confirmation.
+                  A DeerPark strategist will be in touch within two business days with your assessment. Check your inbox — including spam — for a confirmation.
                 </p>
               </div>
             ) : (
@@ -763,7 +761,7 @@ const LeadCapture = () => {
                 <Button type="submit" size="lg" disabled={submitting} className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
                   {submitting ? "Submitting…" : (
                     <>
-                      Send My Scorecard Request <ArrowRight className="ml-2 w-4 h-4" />
+                      Send My Assessment Request <ArrowRight className="ml-2 w-4 h-4" />
                     </>
                   )}
                 </Button>
@@ -793,7 +791,7 @@ export default function Home() {
         <FAQ />
         <LeadCapture />
       </main>
-      <ScorecardFAB />
+      <AssessmentFAB />
       <Footer />
     </div>
   );
