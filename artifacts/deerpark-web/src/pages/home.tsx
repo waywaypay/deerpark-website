@@ -1,4 +1,4 @@
-import React, { FormEvent, useState } from "react";
+import React, { FormEvent, useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar } from "lucide-react";
@@ -554,16 +554,62 @@ type FormStatus =
   | { state: "success" }
   | { state: "error"; message: string };
 
+// Match Tailwind's `md` breakpoint so the FAB swap (md:hidden) and the form
+// input swap stay in lockstep. Defaults to false on first paint to avoid
+// flashing the phone field on a desktop reload.
+const MOBILE_QUERY = "(max-width: 767.98px)";
+const useIsMobile = (): boolean => {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mql = window.matchMedia(MOBILE_QUERY);
+    const sync = () => setIsMobile(mql.matches);
+    sync();
+    mql.addEventListener("change", sync);
+    return () => mql.removeEventListener("change", sync);
+  }, []);
+  return isMobile;
+};
+
+// Best-effort US phone normalizer. Returns E.164 (+15551234567) or null when
+// the input can't be coerced. Server re-validates against E.164 regardless.
+const normalizePhone = (raw: string): string | null => {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("+")) {
+    const digits = trimmed.slice(1).replace(/\D/g, "");
+    const e164 = `+${digits}`;
+    return /^\+[1-9]\d{6,14}$/.test(e164) ? e164 : null;
+  }
+  const digits = trimmed.replace(/\D/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return null;
+};
+
 const LeadCapture = () => {
   const [status, setStatus] = useState<FormStatus>({ state: "idle" });
+  const isMobile = useIsMobile();
+  const contactType: "sms" | "email" = isMobile ? "sms" : "email";
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const rawContact = String(formData.get("contact") || "").trim();
+    const contact =
+      contactType === "sms" ? normalizePhone(rawContact) : rawContact;
+
+    if (contactType === "sms" && !contact) {
+      setStatus({
+        state: "error",
+        message: "Please enter a valid mobile number, e.g. (555) 123-4567.",
+      });
+      return;
+    }
+
     const payload = {
       name: String(formData.get("name") || "").trim(),
-      email: String(formData.get("email") || "").trim(),
+      contact: contact ?? "",
+      contactType,
       company: String(formData.get("company") || "").trim(),
       challenge: String(formData.get("challenge") || "").trim(),
     };
@@ -669,8 +715,32 @@ const LeadCapture = () => {
                   <input id="name" name="name" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
                 </div>
                 <div>
-                  <label htmlFor="email" className="section-label block mb-2">Work Email</label>
-                  <input id="email" name="email" type="email" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
+                  <label htmlFor="contact" className="section-label block mb-2">
+                    {contactType === "sms" ? "Mobile Number" : "Work Email"}
+                  </label>
+                  {contactType === "sms" ? (
+                    <input
+                      id="contact"
+                      name="contact"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="(555) 123-4567"
+                      required
+                      disabled={submitting}
+                      className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
+                    />
+                  ) : (
+                    <input
+                      id="contact"
+                      name="contact"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      disabled={submitting}
+                      className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
+                    />
+                  )}
                 </div>
                 <div>
                   <label htmlFor="company" className="section-label block mb-2">Company</label>

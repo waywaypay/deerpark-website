@@ -46,7 +46,8 @@ type AgentDetail = {
 type Lead = {
   id: number;
   name: string;
-  email: string;
+  contact: string;
+  contactType: "email" | "sms";
   company: string;
   challenge: string;
   createdAt: string;
@@ -434,16 +435,16 @@ const LeadsTab = ({ token }: { token: string }) => {
     const q = filter.trim().toLowerCase();
     if (!q) return leads;
     return leads.filter((l) =>
-      [l.name, l.email, l.company, l.challenge].some((v) => v.toLowerCase().includes(q)),
+      [l.name, l.contact, l.company, l.challenge].some((v) => v.toLowerCase().includes(q)),
     );
   }, [leads, filter]);
 
   const exportCsv = () => {
     if (!leads || leads.length === 0) return;
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const header = ["id", "createdAt", "name", "email", "company", "challenge"];
+    const header = ["id", "createdAt", "name", "contactType", "contact", "company", "challenge"];
     const rows = leads.map((l) =>
-      [l.id, l.createdAt, l.name, l.email, l.company, l.challenge].map((v) => escape(String(v))).join(","),
+      [l.id, l.createdAt, l.name, l.contactType, l.contact, l.company, l.challenge].map((v) => escape(String(v))).join(","),
     );
     const csv = [header.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -455,9 +456,9 @@ const LeadsTab = ({ token }: { token: string }) => {
     URL.revokeObjectURL(url);
   };
 
-  const copyEmails = async () => {
+  const copyContacts = async () => {
     if (!filtered.length) return;
-    const list = filtered.map((l) => l.email).join(", ");
+    const list = filtered.map((l) => l.contact).join(", ");
     await navigator.clipboard.writeText(list);
   };
 
@@ -488,11 +489,11 @@ const LeadsTab = ({ token }: { token: string }) => {
           </Button>
           <Button
             variant="outline"
-            onClick={() => void copyEmails()}
+            onClick={() => void copyContacts()}
             disabled={!filtered.length}
             className="rounded-none text-xs uppercase tracking-widest"
           >
-            Copy emails
+            Copy contacts
           </Button>
           <Button
             onClick={exportCsv}
@@ -516,7 +517,7 @@ const LeadsTab = ({ token }: { token: string }) => {
             <tr className="border-b border-foreground/10">
               <th className="px-4 py-3 section-label">Submitted</th>
               <th className="px-4 py-3 section-label">Name</th>
-              <th className="px-4 py-3 section-label">Email</th>
+              <th className="px-4 py-3 section-label">Contact</th>
               <th className="px-4 py-3 section-label">Company</th>
               <th className="px-4 py-3 section-label">Challenge</th>
             </tr>
@@ -531,13 +532,18 @@ const LeadsTab = ({ token }: { token: string }) => {
                 <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatDate(l.createdAt)}</td>
                 <td className="px-4 py-3">{l.name}</td>
                 <td className="px-4 py-3">
-                  <a
-                    href={`mailto:${l.email}`}
-                    onClick={(e) => e.stopPropagation()}
-                    className="hover:underline underline-offset-4"
-                  >
-                    {l.email}
-                  </a>
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                      {l.contactType === "sms" ? "SMS" : "Email"}
+                    </span>
+                    <a
+                      href={l.contactType === "sms" ? `sms:${l.contact}` : `mailto:${l.contact}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:underline underline-offset-4"
+                    >
+                      {l.contact}
+                    </a>
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{l.company}</td>
                 <td className="px-4 py-3 text-muted-foreground max-w-md">
