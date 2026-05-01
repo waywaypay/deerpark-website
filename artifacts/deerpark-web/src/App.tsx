@@ -6,7 +6,6 @@ import Home from "@/pages/home";
 import Dispatch from "@/pages/dispatch";
 import DispatchArchive from "@/pages/dispatch-archive";
 import DispatchPost from "@/pages/dispatch-post";
-import CapitalDesk from "@/pages/capital-desk";
 import Admin from "@/pages/admin";
 
 const queryClient = new QueryClient();
@@ -18,7 +17,6 @@ function Router() {
       <Route path="/dispatch" component={Dispatch} />
       <Route path="/dispatch/archive" component={DispatchArchive} />
       <Route path="/dispatch/:id" component={DispatchPost} />
-      <Route path="/capital-desk" component={CapitalDesk} />
       <Route path="/admin" component={Admin} />
       <Route component={NotFound} />
     </Switch>

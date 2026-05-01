@@ -9,7 +9,6 @@ import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
 /** Site-wide: AI agent destinations shown under “Agents” in the header. */
 export const AGENT_LINKS = [
   { href: "/dispatch", label: "Dispatch" },
-  { href: "/capital-desk", label: "Capital Desk" },
 ] as const;
 
 export const FadeIn = ({
