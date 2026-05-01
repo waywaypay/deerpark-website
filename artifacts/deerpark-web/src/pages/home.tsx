@@ -3,6 +3,7 @@ import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar } from "lucide-react";
 import { FadeIn, Navbar, Footer, ScorecardFAB } from "@/components/site-layout";
+import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
 
 const TICKER_ITEMS = [
   "AI Readiness Assessment",
@@ -51,17 +52,31 @@ const Hero = () => {
             </p>
           </FadeIn>
 
-          <FadeIn delay={0.3} className="flex flex-col sm:flex-row gap-4 mb-14">
-            <a href="#assessment">
-              <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90">
-                Get Free Scorecard <ArrowRight className="ml-2 w-4 h-4" />
-              </Button>
-            </a>
-            <a href="#case-study">
-              <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-foreground/25 hover:bg-foreground/5">
-                See Case Study
-              </Button>
-            </a>
+          <FadeIn delay={0.3} className="mb-14">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <a href="#assessment">
+                <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90">
+                  Get Free Scorecard <ArrowRight className="ml-2 w-4 h-4" />
+                </Button>
+              </a>
+              <a href="#case-study">
+                <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-foreground/25 hover:bg-foreground/5">
+                  See Case Study
+                </Button>
+              </a>
+            </div>
+            {SMS_ENABLED && SMS_NUMBER_E164 && (
+              <p className="mt-5 text-sm text-muted-foreground font-light">
+                Or text our concierge:{" "}
+                <a
+                  href={smsHref(SMS_NUMBER_E164)}
+                  className="text-foreground underline underline-offset-4 hover:text-foreground/70"
+                >
+                  {formatSmsNumber(SMS_NUMBER_E164)}
+                </a>
+                <span className="text-muted-foreground/70"> — 60-second scorecard, no form.</span>
+              </p>
+            )}
           </FadeIn>
 
           <FadeIn delay={0.4}>
@@ -537,6 +552,18 @@ const LeadCapture = () => {
                 <span className="underline underline-offset-4">Book a 20-min intro call</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
+              {SMS_ENABLED && SMS_NUMBER_E164 && (
+                <p className="text-sm text-muted-foreground font-light mt-3">
+                  Or text our concierge bot at{" "}
+                  <a
+                    href={smsHref(SMS_NUMBER_E164)}
+                    className="text-foreground underline underline-offset-4 hover:text-foreground/70"
+                  >
+                    {formatSmsNumber(SMS_NUMBER_E164)}
+                  </a>
+                  {" — "}quick back-and-forth, scorecard in two messages.
+                </p>
+              )}
               <p className="text-xs text-muted-foreground font-light mt-3">
                 Or email <a href="mailto:contact@deerpark.io" className="underline underline-offset-2 hover:text-foreground">contact@deerpark.io</a>.
               </p>

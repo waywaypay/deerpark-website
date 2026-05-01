@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, MessageSquare, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
+import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
 
 /** Site-wide: AI agent destinations shown under “Agents” in the header. */
 export const AGENT_LINKS = [
@@ -242,10 +243,22 @@ export const Footer = () => (
 );
 
 export const ScorecardFAB = () => (
-  <a
-    href="/#assessment"
-    className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
-  >
-    Get Free Scorecard
-  </a>
+  <div className="fixed bottom-4 right-4 z-50 md:hidden flex items-stretch gap-2">
+    {SMS_ENABLED && SMS_NUMBER_E164 && (
+      <a
+        href={smsHref(SMS_NUMBER_E164)}
+        aria-label="Text our concierge"
+        className="rounded-none bg-background text-foreground border border-foreground/30 px-4 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
+      >
+        <MessageSquare className="w-3.5 h-3.5" />
+        Text
+      </a>
+    )}
+    <a
+      href="/#assessment"
+      className="rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
+    >
+      Get Free Scorecard
+    </a>
+  </div>
 );
