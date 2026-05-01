@@ -82,7 +82,10 @@ const Hero = () => {
           <FadeIn delay={0.4}>
             <div className="flex gap-10 border-t border-foreground/15 pt-8">
                 {[
-                { stat: "90%", label: "manual effort removed from everyday tasks" },
+                // Hero stats lead with magnitude, not precision. The hard
+                // 90% lives in the case studies where we can back it up
+                // with the actual workflow.
+                { stat: "10x", label: "leverage on the recurring workflows we deploy" },
                 { stat: "6-8 wks", label: "from readiness review to live rollout" },
                 { stat: "100%", label: "code, prompts, and data stay in your accounts" },
               ].map(({ stat, label }) => (
@@ -300,84 +303,162 @@ const Services = () => (
   </section>
 );
 
-const CASE_STACK = [
-  { label: "Product", detail: "One web app for high-volume management scheduling — replacing spreadsheets and group chats with a single clean view of who's doing what, and when, across every site." },
-  { label: "Experience", detail: "Simple UI anyone can use, single sign-on, white-label theming for every client deployment." },
-  { label: "AI & Automation", detail: "Smart shift suggestions, conflict detection, time-off handling, and natural-language edits — all behind plain-language controls." },
-  { label: "Deployment", detail: "Shipped to the firm's own cloud with secure access, logging, and cost telemetry." },
-  { label: "Training", detail: "Executive briefing, role-based workshops, and runbooks so every manager was live on day one." },
+type CaseStudyData = {
+  /** Slug used by anchor links and React keys. */
+  id: string;
+  /** Eyebrow tag — second-line context for the section label. */
+  eyebrow: string;
+  /** Big serif headline that carries the case in one line. */
+  headline: string;
+  /** Two short narrative paragraphs telling the story. */
+  intro: [string, string];
+  /** The before/after contrast panels. */
+  before: string;
+  after: string;
+  /** Three KPIs displayed as a row of dt/dd pairs. */
+  metrics: { label: string; value: string }[];
+  /** "What we delivered" stack — label/detail pairs, 4-5 rows. */
+  delivered: { label: string; detail: string }[];
+  /** Closing outcome line that punctuates the case. */
+  outcome: React.ReactNode;
+};
+
+const CASE_STUDIES: CaseStudyData[] = [
+  {
+    id: "scheduling-app",
+    eyebrow: "Custom Application",
+    headline: "One web app to manage high-volume management schedules.",
+    intro: [
+      "A services operator needed a single AI-powered web app to run high-volume management schedules across dozens of client sites — shifts, availability, coverage, and time-off — without the spreadsheet chaos and group-chat back-and-forth that every manager was losing hours to each week.",
+      "We took it from the first Figma frame to production in six to eight weeks: product design, full stack, AI layer, training, and handoff. After the internal demo landed, the operator rolled the same app across their active client base.",
+    ],
+    before:
+      "Spreadsheets and group chats. Every manager losing hours each week to coverage edits and time-off back-and-forth.",
+    after:
+      "One web app. A single source of truth across every site, with AI handling the routine edits and conflict checks.",
+    metrics: [
+      { label: "Kickoff to prod", value: "6–8 wks" },
+      { label: "Manual effort", value: "−90%" },
+      { label: "Rolled out", value: "40+ clients" },
+    ],
+    delivered: [
+      { label: "Product", detail: "One web app for high-volume management scheduling — replacing spreadsheets and group chats with a single clean view of who's doing what, and when, across every site." },
+      { label: "Experience", detail: "Simple UI anyone can use, single sign-on, white-label theming for every client deployment." },
+      { label: "AI & Automation", detail: "Smart shift suggestions, conflict detection, time-off handling, and natural-language edits — all behind plain-language controls." },
+      { label: "Deployment", detail: "Shipped to the firm's own cloud with secure access, logging, and cost telemetry." },
+      { label: "Training", detail: "Executive briefing, role-based workshops, and runbooks so every manager was live on day one." },
+    ],
+    outcome: (
+      <>
+        Shipped across <span className="text-background font-medium">40+ clients</span> after a successful demo. Time savings landed alongside higher output quality and measurably stronger client satisfaction.
+      </>
+    ),
+  },
+  {
+    id: "workflow-automation",
+    eyebrow: "Workflow Automation",
+    headline: "A recurring expert workflow, compressed from hours to minutes.",
+    intro: [
+      // Deliberately abstract — the engagement was on a specific corpus
+      // and output format we'd rather not name on a public site. The shape
+      // is what matters: ingest → analyze → draft → human review.
+      "An expert team was producing a recurring written output that depended on ingesting public source material, running structured analysis, and drafting a polished result every cycle. The work was high-judgment but repetitive in shape, and consumed hours of expert time per cycle.",
+      "We rebuilt the pipeline as an AI workflow: source ingestion, structured analysis, and draft assembly, with the team's role moving from drafting to reviewing and shipping. The judgment stayed human; the typing left.",
+    ],
+    before:
+      "Hours per cycle of source review, structured note-taking, and drafting from scratch. Same shape every time — no leverage.",
+    after:
+      "Minutes per cycle of review on a polished, structured draft. Same quality bar, dramatically less time.",
+    metrics: [
+      { label: "Cycle time", value: "hrs → mins" },
+      { label: "Manual effort", value: "−90%" },
+      { label: "Quality bar", value: "held" },
+    ],
+    delivered: [
+      { label: "Pipeline", detail: "Source ingestion, structured analysis, and draft assembly — running on the cadence the team sets, with full audit trail on every output." },
+      { label: "Quality", detail: "Same review bar at the end. The pipeline drafts; the team owns the publish decision and tunes the prompts when standards shift." },
+      { label: "AI & Automation", detail: "Schedule-driven runs, model-agnostic, with cost and latency telemetry on every cycle so the team can swap models without us." },
+      { label: "Deployment", detail: "Runs in the team's own cloud and on the team's own data. Logs, evals, and cost dashboards visible from day one." },
+      { label: "Training", detail: "Walk-throughs and runbooks so the team can add new sources, adjust prompts, and rerun historical cycles without engineering support." },
+    ],
+    outcome: (
+      <>
+        What used to be a half-day of expert work is now a <span className="text-background font-medium">few minutes of review</span>. The team kept full editorial control; the time freed up went into deeper analysis.
+      </>
+    ),
+  },
 ];
+
+const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => (
+  <div className="grid lg:grid-cols-12 gap-12">
+    <FadeIn className="lg:col-span-4 min-w-0">
+      <div className="flex items-center gap-3 mb-8">
+        <div className="h-[1px] w-12 bg-background/40"></div>
+        <span className="section-label !text-background/60">Case Study · {data.eyebrow}</span>
+      </div>
+      <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
+        {data.headline}
+      </h2>
+      <p className="text-background/70 font-light leading-relaxed mb-6">{data.intro[0]}</p>
+      <p className="text-background/70 font-light leading-relaxed">{data.intro[1]}</p>
+      <div className="mt-10 border-t border-background/20 pt-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-background/15 border border-background/15 mb-6">
+          <div className="bg-foreground p-5">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 mb-3 font-sans">Before</div>
+            <div className="text-base font-serif text-background/55 leading-snug">{data.before}</div>
+          </div>
+          <div className="bg-foreground p-5">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-primary mb-3 font-sans">After</div>
+            <div className="text-base font-serif text-background leading-snug">{data.after}</div>
+          </div>
+        </div>
+        <dl className="grid grid-cols-3 gap-4">
+          {data.metrics.map((m) => (
+            <div key={m.label}>
+              <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">{m.label}</dt>
+              <dd className="text-xl md:text-2xl font-serif mt-2">{m.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </FadeIn>
+
+    <FadeIn delay={0.15} className="lg:col-span-8 min-w-0">
+      <div className="border border-background/20 p-8 lg:p-10">
+        <div className="section-label !text-background/60 mb-6">What we delivered</div>
+        <div className="divide-y divide-background/15">
+          {data.delivered.map((s) => (
+            <div key={s.label} className="grid grid-cols-12 gap-4 py-5 items-baseline">
+              <div className="col-span-12 md:col-span-3 text-sm text-background/70 font-light uppercase tracking-[0.12em]">{s.label}</div>
+              <div className="col-span-12 md:col-span-9 text-base md:text-lg font-serif text-background leading-snug">{s.detail}</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-8 pt-8 border-t border-background/15 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
+          <div className="section-label !text-background/60">Outcome</div>
+          <div className="text-lg md:text-xl font-serif text-background leading-snug">
+            {data.outcome}
+          </div>
+        </div>
+      </div>
+    </FadeIn>
+  </div>
+);
 
 const CaseStudy = () => (
   <section id="case-study" className="py-32 border-t border-foreground/15 bg-foreground text-background">
-    <div className="max-w-7xl mx-auto px-6">
-      <div className="grid lg:grid-cols-12 gap-12">
-        <FadeIn className="lg:col-span-4">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-[1px] w-12 bg-background/40"></div>
-            <span className="section-label !text-background/60">Case Study</span>
-          </div>
-          <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
-            One web app to manage high-volume management schedules.
-          </h2>
-          <p className="text-background/70 font-light leading-relaxed mb-6">
-            A services operator needed a single AI-powered web app to run high-volume management schedules across dozens of client sites — shifts, availability, coverage, and time-off — without the spreadsheet chaos and group-chat back-and-forth that every manager was losing hours to each week.
-          </p>
-          <p className="text-background/70 font-light leading-relaxed">
-            We took it from the first Figma frame to production in six to eight weeks: product design, full stack, AI layer, training, and handoff. After the internal demo landed, the operator rolled the same app across their active client base.
-          </p>
-          <div className="mt-10 border-t border-background/20 pt-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-background/15 border border-background/15 mb-6">
-              <div className="bg-foreground p-5">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 mb-3 font-sans">Before</div>
-                <div className="text-base font-serif text-background/55 leading-snug">
-                  Spreadsheets and group chats. Every manager losing hours each week to coverage edits and time-off back-and-forth.
-                </div>
-              </div>
-              <div className="bg-foreground p-5">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-primary mb-3 font-sans">After</div>
-                <div className="text-base font-serif text-background leading-snug">
-                  One web app. A single source of truth across every site, with AI handling the routine edits and conflict checks.
-                </div>
-              </div>
-            </div>
-            <dl className="grid grid-cols-3 gap-4">
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">Kickoff to prod</dt>
-                <dd className="text-xl md:text-2xl font-serif mt-2">6–8 wks</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">Handoff</dt>
-                <dd className="text-xl md:text-2xl font-serif mt-2">100%</dd>
-              </div>
-              <div>
-                <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">Rolled out</dt>
-                <dd className="text-xl md:text-2xl font-serif mt-2">40+ clients</dd>
-              </div>
-            </dl>
-          </div>
-        </FadeIn>
-
-        <FadeIn delay={0.15} className="lg:col-span-8">
-          <div className="border border-background/20 p-8 lg:p-10">
-            <div className="section-label !text-background/60 mb-6">What we delivered</div>
-            <div className="divide-y divide-background/15">
-              {CASE_STACK.map((s) => (
-                <div key={s.label} className="grid grid-cols-12 gap-4 py-5 items-baseline">
-                  <div className="col-span-12 md:col-span-3 text-sm text-background/70 font-light uppercase tracking-[0.12em]">{s.label}</div>
-                  <div className="col-span-12 md:col-span-9 text-base md:text-lg font-serif text-background leading-snug">{s.detail}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-8 pt-8 border-t border-background/15 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
-              <div className="section-label !text-background/60">Outcome</div>
-              <div className="text-lg md:text-xl font-serif text-background leading-snug">
-                Shipped across <span className="text-background font-medium">40+ clients</span> after a successful demo.
-              </div>
-            </div>
-          </div>
-        </FadeIn>
-      </div>
+    <div className="max-w-7xl mx-auto px-6 space-y-24">
+      {CASE_STUDIES.map((cs, i) => (
+        <div
+          key={cs.id}
+          // Visual divider between cases. The first case has none above it
+          // (the section's own border-t handles that); subsequent cases get
+          // a faint band so the eye registers them as separate stories.
+          className={i > 0 ? "pt-24 border-t border-background/15" : undefined}
+        >
+          <CaseStudyBlock data={cs} />
+        </div>
+      ))}
     </div>
   </section>
 );
