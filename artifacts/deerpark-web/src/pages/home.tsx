@@ -90,10 +90,6 @@ const Hero = () => {
           <FadeIn delay={0.4}>
             <div className="flex gap-10 border-t border-foreground/15 pt-8">
                 {[
-                // Hero stats lead with magnitude, not precision. The hard
-                // 90% lives in the case studies where we can back it up
-                // with the actual workflow.
-                { stat: "10x", label: "leverage on the recurring workflows we deploy" },
                 { stat: "6-8 wks", label: "from readiness review to live rollout" },
                 { stat: "100%", label: "code, prompts, and data stay in your accounts" },
               ].map(({ stat, label }) => (
