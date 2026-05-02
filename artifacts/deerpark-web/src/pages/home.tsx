@@ -61,7 +61,7 @@ const Hero = () => {
               </a>
               <a href="#case-study">
                 <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-foreground/25 hover:bg-foreground/5">
-                  See Case Study
+                  See Case Studies
                 </Button>
               </a>
             </div>
@@ -308,33 +308,80 @@ const Services = () => (
 );
 
 type CaseStudyData = {
-  /** Slug used by anchor links and React keys. */
   id: string;
-  /** Eyebrow tag — second-line context for the section label. */
   eyebrow: string;
-  /** Big serif headline that carries the case in one line. */
   headline: string;
-  /** Two short narrative paragraphs telling the story. */
-  intro: [string, string];
-  /** The before/after contrast panels. */
+  intro: string[];
   before: string;
   after: string;
-  /** Three KPIs displayed as a row of dt/dd pairs. */
   metrics: { label: string; value: string }[];
-  /** "What we delivered" stack — label/detail pairs, 4-5 rows. */
   delivered: { label: string; detail: string }[];
-  /** Closing outcome line that punctuates the case. */
   outcome: React.ReactNode;
+  mockup?: React.ReactNode;
 };
+
+const SchedulingPhoneMockup = () => (
+  <div className="relative mx-auto w-full max-w-[260px]">
+    <div className="relative aspect-[9/19.5] rounded-[2.75rem] bg-neutral-900 p-[10px] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.55)] ring-1 ring-background/10">
+      <div className="relative h-full w-full rounded-[2.1rem] overflow-hidden bg-background text-foreground">
+        <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[5.25rem] h-6 bg-neutral-900 rounded-full z-20" />
+        <div className="flex items-center justify-between px-6 pt-3.5 pb-2.5 text-[10px] font-sans font-medium">
+          <span>9:41</span>
+          <span className="opacity-40">•••</span>
+        </div>
+        <div className="px-5 pt-2 pb-3.5 border-b border-foreground/10">
+          <div className="text-[8px] uppercase tracking-[0.2em] text-foreground/50 font-sans">Today · Mar 12</div>
+          <div className="text-[15px] font-serif mt-1 leading-tight">Q1 Review · 6 attendees</div>
+        </div>
+        <div className="p-3 space-y-2">
+          {[
+            { initial: "M", name: "Margaret Chen", role: "CFO · Northwind", note: "Recently led $40M raise", accent: true },
+            { initial: "D", name: "David Park", role: "Founder · Veridian", note: "Background: ML infra" },
+            { initial: "A", name: "Aisha Rahman", role: "Partner · Sequoia East", note: "Focus: B2B platforms" },
+            { initial: "T", name: "Tom Bauer", role: "VP Ops · Helios Group", note: "12 yrs at portfolio firm" },
+          ].map((a) => (
+            <div
+              key={a.name}
+              className={`border rounded-md p-2.5 ${
+                a.accent ? "border-primary/40 bg-primary/5" : "border-foreground/10 bg-foreground/[0.02]"
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <div
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-serif shrink-0 ${
+                    a.accent ? "bg-primary/20 text-foreground" : "bg-foreground/10 text-foreground/60"
+                  }`}
+                >
+                  {a.initial}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-serif leading-tight">{a.name}</div>
+                  <div className="text-[8px] text-foreground/50 leading-tight truncate font-sans">{a.role}</div>
+                </div>
+              </div>
+              <div className="mt-1.5 pl-[2.4rem] text-[8px] text-foreground/55 leading-snug font-sans">
+                {a.note}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
 
 const CASE_STUDIES: CaseStudyData[] = [
   {
     id: "scheduling-app",
     eyebrow: "Custom Application",
     headline: "One web app to manage high-volume management schedules.",
+    mockup: <SchedulingPhoneMockup />,
     intro: [
-      "A services operator needed a single AI-powered web app to run high-volume management schedules across dozens of client sites — shifts, availability, coverage, and time-off — without the spreadsheet chaos and group-chat back-and-forth that every manager was losing hours to each week.",
-      "We took it from the first Figma frame to production in six to eight weeks: product design, full stack, AI layer, training, and handoff. After the internal demo landed, the operator rolled the same app across their active client base.",
+      "A services operator was producing high-volume management schedules using Excel, manual research, and PDF delivery. Each schedule required ~4 hours of analyst time to compile attendee profiles from fragmented sources.",
+      "We rebuilt the workflow as a structured system rather than a document process.",
+      "The core shift was treating each attendee as a persistent data object — continuously enriched via automated ingestion (web sources, internal data) and summarized into standardized profiles. Scheduling logic and profile generation were integrated into a single web interface, with outputs rendered in a mobile-first format instead of static PDFs.",
+      "We led the full build: product design, data architecture, AI enrichment layer, and internal training.",
+      "Across production usage, time per schedule dropped from ~4 hours to ~15 minutes (~93% reduction), while increasing profile completeness and consistency. Following an internal demo, the operator deployed the system across a client base of 40+ accounts.",
     ],
     before:
       "Spreadsheets and group chats. Every manager losing hours each week to coverage edits and time-off back-and-forth.",
@@ -393,61 +440,75 @@ const CASE_STUDIES: CaseStudyData[] = [
   },
 ];
 
-const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => (
-  <div className="grid lg:grid-cols-12 gap-12">
-    <div className="lg:col-span-4 min-w-0">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="h-[1px] w-12 bg-background/40"></div>
-        <span className="section-label !text-background/60">Case Study · {data.eyebrow}</span>
-      </div>
-      <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
-        {data.headline}
-      </h2>
-      <p className="text-background/70 font-light leading-relaxed mb-6">{data.intro[0]}</p>
-      <p className="text-background/70 font-light leading-relaxed">{data.intro[1]}</p>
-      <div className="mt-10 border-t border-background/20 pt-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-background/15 border border-background/15 mb-6">
-          <div className="bg-foreground p-5">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 mb-3 font-sans">Before</div>
-            <div className="text-base font-serif text-background/55 leading-snug">{data.before}</div>
-          </div>
-          <div className="bg-foreground p-5">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-primary mb-3 font-sans">After</div>
-            <div className="text-base font-serif text-background leading-snug">{data.after}</div>
-          </div>
+const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
+  const hasMockup = Boolean(data.mockup);
+  return (
+    <div className="grid lg:grid-cols-12 gap-12">
+      <div className={`min-w-0 ${hasMockup ? "lg:col-span-4" : "lg:col-span-4"}`}>
+        <div className="flex items-center gap-3 mb-8">
+          <div className="h-[1px] w-12 bg-background/40"></div>
+          <span className="section-label !text-background/60">Case Study · {data.eyebrow}</span>
         </div>
-        <dl className="grid grid-cols-3 gap-4">
-          {data.metrics.map((m) => (
-            <div key={m.label}>
-              <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">{m.label}</dt>
-              <dd className="text-xl md:text-2xl font-serif mt-2">{m.value}</dd>
-            </div>
+        <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
+          {data.headline}
+        </h2>
+        <div className="space-y-5">
+          {data.intro.map((para, i) => (
+            <p key={i} className="text-background/70 font-light leading-relaxed">
+              {para}
+            </p>
           ))}
-        </dl>
+        </div>
+        <div className="mt-10 border-t border-background/20 pt-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-background/15 border border-background/15 mb-6">
+            <div className="bg-foreground p-5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 mb-3 font-sans">Before</div>
+              <div className="text-base font-serif text-background/55 leading-snug">{data.before}</div>
+            </div>
+            <div className="bg-foreground p-5">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-primary mb-3 font-sans">After</div>
+              <div className="text-base font-serif text-background leading-snug">{data.after}</div>
+            </div>
+          </div>
+          <dl className="grid grid-cols-3 gap-4">
+            {data.metrics.map((m) => (
+              <div key={m.label}>
+                <dt className="text-[10px] uppercase tracking-[0.15em] text-background/40 font-sans">{m.label}</dt>
+                <dd className="text-xl md:text-2xl font-serif mt-2">{m.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
       </div>
-    </div>
 
-    <div className="lg:col-span-8 min-w-0">
-      <div className="border border-background/20 p-8 lg:p-10">
-        <div className="section-label !text-background/60 mb-6">What we delivered</div>
-        <div className="divide-y divide-background/15">
-          {data.delivered.map((s) => (
-            <div key={s.label} className="grid grid-cols-12 gap-4 py-5 items-baseline">
-              <div className="col-span-12 md:col-span-3 text-sm text-background/70 font-light uppercase tracking-[0.12em]">{s.label}</div>
-              <div className="col-span-12 md:col-span-9 text-base md:text-lg font-serif text-background leading-snug">{s.detail}</div>
-            </div>
-          ))}
+      {hasMockup && (
+        <div className="lg:col-span-3 min-w-0 flex items-start justify-center lg:pt-4">
+          <div className="lg:sticky lg:top-32 w-full">{data.mockup}</div>
         </div>
-        <div className="mt-8 pt-8 border-t border-background/15 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
-          <div className="section-label !text-background/60">Outcome</div>
-          <div className="text-lg md:text-xl font-serif text-background leading-snug">
-            {data.outcome}
+      )}
+
+      <div className={`min-w-0 ${hasMockup ? "lg:col-span-5" : "lg:col-span-8"}`}>
+        <div className="border border-background/20 p-8 lg:p-10">
+          <div className="section-label !text-background/60 mb-6">What we delivered</div>
+          <div className="divide-y divide-background/15">
+            {data.delivered.map((s) => (
+              <div key={s.label} className="grid grid-cols-12 gap-4 py-5 items-baseline">
+                <div className="col-span-12 md:col-span-3 text-sm text-background/70 font-light uppercase tracking-[0.12em]">{s.label}</div>
+                <div className="col-span-12 md:col-span-9 text-base md:text-lg font-serif text-background leading-snug">{s.detail}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 pt-8 border-t border-background/15 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
+            <div className="section-label !text-background/60">Outcome</div>
+            <div className="text-lg md:text-xl font-serif text-background leading-snug">
+              {data.outcome}
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const CaseStudy = () => {
   const [activeIndex, setActiveIndex] = useState(0);
