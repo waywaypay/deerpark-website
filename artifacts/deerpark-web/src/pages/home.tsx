@@ -460,16 +460,18 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
           ))}
         </div>
         <div className="mt-10 border-t border-background/20 pt-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-background/15 border border-background/15 mb-6">
-            <div className="bg-foreground p-5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 mb-3 font-sans">Before</div>
-              <div className="text-base font-serif text-background/55 leading-snug">{data.before}</div>
+          {!hasMockup && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-px bg-background/15 border border-background/15 mb-6">
+              <div className="bg-foreground p-5">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 mb-3 font-sans">Before</div>
+                <div className="text-base font-serif text-background/55 leading-snug">{data.before}</div>
+              </div>
+              <div className="bg-foreground p-5">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-primary mb-3 font-sans">After</div>
+                <div className="text-base font-serif text-background leading-snug">{data.after}</div>
+              </div>
             </div>
-            <div className="bg-foreground p-5">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-primary mb-3 font-sans">After</div>
-              <div className="text-base font-serif text-background leading-snug">{data.after}</div>
-            </div>
-          </div>
+          )}
           <dl className="grid grid-cols-3 gap-4">
             {data.metrics.map((m) => (
               <div key={m.label}>
