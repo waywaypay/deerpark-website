@@ -444,7 +444,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
   const hasMockup = Boolean(data.mockup);
   return (
     <div className="grid lg:grid-cols-12 gap-12">
-      <div className={`min-w-0 ${hasMockup ? "lg:col-span-4" : "lg:col-span-4"}`}>
+      <div className={`min-w-0 ${hasMockup ? "lg:col-span-7" : "lg:col-span-4"}`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-background/40"></div>
           <span className="section-label !text-background/60">Case Study · {data.eyebrow}</span>
@@ -481,31 +481,31 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
         </div>
       </div>
 
-      {hasMockup && (
-        <div className="lg:col-span-3 min-w-0 flex items-start justify-center lg:pt-4">
-          <div className="lg:sticky lg:top-32 w-full">{data.mockup}</div>
+      {hasMockup ? (
+        <div className="lg:col-span-5 min-w-0 flex items-start justify-center lg:pt-4">
+          <div className="lg:sticky lg:top-32 w-full max-w-[300px]">{data.mockup}</div>
         </div>
-      )}
-
-      <div className={`min-w-0 ${hasMockup ? "lg:col-span-5" : "lg:col-span-8"}`}>
-        <div className="border border-background/20 p-8 lg:p-10">
-          <div className="section-label !text-background/60 mb-6">What we delivered</div>
-          <div className="divide-y divide-background/15">
-            {data.delivered.map((s) => (
-              <div key={s.label} className="grid grid-cols-12 gap-4 py-5 items-baseline">
-                <div className="col-span-12 md:col-span-3 text-sm text-background/70 font-light uppercase tracking-[0.12em]">{s.label}</div>
-                <div className="col-span-12 md:col-span-9 text-base md:text-lg font-serif text-background leading-snug">{s.detail}</div>
+      ) : (
+        <div className="lg:col-span-8 min-w-0">
+          <div className="border border-background/20 p-8 lg:p-10">
+            <div className="section-label !text-background/60 mb-6">What we delivered</div>
+            <div className="divide-y divide-background/15">
+              {data.delivered.map((s) => (
+                <div key={s.label} className="grid grid-cols-12 gap-4 py-5 items-baseline">
+                  <div className="col-span-12 md:col-span-3 text-sm text-background/70 font-light uppercase tracking-[0.12em]">{s.label}</div>
+                  <div className="col-span-12 md:col-span-9 text-base md:text-lg font-serif text-background leading-snug">{s.detail}</div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-8 pt-8 border-t border-background/15 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
+              <div className="section-label !text-background/60">Outcome</div>
+              <div className="text-lg md:text-xl font-serif text-background leading-snug">
+                {data.outcome}
               </div>
-            ))}
-          </div>
-          <div className="mt-8 pt-8 border-t border-background/15 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
-            <div className="section-label !text-background/60">Outcome</div>
-            <div className="text-lg md:text-xl font-serif text-background leading-snug">
-              {data.outcome}
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
