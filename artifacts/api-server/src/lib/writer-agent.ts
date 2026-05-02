@@ -1282,32 +1282,16 @@ export async function clearRunState(): Promise<void> {
 
 let writerHandle: NodeJS.Timeout | null = null;
 
-// Tick every 12h, but only attempt a new post if the last one is older than
-// the floor. With a 36h floor, that produces roughly 2 posts per 3 days when
-// the corpus supports it (and fewer on thin weeks since the agent will abort
-// rather than publish slop).
+// Tick every 12h. The agent self-throttles via abort when the corpus is too
+// thin to support a real piece, so the scheduler doesn't need a separate
+// recency floor — slow news days produce no post regardless.
 const WRITER_TICK_MS = 12 * 60 * 60 * 1000;
-const WRITER_FLOOR_MS = 36 * 60 * 60 * 1000;
-
-async function hasPostInLastFloor(): Promise<boolean> {
-  const since = new Date(Date.now() - WRITER_FLOOR_MS);
-  const rows = await db
-    .select({ id: postsTable.id })
-    .from(postsTable)
-    .where(gte(postsTable.publishedAt, since))
-    .limit(1);
-  return rows.length > 0;
-}
 
 export function startWriterScheduler(intervalMs = WRITER_TICK_MS): void {
   if (writerHandle) return;
 
   const tick = async () => {
     try {
-      if (await hasPostInLastFloor()) {
-        logger.info("Writer tick: recent post within floor, skipping");
-        return;
-      }
       logger.info("Writer tick: generating post");
       const result = await generateAndSavePost({});
       if (!result.ok) {
