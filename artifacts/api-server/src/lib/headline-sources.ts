@@ -236,4 +236,45 @@ export const SOURCES: SourceConfig[] = [
     enabled: true,
     tier: 4,
   },
+  // First-party hardware + product news (chips, Mac/iPhone pricing, retail
+  // moves) the AI-only feeds miss. Atom feed; rss-parser handles it.
+  {
+    id: "apple-newsroom",
+    displayName: "Apple Newsroom",
+    category: "Hardware",
+    kind: "rss",
+    url:
+      process.env["APPLE_NEWSROOM_FEED_URL"] ??
+      "https://www.apple.com/newsroom/rss-feed.rss",
+    enabled: true,
+    tier: 3,
+  },
 ];
+
+// Display name for the earnings source, used by the dynamic-tier helper so
+// the tier promotion can't drift if SOURCES is re-ordered.
+export const EARNINGS_TRANSCRIPTS_DISPLAY_NAME = "Earnings transcripts";
+
+// Earnings transcripts are tier 4 on a normal day (low signal vs press), but
+// during the mega-cap reporting cluster (Meta/Alphabet/MSFT/AMZN/AAPL all on
+// the same week) they become the most consequential thing in the corpus.
+// `isEarningsDay` flips them to tier 2 when 3+ transcripts arrive in the
+// last 48h so the writer can lead with the cluster instead of being out-
+// weighted by lab announcements.
+export const EARNINGS_DAY_WINDOW_MS = 48 * 60 * 60 * 1000;
+export const EARNINGS_DAY_MIN_ITEMS = 3;
+export const EARNINGS_PROMOTED_TIER: SourceTier = 2;
+
+export function isEarningsDay(
+  items: Array<{ source: string; publishedAt: Date }>,
+): boolean {
+  const since = Date.now() - EARNINGS_DAY_WINDOW_MS;
+  let count = 0;
+  for (const it of items) {
+    if (it.source !== EARNINGS_TRANSCRIPTS_DISPLAY_NAME) continue;
+    if (it.publishedAt.getTime() < since) continue;
+    count++;
+    if (count >= EARNINGS_DAY_MIN_ITEMS) return true;
+  }
+  return false;
+}

@@ -8,7 +8,12 @@ import {
 } from "@workspace/db";
 import { gte, desc, eq } from "drizzle-orm";
 import { logger } from "./logger";
-import { SOURCES } from "./headline-sources";
+import {
+  SOURCES,
+  EARNINGS_TRANSCRIPTS_DISPLAY_NAME,
+  EARNINGS_PROMOTED_TIER,
+  isEarningsDay,
+} from "./headline-sources";
 
 // Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
 // override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
@@ -75,8 +80,15 @@ const TIER_WEIGHTS: Record<number, number> = { 1: 4, 2: 3, 3: 2, 4: 1 };
 const HALF_LIFE_DAYS = 3;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-function scoreCorpusItem(item: CorpusItem, now: number): number {
-  const tier = SOURCE_TIER.get(item.source) ?? 4;
+function scoreCorpusItem(
+  item: CorpusItem,
+  now: number,
+  earningsDay: boolean,
+): number {
+  let tier = SOURCE_TIER.get(item.source) ?? 4;
+  if (earningsDay && item.source === EARNINGS_TRANSCRIPTS_DISPLAY_NAME) {
+    tier = EARNINGS_PROMOTED_TIER;
+  }
   const tierWeight = TIER_WEIGHTS[tier] ?? 1;
   const ageDays = Math.max(0, (now - item.publishedAt.getTime()) / MS_PER_DAY);
   const decay = Math.exp((-Math.LN2 * ageDays) / HALF_LIFE_DAYS);
@@ -744,9 +756,17 @@ export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
     candidates.push(row);
   }
 
-  // Then rank by tier × recency and take the top N.
+  // Then rank by tier × recency and take the top N. Earnings transcripts get
+  // a tier promotion when the mega-cap reporting cluster lands so a single
+  // 4/30-style cluster of 5+ transcripts can lead the corpus instead of
+  // being out-weighted by lab announcements.
   const now = Date.now();
-  candidates.sort((a, b) => scoreCorpusItem(b, now) - scoreCorpusItem(a, now));
+  const earningsDay = isEarningsDay(rows);
+  candidates.sort(
+    (a, b) =>
+      scoreCorpusItem(b, now, earningsDay) -
+      scoreCorpusItem(a, now, earningsDay),
+  );
   return candidates.slice(0, CORPUS_MAX_ITEMS);
 }
 
