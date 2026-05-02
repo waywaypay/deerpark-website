@@ -2,7 +2,12 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { ingestAllSources } from "../lib/ingest-headlines";
-import { SOURCES } from "../lib/headline-sources";
+import {
+  SOURCES,
+  EARNINGS_TRANSCRIPTS_DISPLAY_NAME,
+  EARNINGS_PROMOTED_TIER,
+  isEarningsDay,
+} from "../lib/headline-sources";
 
 const router: IRouter = Router();
 
@@ -34,8 +39,15 @@ const TIER_WEIGHTS: Record<number, number> = { 1: 4, 2: 3, 3: 2, 4: 1 };
 const HALF_LIFE_DAYS = 3;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-const scoreItem = (row: HeadlineRow, now: number): number => {
-  const tier = SOURCE_TIER.get(row.source) ?? 4;
+const scoreItem = (
+  row: HeadlineRow,
+  now: number,
+  earningsDay: boolean,
+): number => {
+  let tier = SOURCE_TIER.get(row.source) ?? 4;
+  if (earningsDay && row.source === EARNINGS_TRANSCRIPTS_DISPLAY_NAME) {
+    tier = EARNINGS_PROMOTED_TIER;
+  }
   const tierWeight = TIER_WEIGHTS[tier] ?? 1;
   const ageDays = Math.max(0, (now - row.publishedAt.getTime()) / MS_PER_DAY);
   const decay = Math.exp(-Math.LN2 * ageDays / HALF_LIFE_DAYS);
@@ -82,7 +94,11 @@ router.get("/headlines", async (req, res) => {
         publishedAt: new Date(r["published_at"] as string | Date),
       }));
       const now = Date.now();
-      candidates.sort((a, b) => scoreItem(b, now) - scoreItem(a, now));
+      const earningsDay = isEarningsDay(candidates);
+      candidates.sort(
+        (a, b) =>
+          scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay),
+      );
       const rows = candidates.slice(0, limit);
       res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
       return res.json({ items: rows, mode, days });
