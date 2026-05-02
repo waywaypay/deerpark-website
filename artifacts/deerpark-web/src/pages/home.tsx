@@ -1,7 +1,7 @@
 import React, { FormEvent, useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar } from "lucide-react";
 import { FadeIn, Navbar, Footer, AssessmentFAB } from "@/components/site-layout";
 import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
 
@@ -395,7 +395,7 @@ const CASE_STUDIES: CaseStudyData[] = [
 
 const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => (
   <div className="grid lg:grid-cols-12 gap-12">
-    <FadeIn className="lg:col-span-4 min-w-0">
+    <div className="lg:col-span-4 min-w-0">
       <div className="flex items-center gap-3 mb-8">
         <div className="h-[1px] w-12 bg-background/40"></div>
         <span className="section-label !text-background/60">Case Study · {data.eyebrow}</span>
@@ -425,9 +425,9 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => (
           ))}
         </dl>
       </div>
-    </FadeIn>
+    </div>
 
-    <FadeIn delay={0.15} className="lg:col-span-8 min-w-0">
+    <div className="lg:col-span-8 min-w-0">
       <div className="border border-background/20 p-8 lg:p-10">
         <div className="section-label !text-background/60 mb-6">What we delivered</div>
         <div className="divide-y divide-background/15">
@@ -445,27 +445,84 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => (
           </div>
         </div>
       </div>
-    </FadeIn>
+    </div>
   </div>
 );
 
-const CaseStudy = () => (
-  <section id="case-study" className="py-32 border-t border-foreground/15 bg-foreground text-background">
-    <div className="max-w-7xl mx-auto px-6 space-y-24">
-      {CASE_STUDIES.map((cs, i) => (
-        <div
-          key={cs.id}
-          // Visual divider between cases. The first case has none above it
-          // (the section's own border-t handles that); subsequent cases get
-          // a faint band so the eye registers them as separate stories.
-          className={i > 0 ? "pt-24 border-t border-background/15" : undefined}
-        >
-          <CaseStudyBlock data={cs} />
+const CaseStudy = () => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const total = CASE_STUDIES.length;
+  const active = CASE_STUDIES[activeIndex];
+
+  const goTo = (next: number) => {
+    setDirection(next > activeIndex ? 1 : -1);
+    setActiveIndex((next + total) % total);
+  };
+  const prev = () => goTo(activeIndex - 1);
+  const next = () => goTo(activeIndex + 1);
+
+  return (
+    <section id="case-study" className="py-32 border-t border-foreground/15 bg-foreground text-background overflow-hidden">
+      <div className="max-w-7xl mx-auto px-6">
+        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-12 pb-6 border-b border-background/15">
+          <div className="flex items-center gap-3">
+            <div className="h-[1px] w-12 bg-background/40" />
+            <span className="section-label !text-background/60">Case Studies</span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {CASE_STUDIES.map((cs, i) => (
+              <button
+                key={cs.id}
+                type="button"
+                onClick={() => goTo(i)}
+                aria-pressed={i === activeIndex}
+                className={`px-4 py-2 text-[10px] uppercase tracking-[0.18em] font-sans border transition-colors ${
+                  i === activeIndex
+                    ? "border-background bg-background text-foreground"
+                    : "border-background/25 text-background/60 hover:text-background hover:border-background/60"
+                }`}
+              >
+                {cs.eyebrow}
+              </button>
+            ))}
+            <div className="ml-2 flex items-center gap-1">
+              <button
+                type="button"
+                onClick={prev}
+                aria-label="Previous case study"
+                className="w-10 h-10 border border-background/25 hover:border-background/70 hover:bg-background/5 flex items-center justify-center transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="px-2 text-xs font-light tabular-nums text-background/60">
+                {activeIndex + 1} / {total}
+              </span>
+              <button
+                type="button"
+                onClick={next}
+                aria-label="Next case study"
+                className="w-10 h-10 border border-background/25 hover:border-background/70 hover:bg-background/5 flex items-center justify-center transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
-      ))}
-    </div>
-  </section>
-);
+
+        <motion.div
+          key={active.id}
+          initial={{ opacity: 0, x: 24 * direction }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+        >
+          <CaseStudyBlock data={active} />
+        </motion.div>
+      </div>
+    </section>
+  );
+};
 
 
 const FAQ_ITEMS = [
