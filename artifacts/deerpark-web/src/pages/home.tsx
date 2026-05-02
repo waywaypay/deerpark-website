@@ -447,7 +447,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
       <div className={`min-w-0 ${hasMockup ? "lg:col-span-7" : "lg:col-span-4"}`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-background/40"></div>
-          <span className="section-label !text-background/60">Case Study · {data.eyebrow}</span>
+          <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
         </div>
         <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
           {data.headline}

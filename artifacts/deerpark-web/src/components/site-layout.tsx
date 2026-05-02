@@ -35,7 +35,7 @@ type HashLink = { href: string; label: string };
 
 const NAV_HASH_LINKS_BEFORE_AGENTS: HashLink[] = [
   { href: "/#services", label: "Services" },
-  { href: "/#case-study", label: "Case Study" },
+  { href: "/#case-study", label: "Case Studies" },
 ];
 
 const NavHashLink = ({
@@ -215,7 +215,7 @@ export const Footer = () => (
         <div>
           <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Company</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
-            <li><a href="/#case-study" className="hover:text-foreground transition-colors">Case Study</a></li>
+            <li><a href="/#case-study" className="hover:text-foreground transition-colors">Case Studies</a></li>
             <li className="pt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground">Agents</li>
             {AGENT_LINKS.map(({ href, label }) => (
               <li key={href} className="pl-2">
