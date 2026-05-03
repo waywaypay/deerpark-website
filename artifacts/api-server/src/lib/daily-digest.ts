@@ -206,6 +206,24 @@ export async function runDailyDigest(): Promise<Post | null> {
   return best;
 }
 
+/**
+ * Self-healing schema migration. The digest column was added in the same PR
+ * that introduced this scheduler, but pushing the schema separately via
+ * `drizzle-kit push` is fragile (depends on a clean local checkout + the
+ * developer not skipping the prompt). This guarantees the column exists by
+ * the time the first tick runs. Idempotent: ALTER ... IF NOT EXISTS is a
+ * no-op on subsequent boots.
+ */
+export async function ensureSchema(): Promise<void> {
+  await db.execute(sql`
+    ALTER TABLE posts ADD COLUMN IF NOT EXISTS sent_to_substack_at TIMESTAMPTZ
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS posts_sent_to_substack_at_idx
+    ON posts (sent_to_substack_at)
+  `);
+}
+
 let digestHandle: NodeJS.Timeout | null = null;
 
 /**
@@ -217,6 +235,14 @@ let digestHandle: NodeJS.Timeout | null = null;
  */
 export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
   if (digestHandle) return;
+
+  // Run the idempotent migration once at scheduler start. Awaiting at
+  // module-init level isn't possible in our boot sequence, so we kick this
+  // off and let the first tick (60s later) wait on it implicitly via the
+  // alreadySentToday query — by then the column exists.
+  ensureSchema().catch((err) => {
+    logger.error({ err }, "Daily digest: ensureSchema failed");
+  });
 
   const tick = async () => {
     const cfg = readConfig();
