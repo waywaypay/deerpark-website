@@ -782,13 +782,10 @@ const LeadCapture = () => {
       });
 
       if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
         const message =
           response.status === 400
             ? "Please check your entries and try again."
-            : body?.error ?? "Something went wrong. Please try again shortly.";
+            : "Something went wrong on our end. Please email contact@deerpark.io or try again in a few minutes.";
         setStatus({ state: "error", message });
         return;
       }

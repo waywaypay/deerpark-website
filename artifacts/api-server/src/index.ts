@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startHeadlineScheduler } from "./lib/ingest-headlines";
 import { startWriterScheduler } from "./lib/writer-agent";
 import { startDailyDigestScheduler } from "./lib/daily-digest";
+import { ensureLeadsSchema } from "./routes/leads";
 
 const rawPort = process.env["PORT"];
 
@@ -25,6 +26,10 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  ensureLeadsSchema().catch((schemaErr) => {
+    logger.error({ err: schemaErr }, "Leads: ensureSchema failed");
+  });
 
   if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
     const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
