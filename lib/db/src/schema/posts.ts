@@ -22,9 +22,11 @@ export const postsTable = pgTable(
     costUsd: text("cost_usd"),
     publishedAt: timestamp("published_at", { withTimezone: true }).defaultNow().notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    sentToSubstackAt: timestamp("sent_to_substack_at", { withTimezone: true }),
   },
   (t) => [
     index("posts_published_at_idx").on(t.publishedAt),
+    index("posts_sent_to_substack_at_idx").on(t.sentToSubstackAt),
   ],
 );
 

@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startHeadlineScheduler } from "./lib/ingest-headlines";
 import { startWriterScheduler } from "./lib/writer-agent";
+import { startDailyDigestScheduler } from "./lib/daily-digest";
 
 const rawPort = process.env["PORT"];
 
@@ -37,6 +38,27 @@ app.listen(port, (err) => {
       logger.info("Writer scheduler started (12h tick, 36h floor — ~2-3 posts/week when corpus supports)");
     } else {
       logger.warn("LLM_API_KEY not set — writer scheduler disabled");
+    }
+  }
+
+  if (process.env["DISABLE_DAILY_DIGEST"] !== "1") {
+    const haveAll =
+      process.env["SUBSTACK_POSTING_EMAIL"] &&
+      process.env["DAILY_DIGEST_FROM_EMAIL"] &&
+      process.env["RESEND_API_KEY"];
+    if (haveAll) {
+      startDailyDigestScheduler();
+      logger.info(
+        {
+          hourUtc: process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13",
+          minuteUtc: process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0",
+        },
+        "Daily digest scheduler started (weekdays only, posts to Substack as draft)",
+      );
+    } else {
+      logger.warn(
+        "Daily digest disabled — set SUBSTACK_POSTING_EMAIL, DAILY_DIGEST_FROM_EMAIL, RESEND_API_KEY to enable",
+      );
     }
   }
 });
