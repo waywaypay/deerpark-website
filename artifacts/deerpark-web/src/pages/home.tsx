@@ -1,7 +1,7 @@
 import React, { FormEvent, useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin } from "lucide-react";
 import { FadeIn, Navbar, Footer, AssessmentFAB } from "@/components/site-layout";
 import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
 
@@ -320,6 +320,34 @@ type CaseStudyData = {
   mockup?: React.ReactNode;
 };
 
+const SCHEDULE_MEETINGS = [
+  {
+    time: "9:30 AM",
+    title: "Q1 Review",
+    location: "The Carlyle · Penthouse",
+    attendees: 3,
+  },
+  {
+    time: "11:00 AM",
+    title: "Strategy Brief",
+    location: "Aman, Library Room",
+    attendees: 4,
+    accent: true,
+  },
+  {
+    time: "2:00 PM",
+    title: "Investor Update",
+    location: "500 5th Ave · Floor 42",
+    attendees: 2,
+  },
+  {
+    time: "4:30 PM",
+    title: "Portfolio Sync",
+    location: "The Lambs Club",
+    attendees: 6,
+  },
+] as const;
+
 const SchedulingPhoneMockup = () => (
   <div className="relative mx-auto w-full max-w-[260px]">
     <div className="relative aspect-[9/19.5] rounded-[2.75rem] bg-neutral-900 p-[10px] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.55)] ring-1 ring-background/10">
@@ -329,38 +357,41 @@ const SchedulingPhoneMockup = () => (
           <span>9:41</span>
           <span className="opacity-40">•••</span>
         </div>
-        <div className="px-5 pt-2 pb-3.5 border-b border-foreground/10">
-          <div className="text-[8px] uppercase tracking-[0.2em] text-foreground/50 font-sans">Today · Mar 12</div>
-          <div className="text-[15px] font-serif mt-1 leading-tight">Q1 Review · 6 attendees</div>
+        <div className="px-5 pt-2 pb-3 border-b border-foreground/10 flex items-end justify-between gap-2">
+          <div>
+            <div className="text-[8px] uppercase tracking-[0.2em] text-foreground/50 font-sans">Tuesday</div>
+            <div className="text-[15px] font-serif mt-0.5 leading-tight">Mar 12, 2026</div>
+          </div>
+          <div className="text-[8px] uppercase tracking-[0.15em] text-foreground/45 font-sans pb-0.5">4 mtgs</div>
         </div>
-        <div className="p-3 space-y-2">
-          {[
-            { initial: "M", name: "Margaret Chen", role: "CFO · Northwind", note: "Recently led $40M raise", accent: true },
-            { initial: "D", name: "David Park", role: "Founder · Veridian", note: "Background: ML infra" },
-            { initial: "A", name: "Aisha Rahman", role: "Partner · Sequoia East", note: "Focus: B2B platforms" },
-            { initial: "T", name: "Tom Bauer", role: "VP Ops · Helios Group", note: "12 yrs at portfolio firm" },
-          ].map((a) => (
+        <div className="p-2.5 space-y-2">
+          {SCHEDULE_MEETINGS.map((m) => (
             <div
-              key={a.name}
+              key={m.time}
               className={`border rounded-md p-2.5 ${
-                a.accent ? "border-primary/40 bg-primary/5" : "border-foreground/10 bg-foreground/[0.02]"
+                m.accent ? "border-primary/40 bg-primary/5" : "border-foreground/10 bg-foreground/[0.02]"
               }`}
             >
-              <div className="flex items-center gap-2.5">
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-serif shrink-0 ${
-                    a.accent ? "bg-primary/20 text-foreground" : "bg-foreground/10 text-foreground/60"
-                  }`}
-                >
-                  {a.initial}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-serif leading-tight">{a.name}</div>
-                  <div className="text-[8px] text-foreground/50 leading-tight truncate font-sans">{a.role}</div>
-                </div>
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-[10px] font-serif font-medium leading-tight truncate">{m.title}</div>
+                <div className="text-[8px] font-sans tabular-nums text-foreground/55 shrink-0">{m.time}</div>
               </div>
-              <div className="mt-1.5 pl-[2.4rem] text-[8px] text-foreground/55 leading-snug font-sans">
-                {a.note}
+              <div className="mt-1.5 flex items-center gap-1 text-[8px] text-foreground/55 font-sans">
+                <MapPin className="w-2.5 h-2.5 shrink-0" />
+                <span className="truncate">{m.location}</span>
+              </div>
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <div className="flex -space-x-1">
+                  {Array.from({ length: Math.min(m.attendees, 3) }).map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-3.5 h-3.5 rounded-full border border-background ${
+                        m.accent ? "bg-primary/30" : "bg-foreground/15"
+                      }`}
+                    />
+                  ))}
+                </div>
+                <span className="text-[8px] text-foreground/45 font-sans">{m.attendees} attendees</span>
               </div>
             </div>
           ))}
