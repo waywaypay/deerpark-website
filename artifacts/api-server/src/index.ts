@@ -53,7 +53,7 @@ app.listen(port, (err) => {
           hourUtc: process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13",
           minuteUtc: process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0",
         },
-        "Daily digest scheduler started (weekdays only, posts to Substack as draft)",
+        "Daily digest scheduler started (daily, posts to Substack as draft)",
       );
     } else {
       logger.warn(
