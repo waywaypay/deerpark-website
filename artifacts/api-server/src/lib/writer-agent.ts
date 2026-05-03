@@ -570,7 +570,36 @@ const extractSentence = (text: string, idx: number): string => {
 
 type ValidationError = { error: string; offendingSentence?: string };
 
-const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | ValidationError => {
+export type RecentPost = {
+  id: number;
+  title: string;
+  dek: string;
+  citations: string[];
+  publishedAt: Date;
+};
+
+// Topical-novelty config. Citation Jaccard similarity > 35% against any of
+// the last RECENT_POSTS_LOOKBACK posts → reject as a duplicate of that prior
+// piece. 35% is set just below the observed dup pair (50%) and above the
+// observed natural overlap of distinct posts on the same news week (~15%).
+const RECENT_POSTS_LOOKBACK = 5;
+const TOPICAL_OVERLAP_THRESHOLD = 0.35;
+
+function citationJaccard(a: string[], b: string[]): number {
+  if (a.length === 0 || b.length === 0) return 0;
+  const setA = new Set(a);
+  const setB = new Set(b);
+  let intersection = 0;
+  for (const url of setA) if (setB.has(url)) intersection++;
+  const union = setA.size + setB.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+const validateDraft = (
+  raw: RawDraft,
+  corpus: CorpusItem[],
+  recentPosts: RecentPost[] = [],
+): Draft | ValidationError => {
   if (raw.abort) {
     return { error: `Agent aborted: ${raw.rationale ?? "no rationale"}` };
   }
@@ -718,6 +747,20 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | ValidationE
   if (citations.length === 0) return { error: "No valid citations remain after filtering" };
   if (ids.length === 0) return { error: "No valid sourceHeadlineIds after filtering" };
 
+  // Topical novelty: reject if the draft's citation set substantially overlaps
+  // a recent post's. Without this, the agent re-runs on the same rolling 7-day
+  // corpus and re-selects the same evidence — producing back-to-back posts
+  // about the same cluster (observed: two posts 3 minutes apart, 50% overlap).
+  for (const prior of recentPosts) {
+    const overlap = citationJaccard(citations, prior.citations);
+    if (overlap >= TOPICAL_OVERLAP_THRESHOLD) {
+      const date = prior.publishedAt.toISOString().slice(0, 10);
+      return {
+        error: `Draft repeats prior post "${prior.title}" (${date}) — citation Jaccard ${(overlap * 100).toFixed(0)}% (threshold ${(TOPICAL_OVERLAP_THRESHOLD * 100).toFixed(0)}%). Pick a different angle or abort.`,
+      };
+    }
+  }
+
   return {
     mode: raw.mode as WriterMode,
     tag: raw.tag as WriterTag,
@@ -728,6 +771,40 @@ const validateDraft = (raw: RawDraft, corpus: CorpusItem[]): Draft | ValidationE
     sourceHeadlineIds: ids,
     rationale: raw.rationale ?? "",
   };
+};
+
+export async function loadRecentPosts(limit = RECENT_POSTS_LOOKBACK): Promise<RecentPost[]> {
+  const rows = await db
+    .select({
+      id: postsTable.id,
+      title: postsTable.title,
+      dek: postsTable.dek,
+      citations: postsTable.citations,
+      publishedAt: postsTable.publishedAt,
+    })
+    .from(postsTable)
+    .orderBy(desc(postsTable.publishedAt))
+    .limit(limit);
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    dek: r.dek,
+    citations: Array.isArray(r.citations) ? r.citations : [],
+    publishedAt: r.publishedAt,
+  }));
+}
+
+const formatRecentPosts = (posts: RecentPost[]): string => {
+  if (posts.length === 0) return "(no recent posts — first run)";
+  return posts
+    .map((p) => {
+      const date = p.publishedAt.toISOString().slice(0, 10);
+      const cites = p.citations.length
+        ? `\nCited URLs: ${p.citations.join(", ")}`
+        : "";
+      return `${date} — ${p.title}\nDek: ${p.dek}${cites}`;
+    })
+    .join("\n\n");
 };
 
 export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
@@ -801,6 +878,11 @@ export async function generateAndSavePost(opts: {
     return { ok: false, error: `Corpus too thin: ${corpus.length} items in window` };
   }
 
+  // Load recent posts so the agent knows what it has already covered. Without
+  // this it has no memory across runs and will re-pick the same cluster from
+  // the rolling corpus — the dup-pair root cause.
+  const recentPosts = await loadRecentPosts();
+
   // Per-request timeout. Without this, a hung Venice connection leaves the
   // run Promise pending forever and state stays "running" indefinitely.
   // 8 min is generous: Claude reasoning + body output runs ~4–6 min; this
@@ -814,6 +896,10 @@ export async function generateAndSavePost(opts: {
     modeHint === "auto"
       ? "Pick whichever mode the headlines best support."
       : `Mode hint: ${modeHint}. (You may override if the headlines don't support it — explain in rationale.)`,
+    "",
+    "Recent posts you (or your predecessor) have already published. Do NOT retread these — pick a substantively different thesis using different evidence. If every fresh angle the headlines support is already covered below, return { abort: true, rationale: \"...\" }.",
+    "",
+    formatRecentPosts(recentPosts),
     "",
     `Headlines (${corpus.length} items from the last ${opts.corpusDays ?? 7} days):`,
     formatCorpus(corpus),
@@ -932,7 +1018,7 @@ export async function generateAndSavePost(opts: {
       };
     }
 
-    const result = validateDraft(raw, corpus);
+    const result = validateDraft(raw, corpus, recentPosts);
     if (!("error" in result)) {
       validated = result;
       break;
@@ -950,10 +1036,11 @@ export async function generateAndSavePost(opts: {
     const isTitleCase = result.error.startsWith("Title looks like Title Case");
     const isCorpusWord = result.error.startsWith("Output contains the word 'corpus'");
     const isMetaAttrib = result.error.startsWith("Meta-reference attribution detected");
+    const isTopicalDup = result.error.startsWith("Draft repeats prior post");
 
     if (
       attempt < MAX_VALIDATION_ATTEMPTS &&
-      (isHallucinatedUrls || isAiTell || isTooShort || isTitleCase || isCorpusWord || isMetaAttrib)
+      (isHallucinatedUrls || isAiTell || isTooShort || isTitleCase || isCorpusWord || isMetaAttrib || isTopicalDup)
     ) {
       messages.push({ role: "assistant", content: turnText });
       let retryPrompt: string;
@@ -1019,6 +1106,18 @@ export async function generateAndSavePost(opts: {
           "Readers do not know you have a structured input. Never refer to your sources collectively as 'the corpus', 'the feed', 'the headlines', 'the dispatch', 'our list', or any similar meta-reference. Attribute by the actual publisher name (Anthropic, OpenAI, METR, TechCrunch, etc.) or remove the parenthetical. Replace any literal '(per …)' / '(per the corpus)' / 'per the headlines' phrasing with named attribution or no parenthetical at all.",
           "",
           "Rewrite ONLY the offending phrasing wherever it appears in the title, dek, or body. Keep every other sentence verbatim. Re-emit the FULL post in the SAME JSON schema, no prose around it.",
+        ].join("\n");
+      } else if (isTopicalDup) {
+        retryPrompt = [
+          `Your previous response was rejected: ${result.error}`,
+          "",
+          "These are the recent posts you cannot retread:",
+          "",
+          formatRecentPosts(recentPosts),
+          "",
+          "Pick a substantively different thesis from a different cluster of headlines in the corpus. Do not reuse more than ~2 of the previously-cited URLs. If the headlines genuinely don't support an angle distinct from those above, return { abort: true, rationale: \"...\" } — that is the correct outcome, not a forced rewrite of similar material.",
+          "",
+          "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
       } else {
         // Body-too-short retry — be explicit about the numbers because the
