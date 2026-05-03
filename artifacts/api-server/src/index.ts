@@ -43,9 +43,7 @@ app.listen(port, (err) => {
 
   if (process.env["DISABLE_DAILY_DIGEST"] !== "1") {
     const haveAll =
-      process.env["SUBSTACK_POSTING_EMAIL"] &&
-      process.env["DAILY_DIGEST_FROM_EMAIL"] &&
-      process.env["RESEND_API_KEY"];
+      process.env["DAILY_DIGEST_FROM_EMAIL"] && process.env["RESEND_API_KEY"];
     if (haveAll) {
       startDailyDigestScheduler();
       logger.info(
@@ -53,11 +51,11 @@ app.listen(port, (err) => {
           hourUtc: process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13",
           minuteUtc: process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0",
         },
-        "Daily digest scheduler started (daily, posts to Substack as draft)",
+        "Daily digest scheduler started (daily, sends best post directly to subscribers)",
       );
     } else {
       logger.warn(
-        "Daily digest disabled — set SUBSTACK_POSTING_EMAIL, DAILY_DIGEST_FROM_EMAIL, RESEND_API_KEY to enable",
+        "Daily digest disabled — set DAILY_DIGEST_FROM_EMAIL and RESEND_API_KEY to enable",
       );
     }
   }

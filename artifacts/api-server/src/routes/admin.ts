@@ -292,11 +292,24 @@ router.delete("/admin/writers/:id/prompt", async (req, res) => {
 
 router.post("/admin/digest/run", async (req, res) => {
   try {
-    const post = await runDailyDigest();
-    if (!post) {
-      return res.json({ ok: true, sent: null, reason: "no-op (already sent today, no candidates, or config incomplete) — see /admin/digest/status" });
+    const result = await runDailyDigest();
+    if (!result) {
+      return res.json({
+        ok: true,
+        sent: null,
+        reason:
+          "no-op (already sent today, no candidates, no active subscribers, or config incomplete) — see /api/digest/status",
+      });
     }
-    return res.json({ ok: true, sent: { id: post.id, title: post.title } });
+    return res.json({
+      ok: true,
+      post: { id: result.post.id, title: result.post.title },
+      sent: result.sent,
+      failed: result.failed,
+      // Don't echo full results — could leak emails. Sample first failure if any.
+      firstFailure:
+        result.results.find((r) => !r.ok)?.error ?? null,
+    });
   } catch (err) {
     req.log.error({ err }, "Manual digest run failed");
     return res.status(500).json({
