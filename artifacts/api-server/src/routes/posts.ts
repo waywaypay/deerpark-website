@@ -19,6 +19,7 @@ router.get("/posts", async (req, res) => {
         dek: postsTable.dek,
         bodyMarkdown: postsTable.bodyMarkdown,
         citations: postsTable.citations,
+        sourceHeadlineIds: postsTable.sourceHeadlineIds,
         publishedAt: postsTable.publishedAt,
       })
       .from(postsTable)

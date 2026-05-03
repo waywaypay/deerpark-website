@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { db, headlinesTable, postsTable } from "@workspace/db";
+import { desc, inArray, sql } from "drizzle-orm";
 import { ingestAllSources } from "../lib/ingest-headlines";
 import {
   SOURCES,
@@ -19,6 +19,43 @@ type HeadlineRow = {
   url: string;
   publishedAt: Date;
 };
+
+type CoveredBy = {
+  postId: number;
+  postTitle: string;
+  publishedAt: string;
+};
+
+// Build a map of headlineId → most-recent dispatch post that cited it.
+// We pull the recent post window once, then JS-join in memory — avoids a
+// jsonb_array_elements correlated subquery and keeps the SQL legible.
+async function loadCoveredByMap(days: number): Promise<Map<number, CoveredBy>> {
+  const recentPosts = await db
+    .select({
+      id: postsTable.id,
+      title: postsTable.title,
+      sourceHeadlineIds: postsTable.sourceHeadlineIds,
+      publishedAt: postsTable.publishedAt,
+    })
+    .from(postsTable)
+    .where(sql`${postsTable.publishedAt} >= NOW() - (${days} || ' days')::interval`)
+    .orderBy(desc(postsTable.publishedAt));
+
+  const map = new Map<number, CoveredBy>();
+  for (const p of recentPosts) {
+    for (const hid of p.sourceHeadlineIds ?? []) {
+      // First write wins because we iterate newest-first.
+      if (!map.has(hid)) {
+        map.set(hid, {
+          postId: p.id,
+          postTitle: p.title,
+          publishedAt: p.publishedAt.toISOString(),
+        });
+      }
+    }
+  }
+  return map;
+}
 
 /** Map SQL row keys from Drizzle execute() payload to HeadlineRow. */
 const mapSqlRowToHeadline = (
@@ -100,8 +137,10 @@ router.get("/headlines", async (req, res) => {
           scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay),
       );
       const rows = candidates.slice(0, limit);
+      const coveredBy = await loadCoveredByMap(30);
+      const items = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
       res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
-      return res.json({ items: rows, mode, days });
+      return res.json({ items, mode, days });
     }
 
     // mode === "latest" — strict recency with per-source cap.
@@ -121,10 +160,51 @@ router.get("/headlines", async (req, res) => {
     const rows: HeadlineRow[] = result.rows.map((r) =>
       mapSqlRowToHeadline(r as Record<string, unknown>),
     );
+    const coveredBy = await loadCoveredByMap(30);
+    const items = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
     res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
-    return res.json({ items: rows, mode });
+    return res.json({ items, mode });
   } catch (err) {
     req.log.error({ err }, "Failed to load headlines");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Lookup a small batch of headlines by ID. Used by the dispatch post detail
+// page to render "Reacting to" — the headlines this post cited.
+router.get("/headlines/by-ids", async (req, res) => {
+  const raw = String(req.query["ids"] ?? "");
+  const ids = raw
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n) && n > 0)
+    .slice(0, 25);
+
+  if (ids.length === 0) {
+    return res.json({ items: [] });
+  }
+
+  try {
+    const rows = await db
+      .select({
+        id: headlinesTable.id,
+        source: headlinesTable.source,
+        category: headlinesTable.category,
+        title: headlinesTable.title,
+        url: headlinesTable.url,
+        publishedAt: headlinesTable.publishedAt,
+      })
+      .from(headlinesTable)
+      .where(inArray(headlinesTable.id, ids));
+
+    // Preserve caller-specified order (lets the writer agent rank citations).
+    const order = new Map(ids.map((id, idx) => [id, idx]));
+    rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+
+    res.setHeader("Cache-Control", "public, max-age=300, s-maxage=900");
+    return res.json({ items: rows });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load headlines by ids");
     return res.status(500).json({ error: "Internal server error" });
   }
 });
