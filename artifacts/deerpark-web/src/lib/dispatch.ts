@@ -9,6 +9,7 @@ export type PostApiItem = {
   dek: string;
   bodyMarkdown: string;
   citations: string[];
+  sourceHeadlineIds: number[];
   publishedAt: string;
 };
 
@@ -19,6 +20,16 @@ export type DispatchEntry = {
   title: string;
   dek: string;
   tag: string;
+  sourceHeadlineIds?: number[];
+};
+
+export type CitedHeadline = {
+  id: number;
+  source: string;
+  category: string;
+  title: string;
+  url: string;
+  publishedAt: string;
 };
 
 export type DispatchWeek = {
@@ -107,6 +118,22 @@ export function usePosts() {
   });
 }
 
+export function useHeadlinesByIds(ids: number[] | undefined) {
+  const sortedIds = ids && ids.length > 0 ? [...ids].sort((a, b) => a - b) : [];
+  const key = sortedIds.join(",");
+  return useQuery<CitedHeadline[]>({
+    queryKey: ["headlines", "by-ids", key],
+    enabled: sortedIds.length > 0,
+    queryFn: async () => {
+      const res = await fetch(`/api/headlines/by-ids?ids=${encodeURIComponent(ids!.join(","))}`);
+      if (!res.ok) throw new Error(`Headlines lookup failed: ${res.status}`);
+      const data = (await res.json()) as { items: CitedHeadline[] };
+      return data.items;
+    },
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
 const SHORT_DATE_FMT = new Intl.DateTimeFormat("en-US", { weekday: "short" });
 const LONG_DATE_FMT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
 
@@ -157,6 +184,7 @@ export const groupPostsToWeeks = (posts: PostApiItem[]): DispatchWeek[] => {
           title: p.title,
           dek: p.dek,
           tag: p.tag,
+          sourceHeadlineIds: p.sourceHeadlineIds,
         };
       }),
     });

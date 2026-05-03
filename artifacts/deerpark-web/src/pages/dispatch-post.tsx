@@ -1,8 +1,8 @@
 import { Link, useRoute } from "wouter";
 import ReactMarkdown from "react-markdown";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, Rss } from "lucide-react";
 import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
-import { usePosts } from "@/lib/dispatch";
+import { usePosts, useHeadlinesByIds } from "@/lib/dispatch";
 
 const POST_DATE_FMT = new Intl.DateTimeFormat("en-US", {
   weekday: "long",
@@ -16,6 +16,8 @@ export default function DispatchPost() {
   const postId = params?.id ? Number(params.id) : null;
   const postsQuery = usePosts();
   const post = postsQuery.data?.find((p) => p.id === postId) ?? null;
+  const citedHeadlinesQuery = useHeadlinesByIds(post?.sourceHeadlineIds);
+  const citedHeadlines = (citedHeadlinesQuery.data ?? []).slice(0, 4);
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-foreground selection:text-background">
@@ -63,6 +65,35 @@ export default function DispatchPost() {
               <p className="text-lg md:text-xl text-muted-foreground font-light leading-relaxed mb-12 italic">
                 {post.dek}
               </p>
+              {citedHeadlines.length > 0 && (
+                <div className="mb-12 border-y border-foreground/15 py-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Rss className="w-3.5 h-3.5 text-foreground/60" />
+                    <span className="section-label">Reacting to</span>
+                  </div>
+                  <ul className="space-y-3">
+                    {citedHeadlines.map((h) => (
+                      <li key={h.id}>
+                        <a
+                          href={h.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group grid grid-cols-12 gap-4 items-baseline hover:bg-foreground/[0.02] -mx-2 px-2 py-1.5 transition-colors"
+                        >
+                          <div className="col-span-12 md:col-span-3 flex items-baseline gap-3">
+                            <span className="text-sm font-serif text-foreground">{h.source}</span>
+                            <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{h.category}</span>
+                          </div>
+                          <div className="col-span-12 md:col-span-9 text-sm font-light text-foreground/90 leading-snug flex items-start gap-2 group-hover:text-foreground transition-colors">
+                            <span>{h.title}</span>
+                            <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0 mt-1" />
+                          </div>
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               <div className="prose prose-neutral dark:prose-invert max-w-none prose-headings:font-serif prose-p:font-light prose-p:leading-relaxed prose-a:text-foreground prose-a:underline-offset-4">
                 <ReactMarkdown>{post.bodyMarkdown}</ReactMarkdown>
               </div>
