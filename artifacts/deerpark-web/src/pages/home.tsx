@@ -828,13 +828,13 @@ const LeadCapture = () => {
             <div className="mt-10 pt-8 border-t border-foreground/15">
               <div className="section-label mb-3">Prefer to skip the form?</div>
               <a
-                href="https://cal.com/deerpark/intro"
+                href="https://calendar.app.google/5PAVU7Ron83HShxi9"
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-3 text-sm text-foreground hover:text-foreground/70 transition-colors"
               >
                 <Calendar className="w-4 h-4" />
-                <span className="underline underline-offset-4">Book a 20-min intro call</span>
+                <span className="underline underline-offset-4">Book a 15-min intro call</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
               {SMS_ENABLED && SMS_NUMBER_E164 && (
