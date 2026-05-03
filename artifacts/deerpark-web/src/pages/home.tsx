@@ -48,7 +48,7 @@ const Hero = () => {
 
           <FadeIn delay={0.2}>
             <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-md mb-10 font-sans font-light">
-              We help organizations get ready for AI, build the applications their teams need, and train their people to run them. From exploring AI to operating it in six to eight weeks.
+              We help organizations get ready for AI, build the applications their teams need, and train their people to run them. From exploring AI to operating it in eight weeks.
             </p>
           </FadeIn>
 
@@ -90,7 +90,7 @@ const Hero = () => {
           <FadeIn delay={0.4}>
             <div className="flex gap-10 border-t border-foreground/15 pt-8">
                 {[
-                { stat: "6-8 wks", label: "from readiness review to live rollout" },
+                { stat: "8 wks", label: "from readiness review to live rollout" },
                 { stat: "100%", label: "code, prompts, and data stay in your accounts" },
               ].map(({ stat, label }) => (
                 <div key={stat}>
@@ -247,7 +247,7 @@ const Services = () => (
         <div className="hidden md:block mb-20 border border-foreground/15 bg-foreground/[0.02] p-8">
           <div className="flex items-baseline justify-between mb-6">
             <span className="section-label">Engagement timeline</span>
-            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-sans">6–8 weeks · kickoff to handoff</span>
+            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-sans">8 weeks · kickoff to handoff</span>
           </div>
           <div className="grid grid-cols-8 gap-px mb-3 border-b border-foreground/10 pb-3">
             {Array.from({ length: 8 }, (_, i) => (
@@ -419,8 +419,8 @@ const CASE_STUDIES: CaseStudyData[] = [
     after:
       "One web app. A single source of truth across every site, with AI handling the routine edits and conflict checks.",
     metrics: [
-      { label: "Kickoff to prod", value: "6–8 wks" },
-      { label: "Manual effort", value: "−90%" },
+      { label: "Kickoff to prod", value: "8 wks" },
+      { label: "Reporting time", value: "−94%" },
       { label: "Rolled out", value: "40+ clients" },
     ],
     delivered: [
