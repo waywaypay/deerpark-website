@@ -6,6 +6,7 @@ import postsRouter from "./posts";
 import digestRouter from "./digest";
 import adminRouter from "./admin";
 import subscribeRouter from "./subscribe";
+import unsubscribeRouter from "./unsubscribe";
 import smsRouter from "./sms";
 import smsAdminRouter from "./sms-admin";
 
@@ -18,6 +19,7 @@ router.use(postsRouter);
 router.use(digestRouter);
 router.use(adminRouter);
 router.use(subscribeRouter);
+router.use(unsubscribeRouter);
 router.use(smsRouter);
 router.use(smsAdminRouter);
 

@@ -1,4 +1,4 @@
-import { db, postsTable, type Post } from "@workspace/db";
+import { db, postsTable, subscribersTable, type Post } from "@workspace/db";
 import { and, desc, gte, isNull, sql } from "drizzle-orm";
 import { marked } from "marked";
 import { logger } from "./logger";
@@ -6,42 +6,52 @@ import { logger } from "./logger";
 const RESEND_API = "https://api.resend.com/emails";
 
 type DigestConfig = {
-  postingEmail: string;
   fromEmail: string;
   resendApiKey: string;
   hourUtc: number;
   minuteUtc: number;
-  /** Optional: Substack URL to link the public archive in the email footer. */
-  substackUrl?: string;
+  /** Public archive link in the email footer. */
+  archiveUrl: string;
+  /** Base URL for the unsubscribe link. */
+  publicBaseUrl: string;
 };
 
-/** Public-safe view of config state — booleans only, no secret values. */
+/**
+ * Trim whitespace and strip outer quotes from a config value. Common failure
+ * mode: env values pasted with surrounding quotes which `fly secrets set` then
+ * stores literally.
+ */
+function sanitizeEnv(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
+  let v = raw.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
+/** Public-safe view of config state. */
 export function digestConfigStatus(): {
-  hasSubstackEmail: boolean;
   hasFromEmail: boolean;
   hasResendKey: boolean;
   hourUtc: number;
   minuteUtc: number;
   ready: boolean;
 } {
-  const hasSubstackEmail = Boolean(process.env["SUBSTACK_POSTING_EMAIL"]);
-  const hasFromEmail = Boolean(process.env["DAILY_DIGEST_FROM_EMAIL"]);
-  const hasResendKey = Boolean(process.env["RESEND_API_KEY"]);
+  const hasFromEmail = Boolean(sanitizeEnv(process.env["DAILY_DIGEST_FROM_EMAIL"]));
+  const hasResendKey = Boolean(sanitizeEnv(process.env["RESEND_API_KEY"]));
   return {
-    hasSubstackEmail,
     hasFromEmail,
     hasResendKey,
     hourUtc: Number(process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13"),
     minuteUtc: Number(process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0"),
-    ready: hasSubstackEmail && hasFromEmail && hasResendKey,
+    ready: hasFromEmail && hasResendKey,
   };
 }
 
 function readConfig(): DigestConfig | { error: string } {
-  const postingEmail = process.env["SUBSTACK_POSTING_EMAIL"];
-  const fromEmail = process.env["DAILY_DIGEST_FROM_EMAIL"];
-  const resendApiKey = process.env["RESEND_API_KEY"];
-  if (!postingEmail) return { error: "SUBSTACK_POSTING_EMAIL not set" };
+  const fromEmail = sanitizeEnv(process.env["DAILY_DIGEST_FROM_EMAIL"]);
+  const resendApiKey = sanitizeEnv(process.env["RESEND_API_KEY"]);
   if (!fromEmail) return { error: "DAILY_DIGEST_FROM_EMAIL not set" };
   if (!resendApiKey) return { error: "RESEND_API_KEY not set" };
 
@@ -55,12 +65,12 @@ function readConfig(): DigestConfig | { error: string } {
   }
 
   return {
-    postingEmail,
     fromEmail,
     resendApiKey,
     hourUtc,
     minuteUtc,
-    substackUrl: process.env["SUBSTACK_URL"] ?? "https://deerparkai.substack.com",
+    archiveUrl: sanitizeEnv(process.env["SUBSTACK_URL"]) ?? "https://deerparkai.substack.com",
+    publicBaseUrl: sanitizeEnv(process.env["PUBLIC_API_BASE_URL"]) ?? "https://deerpark-api.fly.dev",
   };
 }
 
@@ -89,10 +99,9 @@ export function pickBestPost(candidates: Post[]): Post | null {
 }
 
 /**
- * Posts created in the last 24h that have not yet been sent to Substack.
- * The 24h window matches our daily cadence — if we miss a day, the next
- * tick still picks the freshest unsent post rather than retroactively
- * shipping yesterday's leftovers.
+ * Posts created in the last 24h that haven't been sent yet. The 24h window
+ * matches our daily cadence — a missed day picks up the freshest unsent post,
+ * not yesterday's leftover.
  */
 export async function loadCandidates(): Promise<Post[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -114,6 +123,27 @@ async function alreadySentToday(): Promise<boolean> {
   return first ? Number(first.count) > 0 : false;
 }
 
+/** Active subscribers (not unsubscribed), with a guaranteed unsubscribe token. */
+export async function loadActiveSubscribers(): Promise<
+  Array<{ email: string; unsubscribeToken: string }>
+> {
+  // Backfill missing tokens — cheap (only affects legacy rows). The unique
+  // constraint on the column makes this idempotent across racing instances.
+  await db.execute(sql`
+    UPDATE subscribers
+    SET unsubscribe_token = gen_random_uuid()::text
+    WHERE unsubscribe_token IS NULL
+  `);
+
+  const rows = await db
+    .select({ email: subscribersTable.email, unsubscribeToken: subscribersTable.unsubscribeToken })
+    .from(subscribersTable)
+    .where(isNull(subscribersTable.unsubscribedAt));
+
+  return rows
+    .filter((r): r is { email: string; unsubscribeToken: string } => r.unsubscribeToken !== null);
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -123,21 +153,43 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#039;");
 }
 
-export function renderEmailHtml(post: Post, substackUrl?: string): string {
+/**
+ * Render the email body for a single recipient. Includes the personalized
+ * unsubscribe link in the footer.
+ */
+export function renderEmailHtml(
+  post: Post,
+  unsubscribeUrl: string,
+  archiveUrl: string,
+): string {
   const body = marked.parse(post.bodyMarkdown, { async: false }) as string;
   const citations = post.citations.length
     ? `<hr><h4>Sources</h4><ol>${post.citations
-        .map((c) => `<li>${escapeHtml(c)}</li>`)
+        .map((c) => `<li><a href="${escapeHtml(c)}">${escapeHtml(c)}</a></li>`)
         .join("")}</ol>`
     : "";
-  const footer = substackUrl
-    ? `<hr><p style="color:#666;font-size:12px;">Drafted automatically by the Deer Park writer agent. Archive: <a href="${escapeHtml(substackUrl)}">${escapeHtml(substackUrl)}</a></p>`
-    : "";
-  return `<h1>${escapeHtml(post.title)}</h1><p><em>${escapeHtml(post.dek)}</em></p>${body}${citations}${footer}`;
+  const footer = `<hr><p style="color:#666;font-size:12px;line-height:1.5;">From the Deer Park writer agent. <a href="${escapeHtml(archiveUrl)}">Archive</a> &middot; <a href="${escapeHtml(unsubscribeUrl)}">Unsubscribe</a></p>`;
+  return `<h1>${escapeHtml(post.title)}</h1><p style="font-size:18px;color:#444;"><em>${escapeHtml(post.dek)}</em></p>${body}${citations}${footer}`;
 }
 
-async function sendEmail(post: Post, cfg: DigestConfig): Promise<void> {
-  const html = renderEmailHtml(post, cfg.substackUrl);
+function renderEmailText(post: Post, unsubscribeUrl: string): string {
+  const sources = post.citations.length
+    ? `\n\nSources:\n${post.citations.map((c) => `- ${c}`).join("\n")}`
+    : "";
+  return `${post.title}\n\n${post.dek}\n\n${post.bodyMarkdown}${sources}\n\n---\nUnsubscribe: ${unsubscribeUrl}`;
+}
+
+type SendResult = { recipient: string; ok: boolean; error?: string };
+
+async function sendOne(
+  post: Post,
+  recipient: { email: string; unsubscribeToken: string },
+  cfg: DigestConfig,
+): Promise<SendResult> {
+  const unsubscribeUrl = `${cfg.publicBaseUrl}/api/unsubscribe?token=${encodeURIComponent(recipient.unsubscribeToken)}`;
+  const html = renderEmailHtml(post, unsubscribeUrl, cfg.archiveUrl);
+  const text = renderEmailText(post, unsubscribeUrl);
+
   const res = await fetch(RESEND_API, {
     method: "POST",
     headers: {
@@ -146,16 +198,23 @@ async function sendEmail(post: Post, cfg: DigestConfig): Promise<void> {
     },
     body: JSON.stringify({
       from: cfg.fromEmail,
-      to: [cfg.postingEmail],
+      to: [recipient.email],
       subject: post.title,
       html,
-      text: `${post.title}\n\n${post.dek}\n\n${post.bodyMarkdown}`,
+      text,
+      // RFC 8058 one-click unsubscribe header. Gmail/Yahoo prefer this.
+      headers: {
+        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
     }),
   });
+
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new Error(`Resend failed (${res.status}): ${body}`);
+    return { recipient: recipient.email, ok: false, error: `${res.status}: ${body}` };
   }
+  return { recipient: recipient.email, ok: true };
 }
 
 async function markSent(postId: number): Promise<void> {
@@ -165,10 +224,13 @@ async function markSent(postId: number): Promise<void> {
 }
 
 /**
- * Run one digest send. Idempotent: if a send has already happened today (UTC),
- * does nothing. Returns the post that was sent, or null if nothing was sent.
+ * Run one digest send. Idempotent: at most one send per UTC day. Returns the
+ * post sent and per-recipient results, or null if nothing was sent.
  */
-export async function runDailyDigest(): Promise<Post | null> {
+export async function runDailyDigest(): Promise<
+  | { post: Post; sent: number; failed: number; results: SendResult[] }
+  | null
+> {
   const cfg = readConfig();
   if ("error" in cfg) {
     logger.warn({ reason: cfg.error }, "Daily digest skipped — config incomplete");
@@ -186,6 +248,12 @@ export async function runDailyDigest(): Promise<Post | null> {
     return null;
   }
 
+  const subscribers = await loadActiveSubscribers();
+  if (subscribers.length === 0) {
+    logger.warn("Daily digest skipped — no active subscribers");
+    return null;
+  }
+
   const best = pickBestPost(candidates);
   if (!best) return null;
 
@@ -195,24 +263,51 @@ export async function runDailyDigest(): Promise<Post | null> {
       title: best.title,
       mode: best.mode,
       candidates: candidates.length,
+      subscribers: subscribers.length,
     },
-    "Daily digest: sending best-of-day to Substack",
+    "Daily digest: sending best-of-day to subscribers",
   );
 
-  await sendEmail(best, cfg);
-  await markSent(best.id);
+  // Per-recipient send. Sequential with a small gap to stay under Resend's
+  // rate limit (2 req/s on the free tier). Small lists; fine for now.
+  const results: SendResult[] = [];
+  for (const sub of subscribers) {
+    try {
+      const r = await sendOne(best, sub, cfg);
+      results.push(r);
+      if (!r.ok) {
+        logger.warn({ recipient: r.recipient, error: r.error }, "Daily digest: per-recipient send failed");
+      }
+    } catch (err) {
+      results.push({
+        recipient: sub.email,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    // 600ms gap → ~1.6 req/s, comfortably under Resend's 2 req/s free-tier limit.
+    await new Promise((r) => setTimeout(r, 600));
+  }
 
-  logger.info({ postId: best.id }, "Daily digest: sent");
-  return best;
+  const sent = results.filter((r) => r.ok).length;
+  const failed = results.length - sent;
+
+  // Mark the post sent if AT LEAST ONE recipient got it. That preserves
+  // idempotency (no duplicate sends tomorrow) without losing the send to
+  // a single bad address.
+  if (sent > 0) {
+    await markSent(best.id);
+  }
+
+  logger.info({ postId: best.id, sent, failed }, "Daily digest: complete");
+  return { post: best, sent, failed, results };
 }
 
 /**
- * Self-healing schema migration. The digest column was added in the same PR
- * that introduced this scheduler, but pushing the schema separately via
- * `drizzle-kit push` is fragile (depends on a clean local checkout + the
- * developer not skipping the prompt). This guarantees the column exists by
- * the time the first tick runs. Idempotent: ALTER ... IF NOT EXISTS is a
- * no-op on subsequent boots.
+ * Self-healing schema migration. Adds the `sent_to_substack_at` column to
+ * posts and the `unsubscribe_token` / `unsubscribed_at` columns to subscribers
+ * if they're missing, and backfills tokens for legacy subscriber rows.
+ * Idempotent; safe to run on every boot.
  */
 export async function ensureSchema(): Promise<void> {
   await db.execute(sql`
@@ -222,24 +317,30 @@ export async function ensureSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS posts_sent_to_substack_at_idx
     ON posts (sent_to_substack_at)
   `);
+  await db.execute(sql`
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS unsubscribe_token TEXT UNIQUE
+  `);
+  await db.execute(sql`
+    ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMPTZ
+  `);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS subscribers_unsubscribed_at_idx
+    ON subscribers (unsubscribed_at)
+  `);
+  // pgcrypto for gen_random_uuid() — most Postgres installs have it; harmless if already enabled.
+  await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
 }
 
 let digestHandle: NodeJS.Timeout | null = null;
 
 /**
- * Tick every 5 minutes. On each tick, if the current UTC time has crossed
- * the configured send time, run the digest. The actual send is idempotent
- * (checks `alreadySentToday`), so the 5-minute granularity is a recovery
- * window — if the server restarts or a tick misses, the next tick within
- * the window still ships.
+ * Tick every 5 minutes. After the configured target time, on any tick where
+ * no send has happened today, run the digest. `alreadySentToday()` is the
+ * actual double-send guard; the time check is just "not too early."
  */
 export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
   if (digestHandle) return;
 
-  // Run the idempotent migration once at scheduler start. Awaiting at
-  // module-init level isn't possible in our boot sequence, so we kick this
-  // off and let the first tick (60s later) wait on it implicitly via the
-  // alreadySentToday query — by then the column exists.
   ensureSchema().catch((err) => {
     logger.error({ err }, "Daily digest: ensureSchema failed");
   });
@@ -252,9 +353,6 @@ export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
     const targetMin = cfg.hourUtc * 60 + cfg.minuteUtc;
     const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
     if (nowMin < targetMin) return; // too early; wait for the configured hour
-    // No upper bound: if the machine was down at the target time, we still
-    // want to ship today's digest as soon as it's back. `alreadySentToday`
-    // is the actual double-send guard.
 
     try {
       await runDailyDigest();
@@ -263,7 +361,27 @@ export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
     }
   };
 
-  // First tick after 60s (let server settle), then every interval.
   setTimeout(() => void tick(), 60_000);
   digestHandle = setInterval(() => void tick(), intervalMs);
+}
+
+/**
+ * Mark a subscriber as unsubscribed by token. Idempotent — repeat clicks are
+ * fine. Returns the email that was unsubscribed (for the confirmation page),
+ * or null if the token was unknown.
+ */
+export async function unsubscribeByToken(token: string): Promise<string | null> {
+  if (!token) return null;
+  // Look up first so we can return the email; UPDATE ... RETURNING would be one round-trip
+  // but Drizzle's exec API doesn't surface it cleanly. Two queries is fine here.
+  const rows = await db.execute<{ email: string }>(sql`
+    SELECT email FROM subscribers WHERE unsubscribe_token = ${token}
+  `);
+  const email = rows.rows[0]?.email ?? null;
+  if (!email) return null;
+  await db.execute(sql`
+    UPDATE subscribers SET unsubscribed_at = COALESCE(unsubscribed_at, NOW())
+    WHERE unsubscribe_token = ${token}
+  `);
+  return email;
 }
