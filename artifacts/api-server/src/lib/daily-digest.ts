@@ -187,11 +187,11 @@ export async function runDailyDigest(): Promise<Post | null> {
 let digestHandle: NodeJS.Timeout | null = null;
 
 /**
- * Tick every 5 minutes. On each tick, if it's a weekday and the current UTC
- * time has crossed the configured send time, run the digest. The actual send
- * is idempotent (checks `alreadySentToday`), so the 5-minute granularity is
- * a recovery window — if the server restarts or a tick misses, the next
- * tick within the window still ships.
+ * Tick every 5 minutes. On each tick, if the current UTC time has crossed
+ * the configured send time, run the digest. The actual send is idempotent
+ * (checks `alreadySentToday`), so the 5-minute granularity is a recovery
+ * window — if the server restarts or a tick misses, the next tick within
+ * the window still ships.
  */
 export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
   if (digestHandle) return;
@@ -201,9 +201,6 @@ export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
     if ("error" in cfg) return;
 
     const now = new Date();
-    const dayUtc = now.getUTCDay();
-    if (dayUtc === 0 || dayUtc === 6) return; // weekends off
-
     const targetMin = cfg.hourUtc * 60 + cfg.minuteUtc;
     const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
     if (nowMin < targetMin) return; // too early
