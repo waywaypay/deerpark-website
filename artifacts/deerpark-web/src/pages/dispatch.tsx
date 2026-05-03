@@ -83,62 +83,44 @@ function useHeadlines(mode: HeadlineMode) {
 
 const DispatchSubscribe = () => {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
+  const [status, setStatus] = useState<"idle" | "loading">("idle");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setStatus("loading");
-    setErrorMsg("");
-    try {
-      const res = await fetch("/api/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source: "dispatch" }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Subscription failed");
-      }
-      setStatus("success");
-    } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "Something went wrong");
-      setStatus("error");
-    }
+
+    fetch("/api/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, source: "dispatch" }),
+      keepalive: true,
+    }).catch(() => {});
+
+    const url = new URL("/subscribe", SUBSTACK_URL);
+    url.searchParams.set("email", email);
+    url.searchParams.set("utm_source", "deerpark-website");
+    window.location.href = url.toString();
   };
 
-  if (status === "success") {
-    return (
-      <div className="h-12 flex items-center gap-2 text-sm font-sans text-foreground">
-        <span className="text-primary">✓</span> You're subscribed. Welcome to the Daily Writing.
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@company.com"
-          aria-label="Email address"
-          className="flex-1 h-12 px-4 bg-background border border-foreground/20 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/60 transition-colors"
-        />
-        <Button
-          type="submit"
-          disabled={status === "loading"}
-          className="rounded-none h-12 px-6 text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60"
-        >
-          {status === "loading" ? "Subscribing…" : <>Subscribe <ArrowRight className="ml-2 w-4 h-4" /></>}
-        </Button>
-      </form>
-      {status === "error" && (
-        <p className="mt-2 text-xs font-sans text-destructive">{errorMsg}</p>
-      )}
-    </div>
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@company.com"
+        aria-label="Email address"
+        className="flex-1 h-12 px-4 bg-background border border-foreground/20 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/60 transition-colors"
+      />
+      <Button
+        type="submit"
+        disabled={status === "loading"}
+        className="rounded-none h-12 px-6 text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60"
+      >
+        {status === "loading" ? "Redirecting…" : <>Subscribe <ArrowRight className="ml-2 w-4 h-4" /></>}
+      </Button>
+    </form>
   );
 };
 
