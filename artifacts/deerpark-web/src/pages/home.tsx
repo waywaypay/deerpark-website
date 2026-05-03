@@ -326,6 +326,7 @@ const SCHEDULE_MEETINGS = [
     title: "Q1 Review",
     location: "The Carlyle · Penthouse",
     attendees: 3,
+    accent: false,
   },
   {
     time: "11:00 AM",
@@ -339,12 +340,14 @@ const SCHEDULE_MEETINGS = [
     title: "Investor Update",
     location: "500 5th Ave · Floor 42",
     attendees: 2,
+    accent: false,
   },
   {
     time: "4:30 PM",
     title: "Portfolio Sync",
     location: "The Lambs Club",
     attendees: 6,
+    accent: false,
   },
 ] as const;
 
