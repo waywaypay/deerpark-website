@@ -251,8 +251,10 @@ export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
     const now = new Date();
     const targetMin = cfg.hourUtc * 60 + cfg.minuteUtc;
     const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
-    if (nowMin < targetMin) return; // too early
-    if (nowMin > targetMin + 60) return; // outside today's window; wait for tomorrow
+    if (nowMin < targetMin) return; // too early; wait for the configured hour
+    // No upper bound: if the machine was down at the target time, we still
+    // want to ship today's digest as soon as it's back. `alreadySentToday`
+    // is the actual double-send guard.
 
     try {
       await runDailyDigest();
