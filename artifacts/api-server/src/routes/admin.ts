@@ -15,6 +15,7 @@ import {
   clearRunState,
   type WriterMode,
 } from "../lib/writer-agent";
+import { runDailyDigest } from "../lib/daily-digest";
 
 const router: IRouter = Router();
 
@@ -282,6 +283,27 @@ router.delete("/admin/writers/:id/prompt", async (req, res) => {
   } catch (err) {
     req.log.error({ err, id }, "Failed to reset prompt");
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ============================================================================
+// Daily digest — manual-run endpoint (status is public at /api/digest/status)
+// ============================================================================
+
+router.post("/admin/digest/run", async (req, res) => {
+  try {
+    const post = await runDailyDigest();
+    if (!post) {
+      return res.json({ ok: true, sent: null, reason: "no-op (already sent today, no candidates, or config incomplete) — see /admin/digest/status" });
+    }
+    return res.json({ ok: true, sent: { id: post.id, title: post.title } });
+  } catch (err) {
+    req.log.error({ err }, "Manual digest run failed");
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
   }
 });
 
