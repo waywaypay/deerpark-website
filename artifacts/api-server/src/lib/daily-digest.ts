@@ -15,7 +15,74 @@ type DigestConfig = {
   substackUrl?: string;
 };
 
-/** Public-safe view of config state — booleans only, no secret values. */
+/**
+ * Trim whitespace and strip outer quotes from a config value. Common failure
+ * mode: env values pasted with surrounding `"..."` (which `fly secrets set
+ * X='...'` typically handles, but `X=...` from a stray paste includes them
+ * literally).
+ */
+function sanitizeEnv(raw: string | undefined): string | undefined {
+  if (!raw) return raw;
+  let v = raw.trim();
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+    v = v.slice(1, -1).trim();
+  }
+  return v;
+}
+
+/**
+ * Diagnostic fingerprint of an email-shaped secret. Exposes enough to debug
+ * format issues (length, whitespace, quote presence, the @domain part) without
+ * leaking the full value. The local part is collapsed to its first 3 chars.
+ */
+function emailFingerprint(raw: string | undefined): {
+  set: boolean;
+  length: number;
+  trimmedLength: number;
+  hasOuterQuotes: boolean;
+  hasInnerWhitespace: boolean;
+  hasAt: boolean;
+  hasAngleBrackets: boolean;
+  preview: string | null;
+} {
+  if (!raw) {
+    return {
+      set: false,
+      length: 0,
+      trimmedLength: 0,
+      hasOuterQuotes: false,
+      hasInnerWhitespace: false,
+      hasAt: false,
+      hasAngleBrackets: false,
+      preview: null,
+    };
+  }
+  const trimmed = raw.trim();
+  const cleaned = sanitizeEnv(raw) ?? "";
+  const at = cleaned.indexOf("@");
+  let preview: string | null = null;
+  if (at > 0) {
+    const local = cleaned.slice(0, at);
+    const domain = cleaned.slice(at);
+    preview = `${local.slice(0, 3)}…(${local.length})${domain}`;
+  } else {
+    preview = `${cleaned.slice(0, 3)}…(${cleaned.length})`;
+  }
+  return {
+    set: true,
+    length: raw.length,
+    trimmedLength: trimmed.length,
+    hasOuterQuotes:
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")),
+    hasInnerWhitespace: /\s/.test(cleaned),
+    hasAt: cleaned.includes("@"),
+    hasAngleBrackets: cleaned.includes("<") || cleaned.includes(">"),
+    preview,
+  };
+}
+
+/** Public-safe view of config state — booleans + format fingerprints. */
 export function digestConfigStatus(): {
   hasSubstackEmail: boolean;
   hasFromEmail: boolean;
@@ -23,24 +90,27 @@ export function digestConfigStatus(): {
   hourUtc: number;
   minuteUtc: number;
   ready: boolean;
+  postingEmail: ReturnType<typeof emailFingerprint>;
+  fromEmail: ReturnType<typeof emailFingerprint>;
 } {
-  const hasSubstackEmail = Boolean(process.env["SUBSTACK_POSTING_EMAIL"]);
-  const hasFromEmail = Boolean(process.env["DAILY_DIGEST_FROM_EMAIL"]);
-  const hasResendKey = Boolean(process.env["RESEND_API_KEY"]);
+  const postingEmail = emailFingerprint(process.env["SUBSTACK_POSTING_EMAIL"]);
+  const fromEmail = emailFingerprint(process.env["DAILY_DIGEST_FROM_EMAIL"]);
   return {
-    hasSubstackEmail,
-    hasFromEmail,
-    hasResendKey,
+    hasSubstackEmail: postingEmail.set,
+    hasFromEmail: fromEmail.set,
+    hasResendKey: Boolean(process.env["RESEND_API_KEY"]),
     hourUtc: Number(process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13"),
     minuteUtc: Number(process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0"),
-    ready: hasSubstackEmail && hasFromEmail && hasResendKey,
+    ready: postingEmail.set && fromEmail.set && Boolean(process.env["RESEND_API_KEY"]),
+    postingEmail,
+    fromEmail,
   };
 }
 
 function readConfig(): DigestConfig | { error: string } {
-  const postingEmail = process.env["SUBSTACK_POSTING_EMAIL"];
-  const fromEmail = process.env["DAILY_DIGEST_FROM_EMAIL"];
-  const resendApiKey = process.env["RESEND_API_KEY"];
+  const postingEmail = sanitizeEnv(process.env["SUBSTACK_POSTING_EMAIL"]);
+  const fromEmail = sanitizeEnv(process.env["DAILY_DIGEST_FROM_EMAIL"]);
+  const resendApiKey = sanitizeEnv(process.env["RESEND_API_KEY"]);
   if (!postingEmail) return { error: "SUBSTACK_POSTING_EMAIL not set" };
   if (!fromEmail) return { error: "DAILY_DIGEST_FROM_EMAIL not set" };
   if (!resendApiKey) return { error: "RESEND_API_KEY not set" };
