@@ -15,6 +15,28 @@ type DigestConfig = {
   substackUrl?: string;
 };
 
+/** Public-safe view of config state — booleans only, no secret values. */
+export function digestConfigStatus(): {
+  hasSubstackEmail: boolean;
+  hasFromEmail: boolean;
+  hasResendKey: boolean;
+  hourUtc: number;
+  minuteUtc: number;
+  ready: boolean;
+} {
+  const hasSubstackEmail = Boolean(process.env["SUBSTACK_POSTING_EMAIL"]);
+  const hasFromEmail = Boolean(process.env["DAILY_DIGEST_FROM_EMAIL"]);
+  const hasResendKey = Boolean(process.env["RESEND_API_KEY"]);
+  return {
+    hasSubstackEmail,
+    hasFromEmail,
+    hasResendKey,
+    hourUtc: Number(process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13"),
+    minuteUtc: Number(process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0"),
+    ready: hasSubstackEmail && hasFromEmail && hasResendKey,
+  };
+}
+
 function readConfig(): DigestConfig | { error: string } {
   const postingEmail = process.env["SUBSTACK_POSTING_EMAIL"];
   const fromEmail = process.env["DAILY_DIGEST_FROM_EMAIL"];
@@ -72,7 +94,7 @@ export function pickBestPost(candidates: Post[]): Post | null {
  * tick still picks the freshest unsent post rather than retroactively
  * shipping yesterday's leftovers.
  */
-async function loadCandidates(): Promise<Post[]> {
+export async function loadCandidates(): Promise<Post[]> {
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
   return db
     .select()

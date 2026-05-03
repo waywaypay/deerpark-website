@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, leadsTable, headlinesTable, postsTable } from "@workspace/db";
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, isNotNull, sql } from "drizzle-orm";
 import { adminAuth } from "../middlewares/admin-auth";
 import { SOURCES } from "../lib/headline-sources";
 import { ingestAllSources, ingestSourceById } from "../lib/ingest-headlines";
@@ -15,6 +15,12 @@ import {
   clearRunState,
   type WriterMode,
 } from "../lib/writer-agent";
+import {
+  digestConfigStatus,
+  loadCandidates,
+  pickBestPost,
+  runDailyDigest,
+} from "../lib/daily-digest";
 
 const router: IRouter = Router();
 
@@ -282,6 +288,90 @@ router.delete("/admin/writers/:id/prompt", async (req, res) => {
   } catch (err) {
     req.log.error({ err, id }, "Failed to reset prompt");
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ============================================================================
+// Daily digest — diagnostic + manual-run endpoints
+// ============================================================================
+
+router.get("/admin/digest/status", async (req, res) => {
+  const config = digestConfigStatus();
+
+  // Schema-existence probe — succeeds if the column exists, throws otherwise.
+  let schemaOk = false;
+  let schemaError: string | null = null;
+  try {
+    await db.execute(sql`SELECT sent_to_substack_at FROM posts LIMIT 1`);
+    schemaOk = true;
+  } catch (err) {
+    schemaError = err instanceof Error ? err.message : String(err);
+  }
+
+  let candidates: Awaited<ReturnType<typeof loadCandidates>> = [];
+  let candidateError: string | null = null;
+  try {
+    candidates = await loadCandidates();
+  } catch (err) {
+    candidateError = err instanceof Error ? err.message : String(err);
+  }
+
+  let lastSent: { id: number; title: string; sentToSubstackAt: Date | null } | null = null;
+  try {
+    const rows = await db
+      .select({
+        id: postsTable.id,
+        title: postsTable.title,
+        sentToSubstackAt: postsTable.sentToSubstackAt,
+      })
+      .from(postsTable)
+      .where(isNotNull(postsTable.sentToSubstackAt))
+      .orderBy(desc(postsTable.sentToSubstackAt))
+      .limit(1);
+    lastSent = rows[0] ?? null;
+  } catch (err) {
+    req.log.warn({ err }, "Failed to load lastSent");
+  }
+
+  const best = candidates.length ? pickBestPost(candidates) : null;
+
+  return res.json({
+    config,
+    schema: { ok: schemaOk, error: schemaError },
+    candidates: {
+      count: candidates.length,
+      error: candidateError,
+      preview: candidates.slice(0, 5).map((c) => ({
+        id: c.id,
+        mode: c.mode,
+        publishedAt: c.publishedAt,
+        title: c.title,
+        citationsCount: c.citations.length,
+        bodyLength: c.bodyMarkdown.length,
+      })),
+    },
+    bestCandidate: best
+      ? { id: best.id, mode: best.mode, title: best.title, publishedAt: best.publishedAt }
+      : null,
+    lastSent,
+    nowUtc: new Date().toISOString(),
+  });
+});
+
+router.post("/admin/digest/run", async (req, res) => {
+  try {
+    const post = await runDailyDigest();
+    if (!post) {
+      return res.json({ ok: true, sent: null, reason: "no-op (already sent today, no candidates, or config incomplete) — see /admin/digest/status" });
+    }
+    return res.json({ ok: true, sent: { id: post.id, title: post.title } });
+  } catch (err) {
+    req.log.error({ err }, "Manual digest run failed");
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
   }
 });
 
