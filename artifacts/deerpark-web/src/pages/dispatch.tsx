@@ -133,69 +133,6 @@ const DispatchSubscribe = () => {
   );
 };
 
-const HEADLINE_RAIL_DATE_FMT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
-
-const HeadlineRail = () => {
-  const headlinesQuery = useHeadlines("top");
-  const headlines = (headlinesQuery.data && headlinesQuery.data.length > 0
-    ? headlinesQuery.data
-    : HEADLINE_FALLBACK
-  ).slice(0, 8);
-
-  return (
-    <aside className="lg:sticky lg:top-28 border border-foreground/15 p-6 bg-foreground/[0.015]">
-      <div className="flex items-center gap-3 mb-5 pb-4 border-b border-foreground/15">
-        <Rss className="w-4 h-4 text-foreground/70" />
-        <span className="section-label">What we're watching</span>
-      </div>
-      <ul className="space-y-4">
-        {headlines.map((item) => {
-          const d = new Date(item.publishedAt);
-          const titleNode = (
-            <span className="text-sm font-light text-foreground leading-snug group-hover:text-foreground/80 transition-colors">
-              {item.title}
-            </span>
-          );
-          const key = `rail-${item.source}-${item.publishedAt}-${item.title}`;
-          return (
-            <li key={key} className="group">
-              {item.url ? (
-                <a href={item.url} target="_blank" rel="noopener noreferrer" className="block">
-                  {titleNode}
-                </a>
-              ) : (
-                titleNode
-              )}
-              <div className="mt-1.5 flex items-baseline gap-2 text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-sans">
-                <span>{item.source}</span>
-                <span aria-hidden>•</span>
-                <span>{HEADLINE_RAIL_DATE_FMT.format(d)}</span>
-                {item.coveredBy && (
-                  <Link
-                    href={`/dispatch/${item.coveredBy.postId}`}
-                    className="ml-auto inline-flex items-center gap-1 text-foreground/70 hover:text-foreground transition-colors"
-                    title={item.coveredBy.postTitle}
-                  >
-                    In Dispatch
-                    <ArrowRight className="w-3 h-3" />
-                  </Link>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      <a
-        href="#headline-feed"
-        className="mt-5 pt-4 border-t border-foreground/15 inline-flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
-      >
-        Full feed
-        <ArrowRight className="w-3 h-3" />
-      </a>
-    </aside>
-  );
-};
-
 const DispatchSection = () => {
   const postsQuery = usePosts();
   const [expanded, setExpanded] = useState(false);
@@ -243,55 +180,45 @@ const DispatchSection = () => {
           </div>
         </FadeIn>
 
-        <div className="grid lg:grid-cols-12 gap-10">
-          <div className="lg:col-span-8">
-            <FadeIn delay={0.05}>
-              <div className="flex items-baseline justify-between mb-2">
-                <span className="section-label">Week of {latestWeek.label}</span>
-                <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
-                  {latestWeek.sublabel}
-                </span>
-              </div>
-            </FadeIn>
-
-            <FadeIn delay={0.1}>
-              <DispatchList entries={visibleEntries} />
-            </FadeIn>
-
-            <FadeIn delay={0.15}>
-              <div className="mt-10 flex flex-wrap items-center justify-between gap-4">
-                {hasMore ? (
-                  <button
-                    type="button"
-                    onClick={() => setExpanded((v) => !v)}
-                    aria-expanded={expanded}
-                    className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {expanded ? "Show less" : `Show all ${latestWeek.entries.length}`}
-                    <ArrowRight
-                      className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-90" : ""}`}
-                    />
-                  </button>
-                ) : (
-                  <span />
-                )}
-                <Link
-                  href="/dispatch/archive"
-                  className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Browse archive
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </FadeIn>
+        <FadeIn delay={0.05}>
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="section-label">Week of {latestWeek.label}</span>
+            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
+              {latestWeek.sublabel}
+            </span>
           </div>
+        </FadeIn>
 
-          <div className="hidden lg:block lg:col-span-4">
-            <FadeIn delay={0.1}>
-              <HeadlineRail />
-            </FadeIn>
+        <FadeIn delay={0.1}>
+          <DispatchList entries={visibleEntries} />
+        </FadeIn>
+
+        <FadeIn delay={0.15}>
+          <div className="mt-10 flex flex-wrap items-center justify-between gap-4">
+            {hasMore ? (
+              <button
+                type="button"
+                onClick={() => setExpanded((v) => !v)}
+                aria-expanded={expanded}
+                className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {expanded ? "Show less" : `Show all ${latestWeek.entries.length}`}
+                <ArrowRight
+                  className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-90" : ""}`}
+                />
+              </button>
+            ) : (
+              <span />
+            )}
+            <Link
+              href="/dispatch/archive"
+              className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Browse archive
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
-        </div>
+        </FadeIn>
       </div>
     </section>
   );
