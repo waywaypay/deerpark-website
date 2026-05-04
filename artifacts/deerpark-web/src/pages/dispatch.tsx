@@ -198,12 +198,16 @@ const HeadlineRail = () => {
 
 const DispatchSection = () => {
   const postsQuery = usePosts();
+  const [expanded, setExpanded] = useState(false);
   const latestWeek = useMemo(() => {
     if (postsQuery.data && postsQuery.data.length > 0) {
       return groupPostsToWeeks(postsQuery.data)[0];
     }
     return DISPATCH_WEEKS[0];
   }, [postsQuery.data]);
+
+  const visibleEntries = expanded ? latestWeek.entries : latestWeek.entries.slice(0, 3);
+  const hasMore = latestWeek.entries.length > 3;
 
   return (
     <section id="dispatch" className="pt-32 md:pt-40 pb-24 bg-background">
@@ -251,11 +255,26 @@ const DispatchSection = () => {
             </FadeIn>
 
             <FadeIn delay={0.1}>
-              <DispatchList entries={latestWeek.entries} />
+              <DispatchList entries={visibleEntries} />
             </FadeIn>
 
             <FadeIn delay={0.15}>
-              <div className="mt-10 flex justify-end">
+              <div className="mt-10 flex flex-wrap items-center justify-between gap-4">
+                {hasMore ? (
+                  <button
+                    type="button"
+                    onClick={() => setExpanded((v) => !v)}
+                    aria-expanded={expanded}
+                    className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {expanded ? "Show less" : `Show all ${latestWeek.entries.length}`}
+                    <ArrowRight
+                      className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-90" : ""}`}
+                    />
+                  </button>
+                ) : (
+                  <span />
+                )}
                 <Link
                   href="/dispatch/archive"
                   className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground transition-colors"
