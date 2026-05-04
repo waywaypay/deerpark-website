@@ -519,15 +519,15 @@ const SchedulingMockups = () => {
 
   return (
     <div>
-      <div className="flex flex-col items-center sm:flex-row sm:gap-3 sm:items-start sm:justify-center">
-        <div className={`w-full max-w-[240px] sm:max-w-[210px] sm:flex-1 sm:min-w-0 ${activeIndex === 0 ? "" : "hidden sm:block"}`}>
+      <div className="flex flex-col items-center">
+        <div className={`w-full max-w-[260px] ${activeIndex === 0 ? "" : "hidden"}`}>
           <SchedulingPhoneMockup />
         </div>
-        <div className={`w-full max-w-[240px] sm:max-w-[210px] sm:flex-1 sm:min-w-0 ${activeIndex === 1 ? "" : "hidden sm:block"}`}>
+        <div className={`w-full max-w-[260px] ${activeIndex === 1 ? "" : "hidden"}`}>
           <InvestorPhoneMockup />
         </div>
       </div>
-      <div className="flex items-center justify-center gap-3 mt-6 sm:hidden">
+      <div className="flex items-center justify-center gap-3 mt-6">
         <button
           type="button"
           onClick={() => setActiveIndex((i) => (i - 1 + total) % total)}
@@ -637,7 +637,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
   const hasMockup = Boolean(data.mockup);
   return (
     <div className="grid lg:grid-cols-12 gap-12">
-      <div className={`min-w-0 ${hasMockup ? "lg:col-span-6" : "lg:col-span-4"}`}>
+      <div className={`min-w-0 ${hasMockup ? "lg:col-span-7" : "lg:col-span-4"}`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-background/40"></div>
           <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
@@ -677,8 +677,8 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
       </div>
 
       {hasMockup ? (
-        <div className="lg:col-span-6 min-w-0 flex items-start justify-center lg:pt-4">
-          <div className="lg:sticky lg:top-32 w-full max-w-[480px]">{data.mockup}</div>
+        <div className="lg:col-span-5 min-w-0 flex items-start justify-center lg:pt-4">
+          <div className="lg:sticky lg:top-32 w-full max-w-[300px]">{data.mockup}</div>
         </div>
       ) : (
         <div className="lg:col-span-8 min-w-0">
