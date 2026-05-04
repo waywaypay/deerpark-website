@@ -333,14 +333,14 @@ const SCHEDULE_MEETINGS = [
     title: "Strategy Brief",
     location: "Aman, Library Room",
     attendees: 4,
-    accent: true,
+    accent: false,
   },
   {
     time: "2:00 PM",
     title: "Investor Update",
     location: "500 5th Ave · Floor 42",
     attendees: 2,
-    accent: false,
+    accent: true,
   },
   {
     time: "4:30 PM",
@@ -352,7 +352,7 @@ const SCHEDULE_MEETINGS = [
 ] as const;
 
 const SchedulingPhoneMockup = () => (
-  <div className="relative mx-auto w-full max-w-[260px]">
+  <div className="relative w-full">
     <div className="relative aspect-[9/19.5] rounded-[2.75rem] bg-neutral-900 p-[10px] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.55)] ring-1 ring-background/10">
       <div className="relative h-full w-full rounded-[2.1rem] overflow-hidden bg-background text-foreground">
         <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[5.25rem] h-6 bg-neutral-900 rounded-full z-20" />
@@ -404,12 +404,171 @@ const SchedulingPhoneMockup = () => (
   </div>
 );
 
+const INVESTOR_HOLDINGS = [
+  { q: "Q1 '24", v: 1.2 },
+  { q: "Q2 '24", v: 1.4 },
+  { q: "Q3 '24", v: 1.6 },
+  { q: "Q4 '24", v: 2.1 },
+  { q: "Q1 '25", v: 2.4 },
+  { q: "Q2 '25", v: 2.8 },
+] as const;
+
+const INVESTOR_ACTIVITY = [
+  { label: "Added 400K shares", when: "Jun" },
+  { label: "Joined Q1 earnings call", when: "May" },
+  { label: "Published sector note", when: "Apr" },
+] as const;
+
+const InvestorPhoneMockup = () => {
+  const values = INVESTOR_HOLDINGS.map((h) => h.v);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const points = INVESTOR_HOLDINGS.map((h, i) => {
+    const x = (i / (INVESTOR_HOLDINGS.length - 1)) * 100;
+    const y = 100 - ((h.v - min) / range) * 100;
+    return [x, y] as const;
+  });
+  const polyline = points.map((p) => `${p[0]},${p[1]}`).join(" ");
+  const area = `M 0,100 L ${polyline.replace(/ /g, " L ")} L 100,100 Z`;
+  const last = points[points.length - 1];
+
+  return (
+    <div className="relative w-full">
+      <div className="relative aspect-[9/19.5] rounded-[2.75rem] bg-neutral-900 p-[10px] shadow-[0_25px_60px_-10px_rgba(0,0,0,0.55)] ring-1 ring-background/10">
+        <div className="relative h-full w-full rounded-[2.1rem] overflow-hidden bg-background text-foreground">
+          <div className="absolute top-2.5 left-1/2 -translate-x-1/2 w-[5.25rem] h-6 bg-neutral-900 rounded-full z-20" />
+          <div className="flex items-center justify-between px-6 pt-3.5 pb-2.5 text-[10px] font-sans font-medium">
+            <span>9:41</span>
+            <span className="opacity-40">•••</span>
+          </div>
+          <div className="px-5 pt-2 pb-3 border-b border-foreground/10">
+            <div className="flex items-baseline justify-between">
+              <div className="text-[8px] uppercase tracking-[0.2em] text-foreground/50 font-sans">2:00 PM Brief</div>
+              <div className="text-[8px] uppercase tracking-[0.18em] text-primary font-sans">Live</div>
+            </div>
+            <div className="flex items-center gap-2.5 mt-2">
+              <div className="w-9 h-9 rounded-full bg-gradient-to-br from-primary/40 to-foreground/15 flex items-center justify-center text-[10px] font-serif text-foreground/85 shrink-0">
+                HV
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[12px] font-serif leading-tight truncate">Helena Vance</div>
+                <div className="text-[8px] text-foreground/55 font-sans truncate">Aurelian Capital · PM</div>
+              </div>
+            </div>
+            <div className="mt-2 inline-flex items-center gap-1 text-[8px] font-sans text-primary bg-primary/10 border border-primary/25 px-1.5 py-0.5 rounded-sm">
+              <span className="w-1 h-1 rounded-full bg-primary" />
+              w/ CEO + CFO
+            </div>
+          </div>
+          <div className="p-2.5 space-y-2">
+            <div className="border border-foreground/10 rounded-md p-2.5 bg-foreground/[0.02]">
+              <div className="flex items-baseline justify-between">
+                <div className="text-[8px] uppercase tracking-[0.15em] text-foreground/45 font-sans">Position</div>
+                <div className="text-[8px] font-sans tabular-nums text-primary">+133% YoY</div>
+              </div>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <div className="text-[14px] font-serif tabular-nums leading-none">2.8M</div>
+                <div className="text-[8px] text-foreground/50 font-sans">shares · 1.4% float</div>
+              </div>
+              <div className="mt-2 relative h-9 text-primary">
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 w-full h-full">
+                  <path d={area} fill="currentColor" opacity={0.12} />
+                  <polyline
+                    points={polyline}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <circle cx={last[0]} cy={last[1]} r={2.5} fill="currentColor" />
+                </svg>
+              </div>
+              <div className="flex justify-between text-[7px] font-sans text-foreground/40 tabular-nums mt-1">
+                <span>{INVESTOR_HOLDINGS[0].q}</span>
+                <span>{INVESTOR_HOLDINGS[INVESTOR_HOLDINGS.length - 1].q}</span>
+              </div>
+            </div>
+            <div className="border border-foreground/10 rounded-md p-2.5">
+              <div className="text-[8px] uppercase tracking-[0.15em] text-foreground/45 font-sans">Recent Activity</div>
+              <div className="mt-1.5 space-y-1">
+                {INVESTOR_ACTIVITY.map((a) => (
+                  <div key={a.label} className="flex items-baseline justify-between gap-2 text-[9px] font-sans">
+                    <span className="text-foreground/75 truncate">{a.label}</span>
+                    <span className="text-foreground/40 tabular-nums shrink-0">{a.when}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="border border-primary/30 bg-primary/5 rounded-md p-2.5">
+              <div className="text-[8px] uppercase tracking-[0.15em] text-primary/80 font-sans">Talking Point</div>
+              <div className="mt-1 text-[9.5px] font-serif leading-snug text-foreground/85">
+                Concerned about EU margin compression. Likely to push on FX hedge strategy.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const SchedulingMockups = () => {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const total = 2;
+
+  return (
+    <div>
+      <div className="flex flex-col items-center sm:flex-row sm:gap-3 sm:items-start sm:justify-center">
+        <div className={`w-full max-w-[240px] sm:max-w-[210px] sm:flex-1 sm:min-w-0 ${activeIndex === 0 ? "" : "hidden sm:block"}`}>
+          <SchedulingPhoneMockup />
+        </div>
+        <div className={`w-full max-w-[240px] sm:max-w-[210px] sm:flex-1 sm:min-w-0 ${activeIndex === 1 ? "" : "hidden sm:block"}`}>
+          <InvestorPhoneMockup />
+        </div>
+      </div>
+      <div className="flex items-center justify-center gap-3 mt-6 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setActiveIndex((i) => (i - 1 + total) % total)}
+          aria-label="Previous mockup"
+          className="w-9 h-9 border border-background/25 text-background/70 hover:border-background/70 hover:text-background hover:bg-background/5 flex items-center justify-center transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        <div className="flex items-center gap-1.5">
+          {Array.from({ length: total }).map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setActiveIndex(i)}
+              aria-label={`Show mockup ${i + 1}`}
+              aria-pressed={i === activeIndex}
+              className={`h-1.5 rounded-full transition-all ${
+                i === activeIndex ? "w-6 bg-background" : "w-1.5 bg-background/30"
+              }`}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveIndex((i) => (i + 1) % total)}
+          aria-label="Next mockup"
+          className="w-9 h-9 border border-background/25 text-background/70 hover:border-background/70 hover:text-background hover:bg-background/5 flex items-center justify-center transition-colors"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const CASE_STUDIES: CaseStudyData[] = [
   {
     id: "scheduling-app",
     eyebrow: "Custom Application",
     headline: "One web app to manage high-volume management schedules.",
-    mockup: <SchedulingPhoneMockup />,
+    mockup: <SchedulingMockups />,
     intro: [
       "A services operator was producing high-volume management schedules using Excel, manual research, and PDF delivery. Each schedule required ~4 hours of analyst time to compile attendee profiles from fragmented sources.",
       "We rebuilt the workflow as a structured system rather than a document process.",
@@ -478,7 +637,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
   const hasMockup = Boolean(data.mockup);
   return (
     <div className="grid lg:grid-cols-12 gap-12">
-      <div className={`min-w-0 ${hasMockup ? "lg:col-span-7" : "lg:col-span-4"}`}>
+      <div className={`min-w-0 ${hasMockup ? "lg:col-span-6" : "lg:col-span-4"}`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-background/40"></div>
           <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
@@ -518,8 +677,8 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
       </div>
 
       {hasMockup ? (
-        <div className="lg:col-span-5 min-w-0 flex items-start justify-center lg:pt-4">
-          <div className="lg:sticky lg:top-32 w-full max-w-[300px]">{data.mockup}</div>
+        <div className="lg:col-span-6 min-w-0 flex items-start justify-center lg:pt-4">
+          <div className="lg:sticky lg:top-32 w-full max-w-[480px]">{data.mockup}</div>
         </div>
       ) : (
         <div className="lg:col-span-8 min-w-0">
