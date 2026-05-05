@@ -193,13 +193,8 @@ const SubscribeHero = () => (
           <div className="h-[1px] w-12 bg-primary"></div>
           <span className="section-label">Dispatch</span>
         </div>
-        <div className="flex flex-col gap-8 lg:grid lg:grid-cols-12 lg:items-end">
-          <div className="lg:col-span-7 min-w-0">
-            <h2 className="text-4xl md:text-6xl font-serif leading-[1.05] pb-1">
-              The Daily Writing
-            </h2>
-          </div>
-          <div className="lg:col-span-5 min-w-0">
+        <div className="lg:grid lg:grid-cols-12">
+          <div className="lg:col-span-6 min-w-0">
             <p className="text-muted-foreground font-light leading-relaxed mb-6">
               Daily relevant AI news in your inbox at 3:30 PM PT — the day's top 10, with 2–4 sentences of context on each. Email only; nothing on the site.
             </p>
