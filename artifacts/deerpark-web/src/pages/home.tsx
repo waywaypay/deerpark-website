@@ -567,31 +567,65 @@ const SchedulingMockups = () => {
 };
 
 const PR_WORKFLOW_STEPS = [
-  { icon: Mic, label: "Kick-off", detail: "Quarterly call transcript & notes" },
-  { icon: FolderInput, label: "Ingest", detail: "Auto-routed to project folder" },
-  { icon: Sparkles, label: "Skill", detail: "Custom Skill triggered in Claude" },
-  { icon: Files, label: "Publish", detail: "Formatted doc & deck" },
+  {
+    icon: Mic,
+    label: "Kick-off",
+    detail: "The quarterly client call is captured — transcript and notes ready for the workflow.",
+  },
+  {
+    icon: FolderInput,
+    label: "Ingest",
+    detail: "Files auto-route into the project folder. No manual handoff.",
+  },
+  {
+    icon: Sparkles,
+    label: "Skill",
+    detail: "A custom Claude Skill triggers, running ingestion through draft assembly end-to-end.",
+  },
+  {
+    icon: Files,
+    label: "Publish",
+    detail: "A formatted doc and presentation are produced, ready for review.",
+  },
 ] as const;
 
 const PRWorkflowDiagram = () => (
-  <div className="border border-background/20 p-6 md:p-8">
-    <div className="section-label !text-background/60 mb-6">How it runs</div>
-    <ol className="flex flex-col md:flex-row md:items-stretch gap-3">
+  <div className="border border-background/20 p-6 md:p-10">
+    <div className="flex items-baseline justify-between gap-4 mb-8">
+      <div className="section-label !text-background/60">How it runs</div>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 font-sans">
+        Quarterly · automated
+      </div>
+    </div>
+    <ol className="relative">
       {PR_WORKFLOW_STEPS.map((step, i) => {
         const Icon = step.icon;
+        const last = i === PR_WORKFLOW_STEPS.length - 1;
         return (
-          <React.Fragment key={step.label}>
-            <li className="flex-1 min-w-0 flex flex-col items-center text-center gap-3 p-5 border border-background/15 bg-background/[0.02]">
-              <Icon className="w-6 h-6 text-primary" aria-hidden />
-              <div className="text-[10px] uppercase tracking-[0.18em] text-background/50 font-sans">{step.label}</div>
-              <div className="text-sm font-serif text-background/85 leading-snug">{step.detail}</div>
-            </li>
-            {i < PR_WORKFLOW_STEPS.length - 1 && (
-              <div className="flex items-center justify-center text-background/40 py-1 md:py-0 md:px-1" aria-hidden>
-                <ArrowRight className="w-4 h-4 rotate-90 md:rotate-0" />
-              </div>
+          <li
+            key={step.label}
+            className="relative grid grid-cols-[auto_1fr] gap-5 md:gap-7 pb-9 last:pb-0"
+          >
+            {!last && (
+              <div className="absolute left-[1.125rem] md:left-[1.375rem] top-10 md:top-12 bottom-1 w-px bg-background/15" />
             )}
-          </React.Fragment>
+            <div className="relative w-9 h-9 md:w-11 md:h-11 rounded-full border border-background/30 bg-foreground flex items-center justify-center text-primary shrink-0">
+              <Icon className="w-4 h-4 md:w-5 md:h-5" aria-hidden />
+            </div>
+            <div className="min-w-0 pt-1.5 md:pt-2">
+              <div className="flex items-baseline gap-3 mb-1.5">
+                <span className="font-sans text-[11px] tabular-nums text-background/40">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-background/55 font-sans">
+                  {step.label}
+                </span>
+              </div>
+              <div className="text-base md:text-lg font-serif text-background/90 leading-snug">
+                {step.detail}
+              </div>
+            </div>
+          </li>
         );
       })}
     </ol>
