@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ExternalLink, Rss } from "lucide-react";
+import { ArrowRight, Check, ExternalLink, Rss } from "lucide-react";
 import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
 import { DispatchList } from "@/components/dispatch-list";
 import {
@@ -91,45 +91,86 @@ function useHeadlines(mode: HeadlineMode) {
   });
 }
 
+type SubscribeStatus =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "success" }
+  | { state: "error"; message: string };
+
 const DispatchSubscribe = () => {
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading">("idle");
+  const [status, setStatus] = useState<SubscribeStatus>({ state: "idle" });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setStatus("loading");
+    setStatus({ state: "loading" });
 
-    fetch("/api/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, source: "dispatch" }),
-      keepalive: true,
-    }).catch(() => {});
+    try {
+      const res = await fetch("/api/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, source: "dispatch" }),
+      });
 
-    const url = new URL("/subscribe", SUBSTACK_URL);
-    url.searchParams.set("email", email);
-    url.searchParams.set("utm_source", "deerpark-website");
-    window.location.href = url.toString();
+      if (res.ok) {
+        setStatus({ state: "success" });
+        setEmail("");
+        return;
+      }
+
+      const message =
+        res.status === 400
+          ? "Please enter a valid email address."
+          : "Couldn't reach the subscribe service. Email contact@deerpark.io and we'll add you manually.";
+      setStatus({ state: "error", message });
+    } catch {
+      setStatus({
+        state: "error",
+        message: "Network error. Check your connection and try again.",
+      });
+    }
   };
 
+  if (status.state === "success") {
+    return (
+      <div className="flex items-center gap-3 border border-primary/40 bg-primary/[0.06] px-4 py-3 text-sm font-sans">
+        <Check className="w-4 h-4 text-primary shrink-0" />
+        <span className="text-foreground/90">
+          You're on the list. The next dispatch lands in your inbox the next business day.
+        </span>
+      </div>
+    );
+  }
+
+  const submitting = status.state === "loading";
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
-      <input
-        type="email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="you@company.com"
-        aria-label="Email address"
-        className="flex-1 h-12 px-4 bg-foreground/[0.04] border border-foreground/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors"
-      />
-      <Button
-        type="submit"
-        disabled={status === "loading"}
-        className="rounded-none h-12 px-6 text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60"
-      >
-        {status === "loading" ? "Redirecting…" : <>Subscribe <ArrowRight className="ml-2 w-4 h-4" /></>}
-      </Button>
+    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@company.com"
+          aria-label="Email address"
+          autoComplete="email"
+          disabled={submitting}
+          className="flex-1 h-12 px-4 bg-foreground/[0.04] border border-foreground/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors disabled:opacity-60"
+        />
+        <Button
+          type="submit"
+          disabled={submitting}
+          className="rounded-none h-12 px-6 text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60"
+        >
+          {submitting ? "Subscribing…" : <>Subscribe <ArrowRight className="ml-2 w-4 h-4" /></>}
+        </Button>
+      </div>
+      {status.state === "error" && (
+        <p role="alert" className="text-xs text-red-400 font-sans">
+          {status.message}
+        </p>
+      )}
     </form>
   );
 };
@@ -193,14 +234,14 @@ const DispatchSection = () => {
               {latestEntry && <LatestNotePreview entry={latestEntry} />}
               <DispatchSubscribe />
               <div className="mt-4 text-xs font-sans text-muted-foreground">
-                Delivered via Substack &bull;{" "}
+                Delivered to your inbox each business day &bull;{" "}
                 <a
                   href={SUBSTACK_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="underline underline-offset-4 hover:text-foreground transition-colors"
                 >
-                  Read on Substack
+                  Also on Substack
                 </a>
               </div>
             </div>
