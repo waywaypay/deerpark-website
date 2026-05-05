@@ -48,6 +48,10 @@ WORKDIR /app
 # esbuild produces a standalone bundle (with the pino transport workers next to it),
 # so we only need the dist directory at runtime.
 COPY --from=build /app/artifacts/api-server/dist ./dist
+# Data-migration SQL files (read at boot by lib/migrate.ts). Preserving the
+# repo-relative `lib/db/migrations` path means the runner's path-resolution
+# logic works in both dev (tsx-run from src) and prod (bundle-run from dist).
+COPY --from=build /app/lib/db/migrations ./lib/db/migrations
 
 EXPOSE 8080
 CMD ["node", "--enable-source-maps", "./dist/index.mjs"]
