@@ -6,6 +6,14 @@
   "outputDirectory": "artifacts/deerpark-web/dist",
   "rewrites": [
     {
+      "source": "/dispatch/archive",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/dispatch/:id",
+      "destination": "/api/og?id=:id"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://deerpark-api.fly.dev/api/:path*"
     },
