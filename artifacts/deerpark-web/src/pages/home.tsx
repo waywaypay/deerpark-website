@@ -708,22 +708,30 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
 
   if (narrativeOnly) {
     return (
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center gap-3 mb-8">
-          <div className="h-[1px] w-12 bg-background/40"></div>
-          <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
+      <div>
+        <div className="grid lg:grid-cols-12 gap-12">
+          <div className="min-w-0 lg:col-span-6">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="h-[1px] w-12 bg-background/40"></div>
+              <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
+            </div>
+            <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
+              {data.headline}
+            </h2>
+            <div className="space-y-5">
+              {data.intro.map((para, i) => (
+                <p key={i} className="text-background/70 font-light leading-relaxed">
+                  {para}
+                </p>
+              ))}
+            </div>
+          </div>
+          {data.diagram && (
+            <div className="lg:col-span-6 min-w-0 flex items-start lg:pt-4">
+              <div className="lg:sticky lg:top-32 w-full">{data.diagram}</div>
+            </div>
+          )}
         </div>
-        <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
-          {data.headline}
-        </h2>
-        <div className="space-y-5">
-          {data.intro.map((para, i) => (
-            <p key={i} className="text-background/70 font-light leading-relaxed">
-              {para}
-            </p>
-          ))}
-        </div>
-        {data.diagram && <div className="mt-10">{data.diagram}</div>}
         <div className="mt-10 pt-8 border-t border-background/20 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
           <div className="section-label !text-background/60">Outcome</div>
           <div className="text-lg md:text-xl font-serif text-background leading-snug">
