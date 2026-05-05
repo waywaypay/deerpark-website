@@ -603,14 +603,11 @@ const CASE_STUDIES: CaseStudyData[] = [
   {
     id: "workflow-automation",
     eyebrow: "Workflow Automation",
-    headline: "A recurring expert workflow, compressed from hours to minutes.",
+    headline: "Public relations drafts, from half-day to minutes of review.",
     narrativeOnly: true,
     intro: [
-      // Deliberately abstract — the engagement was on a specific corpus
-      // and output format we'd rather not name on a public site. The shape
-      // is what matters: ingest → analyze → draft → human review.
-      "An expert team was producing a recurring written output that depended on ingesting public source material, running structured analysis, and drafting a polished result every cycle. The work was high-judgment but repetitive in shape, and consumed hours of expert time per cycle.",
-      "We rebuilt the pipeline as an AI workflow with Skills integrated end-to-end across ingestion, analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, while time-to-completion dropped by 90%. The team's role moved from drafting to reviewing and shipping — the judgment stayed human; the typing left.",
+      "A communications team was drafting public relations materials on a recurring cadence — pulling from news coverage, internal briefing notes, and prior statements, then iterating through multiple review rounds. Each cycle consumed hours of senior comms time before anything went out the door.",
+      "We rebuilt the drafting pipeline as an AI workflow with Skills integrated end-to-end across source ingestion, structured analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, while time-to-completion dropped by 90%. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
     ],
     testimonial: {
       quote: "Noticeable difference from the baseline model — and it saves us an incredible amount of time on a quarterly basis.",
@@ -634,7 +631,7 @@ const CASE_STUDIES: CaseStudyData[] = [
     ],
     outcome: (
       <>
-        What used to be a half-day of expert work is now a <span className="text-background font-medium">few minutes of review</span>. The team kept full editorial control; the time freed up went into deeper analysis.
+        What used to be a half-day of communications work is now a <span className="text-background font-medium">few minutes of review</span>. The team kept full editorial control; the freed time went into messaging strategy and faster turnaround on time-sensitive comms.
       </>
     ),
   },
