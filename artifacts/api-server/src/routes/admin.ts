@@ -287,6 +287,74 @@ router.delete("/admin/writers/:id/prompt", async (req, res) => {
 });
 
 // ============================================================================
+// Manual post — bypasses the writer agent for hand-crafted dispatches.
+// ============================================================================
+
+type ManualPostBody = {
+  agentId?: string;
+  tag?: string;
+  title?: string;
+  dek?: string;
+  bodyMarkdown?: string;
+  mode?: string;
+  citations?: unknown;
+  sourceHeadlineIds?: unknown;
+};
+
+router.post("/admin/posts/manual", async (req, res) => {
+  const body = (req.body ?? {}) as ManualPostBody;
+
+  const tag = String(body.tag ?? "").trim();
+  const title = String(body.title ?? "").trim();
+  const dek = String(body.dek ?? "").trim();
+  const bodyMarkdown = String(body.bodyMarkdown ?? "").trim();
+  const agentId = String(body.agentId ?? "manual").trim() || "manual";
+  const mode = body.mode === "deep_dive" ? "deep_dive" : "free_pick";
+  const citations = Array.isArray(body.citations)
+    ? body.citations.filter((c): c is string => typeof c === "string")
+    : [];
+  const sourceHeadlineIds = Array.isArray(body.sourceHeadlineIds)
+    ? body.sourceHeadlineIds.filter((n): n is number => typeof n === "number")
+    : [];
+
+  if (!tag || !title || !dek || !bodyMarkdown) {
+    return res.status(400).json({
+      error: "tag, title, dek, and bodyMarkdown are required",
+    });
+  }
+
+  try {
+    const [row] = await db
+      .insert(postsTable)
+      .values({
+        agentId,
+        mode,
+        tag,
+        title,
+        dek,
+        bodyMarkdown,
+        citations,
+        sourceHeadlineIds,
+        model: "manual",
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        costUsd: "0",
+      })
+      .returning({ id: postsTable.id, publishedAt: postsTable.publishedAt });
+
+    if (!row) return res.status(500).json({ error: "Insert returned no row" });
+    req.log.info({ id: row.id, title }, "Manual post created");
+    return res.status(201).json({ id: row.id, publishedAt: row.publishedAt });
+  } catch (err) {
+    req.log.error({ err }, "Failed to insert manual post");
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Internal server error",
+    });
+  }
+});
+
+// ============================================================================
 // Daily digest — manual-run endpoint (status is public at /api/digest/status)
 // ============================================================================
 
