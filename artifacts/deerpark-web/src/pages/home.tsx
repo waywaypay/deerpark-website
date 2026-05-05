@@ -92,8 +92,8 @@ const Hero = () => {
                 {[
                 { stat: "8 wks", label: "from readiness review to live rollout" },
                 { stat: "100%", label: "code, prompts, and data stay in your accounts" },
-                { stat: "90%+", label: "reduction in manual effort on shipped workflows" },
-                { stat: "0", label: "per-seat AI license fees, ever" },
+                { stat: "up to 90%", label: "reduction in manual effort on shipped workflows" },
+                { stat: "+25%", label: "lift in output quality vs baseline LLM workflows" },
               ].map(({ stat, label }) => (
                 <div key={stat}>
                   <div className="text-2xl font-serif text-foreground mb-1">{stat}</div>
