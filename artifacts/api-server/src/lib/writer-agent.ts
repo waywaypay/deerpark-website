@@ -6,7 +6,7 @@ import {
   settingsTable,
   type InsertPost,
 } from "@workspace/db";
-import { gte, desc, eq } from "drizzle-orm";
+import { gte, desc, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import {
   SOURCES,
@@ -595,6 +595,35 @@ function citationJaccard(a: string[], b: string[]): number {
   return union === 0 ? 0 : intersection / union;
 }
 
+// Recurring model hallucination: writes "Anthropologic" (a real English word
+// meaning 'relating to anthropology') when it means the AI lab "Anthropic".
+// Negative lookahead skips real adjectives like 'Anthropological' / 'Anthropologically'
+// while still catching possessives ("Anthropologic's") and bare uses.
+export function sanitizeKnownMisspellings(text: string): string {
+  return text.replace(/\bAnthropologic(?![a-z])/g, "Anthropic");
+}
+
+// One-time data fix: rewrite "Anthropologic" → "Anthropic" in any persisted
+// post. Idempotent — subsequent boots find no rows to update. Runs on startup
+// to clean up posts written before the sanitizer landed.
+export async function backfillKnownMisspellings(): Promise<void> {
+  // Postgres POSIX regex: \m is start-of-word; (?![a-z]) skips real
+  // adjectives like 'Anthropological'. PG 9.x+ supports lookaheads.
+  // Backslash is doubled so the JS template literal preserves it for PG.
+  const result = await db.execute(sql`
+    UPDATE posts
+    SET
+      title = regexp_replace(title, '\\mAnthropologic(?![a-z])', 'Anthropic', 'g'),
+      dek = regexp_replace(dek, '\\mAnthropologic(?![a-z])', 'Anthropic', 'g'),
+      body_markdown = regexp_replace(body_markdown, '\\mAnthropologic(?![a-z])', 'Anthropic', 'g')
+    WHERE title LIKE '%Anthropologic%'
+       OR dek LIKE '%Anthropologic%'
+       OR body_markdown LIKE '%Anthropologic%'
+  `);
+  const count = (result as { rowCount?: number | null }).rowCount ?? 0;
+  if (count > 0) logger.info({ count }, "Posts: backfilled Anthropologic → Anthropic");
+}
+
 const validateDraft = (
   raw: RawDraft,
   corpus: CorpusItem[],
@@ -764,9 +793,9 @@ const validateDraft = (
   return {
     mode: raw.mode as WriterMode,
     tag: raw.tag as WriterTag,
-    title: raw.title.trim(),
-    dek: raw.dek.trim(),
-    bodyMarkdown: raw.bodyMarkdown.trim(),
+    title: sanitizeKnownMisspellings(raw.title.trim()),
+    dek: sanitizeKnownMisspellings(raw.dek.trim()),
+    bodyMarkdown: sanitizeKnownMisspellings(raw.bodyMarkdown.trim()),
     citations,
     sourceHeadlineIds: ids,
     rationale: raw.rationale ?? "",
