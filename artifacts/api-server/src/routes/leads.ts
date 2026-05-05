@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, leadsTable, insertLeadSchema } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { sendLeadNotificationEmail } from "../lib/lead-notify";
 
 const router: IRouter = Router();
 
@@ -50,9 +51,17 @@ router.post("/leads", async (req, res) => {
     const [lead] = await db
       .insert(leadsTable)
       .values(parsed.data)
-      .returning({ id: leadsTable.id });
+      .returning();
 
     req.log.info({ leadId: lead.id }, "Lead captured");
+
+    // Best-effort notify contact@deerpark.io. Don't block the response or fail
+    // the request if email delivery fails — the lead is already persisted and
+    // visible in the admin dashboard.
+    void sendLeadNotificationEmail(lead).catch((err) => {
+      req.log.error({ err, leadId: lead.id }, "Lead notify: unexpected throw");
+    });
+
     return res.status(201).json({ id: lead.id });
   } catch (err) {
     req.log.error({ err }, "Failed to insert lead");
