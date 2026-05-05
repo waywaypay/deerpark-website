@@ -15,14 +15,18 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { logger } from "./logger";
 
-// In dev, __dirname is artifacts/api-server/src/lib. After esbuild the bundle
-// lives at artifacts/api-server/dist/index.mjs (the build banner aliases
-// __dirname there too). lib/db/migrations is three levels up from either
-// location: ../.. (api-server root) → .. (artifacts) → lib/db/migrations.
+// __dirname depends on how the server is launched:
+//   - dev (tsx, src/lib/migrate.ts):  artifacts/api-server/src/lib  → 4 up
+//   - dev-build (dist/, monorepo):    artifacts/api-server/dist      → 3 up
+//   - prod (Fly runtime image):       /app/dist                      → 1 up
+//     (Dockerfile copies lib/db/migrations to /app/lib/db/migrations
+//     alongside the dist bundle.)
+// Walk all three candidates, take the first that exists.
 function resolveMigrationsDir(): string {
   const candidates = [
-    path.resolve(__dirname, "..", "..", "..", "..", "lib", "db", "migrations"), // src/lib
-    path.resolve(__dirname, "..", "..", "..", "lib", "db", "migrations"),       // dist
+    path.resolve(__dirname, "..", "lib", "db", "migrations"),                   // prod
+    path.resolve(__dirname, "..", "..", "..", "lib", "db", "migrations"),       // dev-build
+    path.resolve(__dirname, "..", "..", "..", "..", "lib", "db", "migrations"), // dev (tsx)
   ];
   for (const c of candidates) if (existsSync(c)) return c;
   return candidates[0]!;
