@@ -8,6 +8,10 @@ import {
   EARNINGS_PROMOTED_TIER,
   isEarningsDay,
 } from "../lib/headline-sources";
+import {
+  dedupeNearDuplicates,
+  ensurePapersInSelection,
+} from "../lib/headline-rank";
 
 const router: IRouter = Router();
 
@@ -109,7 +113,11 @@ router.get("/headlines", async (req, res) => {
       // the top N. Pulls a tight candidate set from the last `days` days —
       // 2 per source so high-volume feeds (arXiv, HN) can't crowd out
       // weekly-cadence labs even when they're freshly published — then ranks
-      // in JS so the formula stays legible and easy to tune.
+      // in JS so the formula stays legible and easy to tune. After ranking
+      // we (1) drop near-duplicate stories so e.g. an Anthropic release plus
+      // Bloomberg's coverage of it don't both land in the top, and
+      // (2) reserve at least 2 slots for academic papers (arXiv, HF Papers)
+      // so an active lab-publishing week doesn't crowd research out entirely.
       const result = await db.execute(sql`
         WITH ranked AS (
           SELECT
@@ -136,7 +144,10 @@ router.get("/headlines", async (req, res) => {
         (a, b) =>
           scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay),
       );
-      const rows = candidates.slice(0, limit);
+      const deduped = dedupeNearDuplicates(candidates);
+      const initialTop = deduped.slice(0, limit);
+      const rows = ensurePapersInSelection(initialTop, deduped, 2)
+        .sort((a, b) => scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay));
       const coveredBy = await loadCoveredByMap(30);
       const items = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
       res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");

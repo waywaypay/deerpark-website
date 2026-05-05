@@ -14,6 +14,10 @@ import {
   EARNINGS_PROMOTED_TIER,
   isEarningsDay,
 } from "./headline-sources";
+import {
+  dedupeNearDuplicates,
+  ensurePapersInSelection,
+} from "./headline-rank";
 
 // Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
 // override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
@@ -747,7 +751,19 @@ export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
       scoreCorpusItem(b, now, earningsDay) -
       scoreCorpusItem(a, now, earningsDay),
   );
-  return candidates.slice(0, CORPUS_MAX_ITEMS);
+  // Drop near-duplicate stories (e.g. an Anthropic release + Bloomberg's
+  // coverage of the same release) so the agent doesn't end up with two slots
+  // in the top-10 covering the same news, and reserve at least 2 slots for
+  // academic papers (arXiv / HF Papers) so research isn't crowded out by an
+  // active lab-publishing week.
+  const deduped = dedupeNearDuplicates(candidates);
+  const initialTop = deduped.slice(0, CORPUS_MAX_ITEMS);
+  return ensurePapersInSelection(initialTop, deduped, 2)
+    .sort(
+      (a, b) =>
+        scoreCorpusItem(b, now, earningsDay) -
+        scoreCorpusItem(a, now, earningsDay),
+    );
 }
 
 export type WriteResult =
