@@ -295,6 +295,43 @@ export const SOURCES: SourceConfig[] = [
     tier: 3,
     aiFilter: true,
   },
+  // First-party AI/strategy announcements from SAP. Catches enterprise-AI
+  // moves (e.g. the Prior Labs / TabPFN acquisition) that the AI-tech press
+  // can be slow to surface. Broad-topic feed → aiFilter:true.
+  {
+    id: "sap-newsroom",
+    displayName: "SAP Newsroom",
+    category: "Lab",
+    kind: "rss",
+    url: process.env["SAP_NEWSROOM_FEED_URL"] ?? "https://news.sap.com/feed/",
+    enabled: true,
+    tier: 2,
+    aiFilter: true,
+  },
+  // Enterprise IT / CIO press. Covers the B2B side of AI deployments —
+  // procurement, vendor strategy, M&A — that consumer-AI press underweights.
+  {
+    id: "cio-dive",
+    displayName: "CIO Dive",
+    category: "Press",
+    kind: "rss",
+    url: process.env["CIO_DIVE_FEED_URL"] ?? "https://www.ciodive.com/feeds/news/",
+    enabled: true,
+    tier: 3,
+    aiFilter: true,
+  },
+  // Already AI-scoped at the source — no aiFilter needed.
+  {
+    id: "venturebeat-ai",
+    displayName: "VentureBeat AI",
+    category: "Press",
+    kind: "rss",
+    url:
+      process.env["VENTUREBEAT_AI_FEED_URL"] ??
+      "https://venturebeat.com/category/ai/feed/",
+    enabled: true,
+    tier: 3,
+  },
 ];
 
 // Display name for the earnings source, used by the dynamic-tier helper so

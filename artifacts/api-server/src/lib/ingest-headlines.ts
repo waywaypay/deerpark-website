@@ -21,6 +21,11 @@ const AI_KEYWORDS = [
   "ai", "ml", "llm", "gpt", "claude", "gemini", "llama", "anthropic",
   "openai", "agent", "rag", "embedding", "inference", "fine-tun",
   "model", "neural", "transformer", "huggingface",
+  // Broader AI/ML signals so M&A and product announcements that don't say
+  // "AI" verbatim (e.g. "SAP buys Prior Labs", "tabular foundation model")
+  // still pass the filter.
+  "machine learning", "deep learning", "tabular", "diffusion",
+  "frontier", "generative", "agentic",
 ];
 
 const isAiRelevant = (title: string) => {
