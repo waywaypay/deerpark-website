@@ -319,6 +319,7 @@ type CaseStudyData = {
   outcome: React.ReactNode;
   mockup?: React.ReactNode;
   narrativeOnly?: boolean;
+  testimonial?: { quote: string; attribution: string };
 };
 
 const SCHEDULE_MEETINGS = [
@@ -609,8 +610,12 @@ const CASE_STUDIES: CaseStudyData[] = [
       // and output format we'd rather not name on a public site. The shape
       // is what matters: ingest → analyze → draft → human review.
       "An expert team was producing a recurring written output that depended on ingesting public source material, running structured analysis, and drafting a polished result every cycle. The work was high-judgment but repetitive in shape, and consumed hours of expert time per cycle.",
-      "We rebuilt the pipeline as an AI workflow: source ingestion, structured analysis, and draft assembly, with the team's role moving from drafting to reviewing and shipping. The judgment stayed human; the typing left.",
+      "We rebuilt the pipeline as an AI workflow with Skills integrated end-to-end across ingestion, analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, while time-to-completion dropped by 90%. The team's role moved from drafting to reviewing and shipping — the judgment stayed human; the typing left.",
     ],
+    testimonial: {
+      quote: "Noticeable difference from the baseline model — and it saves us an incredible amount of time on a quarterly basis.",
+      attribution: "Client Lead",
+    },
     before:
       "Hours per cycle of source review, structured note-taking, and drafting from scratch. Same shape every time — no leverage.",
     after:
@@ -656,6 +661,18 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
             </p>
           ))}
         </div>
+        {data.testimonial && (
+          <figure className="mt-10 pt-8 border-t border-background/20">
+            <blockquote className="text-xl md:text-2xl font-serif text-background leading-snug">
+              <span className="text-background/40">“</span>
+              {data.testimonial.quote}
+              <span className="text-background/40">”</span>
+            </blockquote>
+            <figcaption className="mt-4 section-label !text-background/60">
+              — {data.testimonial.attribution}
+            </figcaption>
+          </figure>
+        )}
         <div className="mt-10 pt-8 border-t border-background/20 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
           <div className="section-label !text-background/60">Outcome</div>
           <div className="text-lg md:text-xl font-serif text-background leading-snug">
