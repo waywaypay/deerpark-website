@@ -1,4 +1,4 @@
-import React, { FormEvent, useEffect, useMemo, useState } from "react";
+import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files, RotateCcw } from "lucide-react";
@@ -1163,19 +1163,35 @@ const LeadCapture = () => {
   const recommended = MODELS[recommendation.primary];
   const runnerUp = MODELS[recommendation.runnerUp];
 
+  const advanceTimerRef = useRef<number | null>(null);
+  const clearAdvanceTimer = () => {
+    if (advanceTimerRef.current !== null) {
+      window.clearTimeout(advanceTimerRef.current);
+      advanceTimerRef.current = null;
+    }
+  };
+  useEffect(() => clearAdvanceTimer, []);
+
   const handleSelect = (choiceIdx: number) => {
     if (!currentQuestion) return;
     const qid = currentQuestion.id;
     setAnswers((prev) => ({ ...prev, [qid]: choiceIdx }));
     // Auto-advance feels right for a quiz; tiny delay so the selected state is visible.
-    window.setTimeout(() => {
+    // Cancel any in-flight advance so a fast double-tap can't skip a question.
+    clearAdvanceTimer();
+    advanceTimerRef.current = window.setTimeout(() => {
+      advanceTimerRef.current = null;
       setStep((s) => Math.min(s + 1, totalQuestions));
     }, 180);
   };
 
-  const handleBack = () => setStep((s) => Math.max(s - 1, 0));
+  const handleBack = () => {
+    clearAdvanceTimer();
+    setStep((s) => Math.max(s - 1, 0));
+  };
 
   const handleRetake = () => {
+    clearAdvanceTimer();
     setAnswers({});
     setStep(0);
     setStatus({ state: "idle" });
