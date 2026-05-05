@@ -1306,19 +1306,37 @@ const LeadCapture = () => {
 
           <FadeIn delay={0.1} className="min-w-0">
             {status.state === "success" ? (
-              <div className="border border-primary/40 bg-background p-10 text-center">
-                <div className="inline-block p-3 border border-primary/40 bg-primary/10 mb-6">
-                  <Check className="w-6 h-6 text-primary" />
+              <div className="space-y-5">
+                <div className="border border-primary/40 bg-background p-6 md:p-8">
+                  <span className="section-label block mb-4">Your model fit</span>
+                  <h3 className="text-3xl md:text-4xl font-serif mb-2">
+                    {recommended.name}
+                  </h3>
+                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-5">
+                    {recommended.vendor}
+                  </p>
+                  <p className="text-base md:text-lg text-foreground/90 font-light leading-relaxed mb-4">
+                    {recommended.oneLiner}
+                  </p>
+                  <p className="text-sm text-muted-foreground font-light leading-relaxed mb-6">
+                    {recommended.rationale}
+                  </p>
+                  <div className="pt-4 border-t border-foreground/10 text-xs text-muted-foreground font-light">
+                    Close runner-up: <span className="text-foreground">{runnerUp.name}</span>{" "}
+                    <span className="opacity-70">({runnerUp.vendor})</span>. We benchmark both against your evals before recommending a deployment.
+                  </div>
                 </div>
-                <h3 className="text-2xl font-serif mb-4">Assessment received.</h3>
-                <p className="text-muted-foreground font-light leading-relaxed max-w-sm mx-auto mb-2">
-                  We logged your model fit as{" "}
-                  <span className="text-foreground">{recommended.name}</span>.
-                  A DeerPark strategist will follow up within two business days with a tailored deployment plan.
-                </p>
-                <p className="text-xs text-muted-foreground font-light">
-                  Check your inbox — including spam — for a confirmation.
-                </p>
+                <div className="border border-foreground/15 bg-background p-6 md:p-8 flex items-start gap-4">
+                  <div className="shrink-0 p-2 border border-primary/40 bg-primary/10">
+                    <Check className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h4 className="text-lg font-serif mb-1">Plan request received.</h4>
+                    <p className="text-sm text-muted-foreground font-light leading-relaxed">
+                      A DeerPark strategist will follow up within two business days with your tailored deployment plan. Check your inbox — including spam — for a confirmation.
+                    </p>
+                  </div>
+                </div>
               </div>
             ) : currentQuestion ? (
               <div className="border border-foreground/15 bg-background p-6 md:p-8">
@@ -1385,97 +1403,90 @@ const LeadCapture = () => {
                 )}
               </div>
             ) : (
-              <div className="space-y-5">
-                <div className="border border-primary/40 bg-background p-6 md:p-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="section-label">Your model fit</span>
-                    <button
-                      type="button"
-                      onClick={handleRetake}
-                      className="inline-flex items-center gap-2 text-xs text-muted-foreground font-light hover:text-foreground transition-colors"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      Retake
-                    </button>
-                  </div>
-                  <h3 className="text-3xl md:text-4xl font-serif mb-2">
-                    {recommended.name}
-                  </h3>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-5">
-                    {recommended.vendor}
-                  </p>
-                  <p className="text-base md:text-lg text-foreground/90 font-light leading-relaxed mb-4">
-                    {recommended.oneLiner}
-                  </p>
-                  <p className="text-sm text-muted-foreground font-light leading-relaxed mb-6">
-                    {recommended.rationale}
-                  </p>
-                  <div className="pt-4 border-t border-foreground/10 text-xs text-muted-foreground font-light">
-                    Close runner-up: <span className="text-foreground">{runnerUp.name}</span>{" "}
-                    <span className="opacity-70">({runnerUp.vendor})</span>. We benchmark both against your evals before recommending a deployment.
+              <form
+                onSubmit={handleSubmit}
+                className="border border-primary/40 bg-background p-6 md:p-8 space-y-5"
+              >
+                <div className="flex items-start justify-between gap-4 mb-1">
+                  <div>
+                    <span className="section-label block mb-3">Final step</span>
+                    <h3 className="text-2xl md:text-3xl font-serif leading-snug mb-2">
+                      Where should we send your model fit?
+                    </h3>
+                    <p className="text-sm text-muted-foreground font-light leading-relaxed">
+                      We'll reveal your recommendation on the next screen and follow up with a tailored deployment plan within two business days.
+                    </p>
                   </div>
                 </div>
-
-                <form
-                  onSubmit={handleSubmit}
-                  className="border border-foreground/15 bg-background p-6 md:p-8 space-y-5"
-                >
-                  <div>
-                    <h4 className="text-lg font-serif mb-1">Send my deployment plan</h4>
-                    <p className="text-xs text-muted-foreground font-light">
-                      We'll send a tailored plan based on your answers within two business days.
-                    </p>
-                  </div>
-                  <div>
-                    <label htmlFor="name" className="section-label block mb-2">Name</label>
-                    <input id="name" name="name" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
-                  </div>
-                  <div>
-                    <label htmlFor="contact" className="section-label block mb-2">
-                      {contactType === "sms" ? "Mobile Number" : "Work Email"}
-                    </label>
-                    {contactType === "sms" ? (
-                      <input
-                        id="contact"
-                        name="contact"
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="tel"
-                        placeholder="(555) 123-4567"
-                        required
-                        disabled={submitting}
-                        className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
-                      />
-                    ) : (
-                      <input
-                        id="contact"
-                        name="contact"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        disabled={submitting}
-                        className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <label htmlFor="company" className="section-label block mb-2">Company</label>
-                    <input id="company" name="company" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
-                  </div>
-                  <Button type="submit" size="lg" disabled={submitting} className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
-                    {submitting ? "Submitting…" : (
-                      <>
-                        Send My Deployment Plan <ArrowRight className="ml-2 w-4 h-4" />
-                      </>
-                    )}
-                  </Button>
-                  {status.state === "error" && (
-                    <p role="alert" className="text-xs text-red-400">
-                      {status.message}
-                    </p>
+                <div>
+                  <label htmlFor="name" className="section-label block mb-2">Name</label>
+                  <input id="name" name="name" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
+                </div>
+                <div>
+                  <label htmlFor="contact" className="section-label block mb-2">
+                    {contactType === "sms" ? "Mobile Number" : "Work Email"}
+                  </label>
+                  {contactType === "sms" ? (
+                    <input
+                      id="contact"
+                      name="contact"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      placeholder="(555) 123-4567"
+                      required
+                      disabled={submitting}
+                      className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
+                    />
+                  ) : (
+                    <input
+                      id="contact"
+                      name="contact"
+                      type="email"
+                      autoComplete="email"
+                      required
+                      disabled={submitting}
+                      className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
+                    />
                   )}
-                </form>
-              </div>
+                </div>
+                <div>
+                  <label htmlFor="company" className="section-label block mb-2">Company</label>
+                  <input id="company" name="company" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
+                </div>
+                <Button type="submit" size="lg" disabled={submitting} className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
+                  {submitting ? "Revealing…" : (
+                    <>
+                      Reveal My Model Fit <ArrowRight className="ml-2 w-4 h-4" />
+                    </>
+                  )}
+                </Button>
+                {status.state === "error" && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {status.message}
+                  </p>
+                )}
+                <div className="pt-4 mt-2 border-t border-foreground/10 flex items-center justify-between text-xs text-muted-foreground font-light">
+                  <button
+                    type="button"
+                    onClick={handleBack}
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" />
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleRetake}
+                    disabled={submitting}
+                    className="inline-flex items-center gap-2 hover:text-foreground transition-colors disabled:opacity-50"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    Retake
+                  </button>
+                </div>
+              </form>
             )}
           </FadeIn>
         </div>
