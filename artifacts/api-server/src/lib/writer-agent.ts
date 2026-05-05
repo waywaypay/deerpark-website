@@ -6,7 +6,7 @@ import {
   settingsTable,
   type InsertPost,
 } from "@workspace/db";
-import { gte, desc, eq } from "drizzle-orm";
+import { gte, desc, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import {
   SOURCES,
@@ -596,23 +596,13 @@ function citationJaccard(a: string[], b: string[]): number {
 }
 
 // Canonical entity names + observed model hallucinations. Each rule maps a
-// regex matching a known misspelling to the canonical replacement. New rules
-// land here when we observe a new hallucination — keep this conservative:
-// patterns must be specific enough that no legitimate sentence is rewritten.
-//
-// JS regex uses `\b` for word boundary + negative lookahead to skip real
-// English words that share a prefix (e.g. 'Anthropological').
-//
-// `pgRegex` is the equivalent PostgreSQL POSIX form (\m = start-of-word) so
-// the same rule can drive both runtime sanitization and database backfill.
-// Canonical entity names + observed model hallucinations. Each rule maps a
 // regex matching a known misspelling to the canonical replacement. Add a new
 // rule whenever we observe a new consistent hallucination — keep entries
 // conservative: patterns must be specific enough that no legitimate sentence
 // is rewritten.
 //
-// Rules apply at runtime, before persist. To clean up rows that were written
-// before a rule landed, add a corresponding migration to lib/db/migrations/.
+// Rules apply at runtime, before persist. To clean up rows written before a
+// rule landed, add a corresponding migration in lib/db/migrations/.
 type MisspellingRule = {
   description: string;
   pattern: RegExp;
