@@ -318,6 +318,7 @@ type CaseStudyData = {
   delivered: { label: string; detail: string }[];
   outcome: React.ReactNode;
   mockup?: React.ReactNode;
+  narrativeOnly?: boolean;
 };
 
 const SCHEDULE_MEETINGS = [
@@ -602,6 +603,7 @@ const CASE_STUDIES: CaseStudyData[] = [
     id: "workflow-automation",
     eyebrow: "Workflow Automation",
     headline: "A recurring expert workflow, compressed from hours to minutes.",
+    narrativeOnly: true,
     intro: [
       // Deliberately abstract — the engagement was on a specific corpus
       // and output format we'd rather not name on a public site. The shape
@@ -635,6 +637,35 @@ const CASE_STUDIES: CaseStudyData[] = [
 
 const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
   const hasMockup = Boolean(data.mockup);
+  const narrativeOnly = Boolean(data.narrativeOnly);
+
+  if (narrativeOnly) {
+    return (
+      <div className="max-w-3xl mx-auto">
+        <div className="flex items-center gap-3 mb-8">
+          <div className="h-[1px] w-12 bg-background/40"></div>
+          <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
+        </div>
+        <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
+          {data.headline}
+        </h2>
+        <div className="space-y-5">
+          {data.intro.map((para, i) => (
+            <p key={i} className="text-background/70 font-light leading-relaxed">
+              {para}
+            </p>
+          ))}
+        </div>
+        <div className="mt-10 pt-8 border-t border-background/20 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
+          <div className="section-label !text-background/60">Outcome</div>
+          <div className="text-lg md:text-xl font-serif text-background leading-snug">
+            {data.outcome}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid lg:grid-cols-12 gap-12">
       <div className={`min-w-0 ${hasMockup ? "lg:col-span-7" : "lg:col-span-4"}`}>
