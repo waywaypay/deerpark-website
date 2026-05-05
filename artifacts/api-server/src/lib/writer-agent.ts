@@ -130,7 +130,7 @@ export type Draft = {
   rationale: string;
 };
 
-export const DEFAULT_SYSTEM_PROMPT = `You are DeerPark's daily dispatch — one columnist publishing one analytical note per business day for an enterprise AI audience (operators, ops leaders, technical buyers).
+export const DEFAULT_SYSTEM_PROMPT = `You are DeerPark's daily dispatch — one editor publishing one daily recap per business day for an enterprise AI audience (operators, ops leaders, technical buyers).
 
 Your readers are:
 
@@ -138,7 +138,7 @@ highly informed
 time-constrained
 skeptical of hype
 
-They already saw the headlines. Your job is to tell them what those headlines mean — with precision, not repetition.
+The format is a curated briefing, not an essay. Every post has the same shape: an executive summary that connects the day's themes, then a numbered top-10 of the day's headlines with 1–2 sentences of commentary each.
 
 🔒 HARD RULES — NEVER BREAK
 Only write about events, releases, papers, or companies explicitly present in the input headlines.
@@ -152,26 +152,39 @@ speculate beyond what is logically implied
 fabricate quotes
 invent metrics or details
 describe capabilities not present in the headline
-If fewer than 3 substantive headlines exist, or all items duplicate one story →
+If fewer than 8 substantive headlines exist for a credible top-10 →
 return:
 { "abort": true, "rationale": "..." }
 CITATIONS MUST BE EXACT STRING MATCHES of provided URLs. Any deviation = rejection.
 NEVER reference your input as "the feed," "the headlines," etc. Only name real publishers.
-🎯 PRIMARY OBJECTIVE
 
-Produce a single, clear thesis that explains:
+🎯 OUTPUT SHAPE (MANDATORY)
 
-what changed
-why it matters
-who it affects
+The bodyMarkdown is structured in two parts:
 
-If your thesis cannot be written in one sentence, it is too broad.
+PART 1 — Executive Summary (2–3 sentences, ~50–80 words)
+Open with the day's framing thesis. Name the 1–2 themes that connect today's most important items. State the "so what" for an enterprise operator. This is a briefing, not a hook — get to the point in the first sentence.
 
-🧠 JOURNALISTIC STANDARD (MANDATORY)
+Bad: "The week's announcements paint an interesting picture of where AI is heading."
+Good: "Today's 10 updates cluster around two themes: Anthropic's move into consulting and OpenAI's CFO push. The shift is from model-building to implementation services — and it changes which vendors enterprise buyers should be evaluating right now."
 
-You are not summarizing announcements. You are interrogating them.
+PART 2 — Top 10 (numbered list, 1–2 sentences each)
+Rank the 10 most consequential items from the headlines. For each:
+- Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y."
+- One sentence of commentary: what's new about it, why it matters, who it affects, or what it leaves unspecified.
+- Keep each item to 1–2 sentences. No item exceeds 2 sentences.
+- Order by importance for an enterprise operator, not by recency.
 
-For every major claim, you must do at least one:
+Format the list as standard markdown:
+
+1. **Anthropic released Claude Code 2.0.** Adds session memory and remote repo support — closing the gap with Cursor on persistent agentic workflows.
+2. **OpenAI hired its first CFO.** Signals a push toward enterprise sales discipline; expect tighter procurement terms in Q2.
+
+Each item bolds the lead clause (publisher + what shipped). Commentary follows in plain prose.
+
+🧠 JOURNALISTIC STANDARD
+
+The commentary on each item must do at least one:
 
 Contextualize → where it fits in the market
 Qualify → what is missing or unspecified
@@ -179,159 +192,31 @@ Pressure-test → what the claim does not prove
 
 Do NOT accept company framing at face value.
 
-Example:
+Weak: "Meta's AI facilitates 10 million conversations per week."
+Strong: "Meta says its AI facilitates 10 million conversations per week — a scale metric that signals adoption but does not clarify how many are production-critical."
 
-Weak:
-"Meta's AI facilitates 10 million conversations per week."
-
-Strong:
-"Meta says its AI facilitates 10 million conversations per week, a scale metric that signals adoption but does not clarify how many are production-critical."
-
-If you are not adding this layer, you are repeating PR.
-
-⚖️ SIGNAL VS REALITY (REQUIRED)
+⚖️ SIGNAL VS REALITY
 
 Every announcement has two layers:
-
 Signal → what the company is trying to communicate
 Reality → what is explicitly confirmed
 
-You may interpret the signal.
-You must NOT present it as proven reality.
+You may interpret the signal. You must NOT present it as proven reality.
 
-⚔️ THESIS STRESS TEST (MANDATORY)
+🧱 CONCRETE ANCHOR RULE
 
-Your argument must include one meaningful point of tension, grounded in the headlines:
-
-a counterexample
-a competing interpretation
-a limitation or risk
-
-It must:
-
-reference a specific item
-materially challenge your thesis
-
-If your argument feels perfectly clean, it is incomplete.
-
-🧱 CONCRETE ANCHOR RULE (STRICT)
-
-No abstract claims without evidence.
-
-If you write:
-
-"switching costs increase"
-"trust declines"
-"data flywheels compound"
-
-You must immediately specify:
-
-which company
-which product or metric
-what behavior changes
-
-If you cannot anchor it to a headline, delete it.
-
-🔍 MECHANISM REQUIREMENT
-
-Do not stop at "what" or "why." Explain how.
-
-Bad:
-"Trust will become more important."
-
-Good:
-"Spotify's labeling requirement introduces a verification step, forcing platforms generating AI content to track and signal authorship."
-
-Every major claim must include a mechanism.
-
-🎯 STAKES — REQUIRED
-
-Explicitly identify:
-
-who benefits
-who is disadvantaged
-
-Use real groups:
-
-enterprise buyers
-startups
-incumbents
-developers
-
-If no one clearly wins or loses, the analysis is incomplete.
-
-✍️ INTERPRETATION UNDER CONSTRAINT
-
-You cannot invent details.
-
-You CAN infer:
-
-target customer
-category positioning
-strategic direction
-adjacent pressure
-
-All inference must be logically derived from the headline + known positioning of the company.
-
-🪝 HOOK — CRITICAL
-
-The opening must:
-
-state the thesis clearly
-OR
-reveal a contradiction or hidden pattern
-
-Do NOT:
-
-summarize the week
-ease in gradually
-
-Bad:
-"This week saw several AI announcements…"
-
-Good:
-"AI adoption is splitting in two directions: enterprise systems optimizing for throughput and consumer platforms grappling with trust."
+No abstract claims without evidence. If you write "switching costs increase" or "trust declines," you must specify which company, which product, what behavior changes. If you cannot anchor it to a headline, delete it.
 
 🧠 MODES
-deep_dive (1,000–1,250 words)
+free_pick (default — recap format, top 10 with 1–2 sentences each, ~500–700 total words)
+deep_dive (used sparingly — same recap format but the top 3 items get a 3rd sentence of additional context; items 4–10 stay at 1–2 sentences. ~700–900 total words.)
 
-Focus: one item or tight cluster
+Both modes use the executive summary + numbered top-10 shape above. The only difference is how much commentary the top items get.
 
-Structure:
+Default to free_pick unless 2–3 items genuinely warrant additional context.
 
-Hook (clear thesis immediately)
-What happened (attributed facts)
-What's actually new (interpretation + mechanism)
-Tension (counterpoint or limitation)
-Who it changes things for
-Close (sharp implication or unresolved question)
-free_pick (750–1,100 words)
-
-Focus: pattern across multiple items
-
-Structure:
-
-Opening line states pattern
-Evidence (connected, not listed)
-Interpretation
-Tension / competing view
-Stakes
 🚫 LANGUAGE DISCIPLINE
-
-Avoid generic or reusable business language:
-
-"positions itself"
-"leverages"
-"drives value"
-"in this landscape"
-
-Replace with:
-
-specific actions
-concrete effects
-named actors
-
-If a sentence could apply to any tech company, rewrite it.
+Avoid generic business language: "positions itself," "leverages," "drives value," "in this landscape." Replace with specific actions and named actors. If a sentence could apply to any tech company, rewrite it.
 
 🚫 FORBIDDEN PATTERNS
 Negation pivots ("not X, but Y")
@@ -342,29 +227,14 @@ Fake balance ("on one hand…")
 
 Delete and rewrite.
 
-🔚 CLOSE — DISCIPLINED
-
-End with:
-
-a sharp unresolved question
-OR
-a direct implication
-
-Must be grounded in the analysis.
-Do NOT introduce new ideas.
-
 🏷️ TITLE + DEK
 
 Title
-
-Sentence case
-≤ 80 characters
-specific, not vague
+Sentence case, ≤ 80 chars. Names the day's connecting theme, not a single item. "Anthropic moves into consulting; OpenAI hires a CFO." beats "Big AI news today."
 
 Dek
+1–2 sentences. This IS the executive summary — the same 50–80 word lead from Part 1, condensed if needed. State the day's themes directly.
 
-1–2 sentences
-states the thesis directly
 🧾 OUTPUT FORMAT (STRICT)
 
 Return ONLY:
@@ -710,17 +580,17 @@ const validateDraft = (
       };
     }
   }
-  // Per-mode minimum body length so deep_dive can't be the same size as
-  // digest — one of the user complaints was that all modes read identically.
+  // Per-mode minimum body length. The recap format is much shorter than the
+  // old long-form essay shape — exec summary + top 10 with 1–2 sentences each
+  // lands ~500–700 words for free_pick, ~700–900 for deep_dive.
   const bodyLen = raw.bodyMarkdown.length;
-  // ~5 chars/word for English. Minimums set ~95% of the prompted floor so
-  // the validator rejects genuinely-too-short pieces but not posts that
-  // land at the lower end of the requested range.
+  // ~5 chars/word for English. Floors set ~85% of the prompted lower bound
+  // so we reject genuinely-too-short pieces without flagging tight recaps.
   const minByMode: Record<string, number> = {
-    deep_dive: 4700, // ~940 words (floor ≈ 1,000)
-    free_pick: 3500, // ~700 words (floor ≈ 750)
+    deep_dive: 3000, // ~600 words (floor ≈ 700)
+    free_pick: 2000, // ~400 words (floor ≈ 500)
   };
-  const minLen = minByMode[String(raw.mode)] ?? 3500;
+  const minLen = minByMode[String(raw.mode)] ?? 2000;
   if (bodyLen < minLen) {
     return { error: `Body too short for ${raw.mode}: ${bodyLen} chars (need ≥ ${minLen})` };
   }
@@ -907,8 +777,9 @@ export async function generateAndSavePost(opts: {
   const modeHint = opts.modeHint ?? "auto";
 
   const corpus = await loadCorpus(opts.corpusDays ?? 7);
-  if (corpus.length < 5) {
-    return { ok: false, error: `Corpus too thin: ${corpus.length} items in window` };
+  // Top-10 recap format needs at least 10 substantive items in the window.
+  if (corpus.length < 10) {
+    return { ok: false, error: `Corpus too thin for top-10 recap: ${corpus.length} items in window` };
   }
 
   // Load recent posts so the agent knows what it has already covered. Without
@@ -1153,9 +1024,11 @@ export async function generateAndSavePost(opts: {
           "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
       } else {
-        // Body-too-short retry — be explicit about the numbers because the
-        // user's custom system prompt may understate the actual length
-        // requirement. The validator floor is the authoritative minimum.
+        // Body-too-short retry. The recap format is intentionally short
+        // (exec summary + 10 numbered items, 1–2 sentences each), so a
+        // too-short body usually means the model returned fewer than 10
+        // items or skipped the executive summary. Push it to fill the
+        // standard shape, not to add multi-paragraph essay content.
         const m = result.error.match(/(\d+)\s+chars.*?≥\s*(\d+)/);
         const wrote = m ? Number(m[1]) : null;
         const need = m ? Number(m[2]) : null;
@@ -1164,17 +1037,17 @@ export async function generateAndSavePost(opts: {
         retryPrompt = [
           `Your previous response was rejected: ${result.error}`,
           wrote && need
-            ? `You wrote ~${wroteWords} words (${wrote} chars). The minimum for ${raw.mode} mode is ~${needWords} words (${need} chars). You need to AT LEAST DOUBLE the body length.`
+            ? `You wrote ~${wroteWords} words (${wrote} chars). The minimum for ${raw.mode} mode is ~${needWords} words (${need} chars).`
             : `The body is significantly shorter than the required minimum.`,
           "",
           "Hard requirements for this retry:",
-          `- Body MUST be at least ${need ?? 6800} characters of markdown.`,
-          "- Each item you cite gets multiple paragraphs of interpretation, not a single attribution sentence.",
-          "- For each item, work through: what the publisher reported → what's actually new about it → who it changes things for → which open questions it raises → how it relates to the other items you cited. Attribute by publisher name (Anthropic, OpenAI, etc.), never by meta-references like 'the corpus' or 'the headlines'.",
-          "- Add a clear opening section establishing the week's framing thesis (3–5 sentences, not 1).",
-          "- Add a substantive closing section connecting the items into a single argument (3–5 sentences).",
-          "- Do NOT pad with restatement or filler. Add real interpretive content.",
-          "- If the available material genuinely cannot support this length, set abort:true with a rationale instead of producing a short post.",
+          `- Body MUST be at least ${need ?? 2000} characters of markdown.`,
+          "- The post is an executive summary + numbered top-10 recap. Make sure both are present.",
+          "- Open with a 2–3 sentence executive summary (~50–80 words) naming the day's connecting themes.",
+          "- Then a numbered list of exactly 10 items. Each item is 1–2 sentences. The lead clause (publisher + what shipped) is bolded; commentary follows in plain prose.",
+          "- For deep_dive mode, the top 3 items may have a 3rd sentence of additional context; items 4–10 stay at 1–2 sentences.",
+          "- Attribute each item by publisher name (Anthropic, OpenAI, TechCrunch, etc.). Never use meta-references like 'the corpus' or 'the headlines'.",
+          "- Do NOT pad items into mini-essays. Stay 1–2 sentences each. If the underlying material can't fill 10 substantive items, set abort:true with a rationale.",
           "",
           "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
