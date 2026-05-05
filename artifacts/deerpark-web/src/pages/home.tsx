@@ -319,7 +319,6 @@ type CaseStudyData = {
   outcome: React.ReactNode;
   mockup?: React.ReactNode;
   narrativeOnly?: boolean;
-  testimonial?: { quote: string; attribution: string };
   diagram?: React.ReactNode;
 };
 
@@ -670,17 +669,13 @@ const CASE_STUDIES: CaseStudyData[] = [
   {
     id: "workflow-automation",
     eyebrow: "Workflow Automation",
-    headline: "Public relations drafts, from half-day to minutes of review.",
+    headline: "Quarterly reporting, from a full day to under an hour.",
     narrativeOnly: true,
     diagram: <PRWorkflowDiagram />,
     intro: [
-      "A communications team was drafting public relations materials on a recurring cadence — pulling from news coverage, internal briefing notes, and prior statements, then iterating through multiple review rounds. Each cycle consumed hours of senior comms time before anything went out the door.",
-      "We rebuilt the drafting pipeline as an AI workflow with Skills integrated end-to-end across source ingestion, structured analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, while time-to-completion dropped by 90%. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
+      "A team was producing recurring quarterly reports for clients — pulling from kick-off call notes, internal data, and prior-cycle context, then iterating through multiple review rounds. Each cycle consumed a full day of senior time before the report went out the door.",
+      "We rebuilt the reporting pipeline as an AI workflow with Skills integrated end-to-end across source ingestion, structured analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, and time-to-completion dropped by over 90% — a full day became under an hour. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
     ],
-    testimonial: {
-      quote: "Noticeable difference from the baseline model — and it saves us an incredible amount of time on a quarterly basis.",
-      attribution: "Client Lead",
-    },
     before:
       "Hours per cycle of source review, structured note-taking, and drafting from scratch. Same shape every time — no leverage.",
     after:
@@ -699,7 +694,7 @@ const CASE_STUDIES: CaseStudyData[] = [
     ],
     outcome: (
       <>
-        What used to be a half-day of communications work is now a <span className="text-background font-medium">few minutes of review</span>. The team kept full editorial control; the freed time went into messaging strategy and faster turnaround on time-sensitive comms.
+        What used to be a full day of reporting work is now <span className="text-background font-medium">under an hour, end to end</span>. The team kept full editorial control; the freed time went into deeper analysis and faster client turnaround.
       </>
     ),
   },
@@ -727,18 +722,6 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
           ))}
         </div>
         {data.diagram && <div className="mt-10">{data.diagram}</div>}
-        {data.testimonial && (
-          <figure className="mt-10 pt-8 border-t border-background/20">
-            <blockquote className="text-xl md:text-2xl font-serif text-background leading-snug">
-              <span className="text-background/40">“</span>
-              {data.testimonial.quote}
-              <span className="text-background/40">”</span>
-            </blockquote>
-            <figcaption className="mt-4 section-label !text-background/60">
-              — {data.testimonial.attribution}
-            </figcaption>
-          </figure>
-        )}
         <div className="mt-10 pt-8 border-t border-background/20 grid md:grid-cols-[auto_1fr] gap-x-8 gap-y-2 items-baseline">
           <div className="section-label !text-background/60">Outcome</div>
           <div className="text-lg md:text-xl font-serif text-background leading-snug">
