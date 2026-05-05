@@ -910,7 +910,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What about data security and compliance?",
-    a: "We deploy inside your VPC or cloud tenant, use your existing IAM, and route through vetted model providers. We have worked with HIPAA, SOC 2, and FINRA-adjacent environments.",
+    a: "We deploy inside your VPC or cloud tenant, use your existing IAM, and route through vetted model providers. We have worked in FINRA-adjacent environments and on systems with healthcare and enterprise compliance requirements.",
   },
   {
     q: "Which models do you use?",
