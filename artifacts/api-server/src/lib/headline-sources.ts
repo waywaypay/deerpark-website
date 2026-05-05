@@ -22,6 +22,11 @@ export type SourceConfig = {
   url: string;
   enabled: boolean;
   tier: SourceTier;
+  // True for broad-topic feeds (Bloomberg Tech, The Information, Axios) where
+  // we only want AI-related items — applied at ingest time via isAiRelevant.
+  // Omit / false for AI-native feeds (TechCrunch AI, Verge AI) that are
+  // already topic-scoped at the source.
+  aiFilter?: boolean;
 };
 
 // URLs can be overridden via env vars. Anthropic and Mistral don't publish
@@ -248,6 +253,47 @@ export const SOURCES: SourceConfig[] = [
       "https://www.apple.com/newsroom/rss-feed.rss",
     enabled: true,
     tier: 3,
+  },
+  // Business-press tier — authoritative coverage of M&A, JVs, financing,
+  // restructurings, and exec moves the AI-tech press underweights or misses
+  // entirely (e.g. Bloomberg breaking an OpenAI / Anthropic JV before any
+  // lab feed posts). Broad-topic feeds, so aiFilter:true keeps non-AI
+  // stories out of the corpus.
+  {
+    id: "bloomberg-tech",
+    displayName: "Bloomberg Technology",
+    category: "Business Press",
+    kind: "rss",
+    url:
+      process.env["BLOOMBERG_TECH_FEED_URL"] ??
+      "https://feeds.bloomberg.com/technology/news.rss",
+    enabled: true,
+    tier: 2,
+    aiFilter: true,
+  },
+  {
+    id: "the-information",
+    displayName: "The Information",
+    category: "Business Press",
+    kind: "rss",
+    url:
+      process.env["THE_INFORMATION_FEED_URL"] ??
+      "https://www.theinformation.com/feed",
+    enabled: true,
+    tier: 2,
+    aiFilter: true,
+  },
+  {
+    id: "axios-tech",
+    displayName: "Axios Tech",
+    category: "Business Press",
+    kind: "rss",
+    url:
+      process.env["AXIOS_TECH_FEED_URL"] ??
+      "https://api.axios.com/feed/topic/technology",
+    enabled: true,
+    tier: 3,
+    aiFilter: true,
   },
 ];
 

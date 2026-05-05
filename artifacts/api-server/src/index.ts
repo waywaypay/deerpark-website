@@ -1,9 +1,10 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startHeadlineScheduler } from "./lib/ingest-headlines";
-import { startWriterScheduler, backfillKnownMisspellings } from "./lib/writer-agent";
+import { startWriterScheduler } from "./lib/writer-agent";
 import { startDailyDigestScheduler } from "./lib/daily-digest";
 import { ensureLeadsSchema } from "./routes/leads";
+import { runDataMigrations } from "./lib/migrate";
 
 const rawPort = process.env["PORT"];
 
@@ -31,8 +32,8 @@ app.listen(port, (err) => {
     logger.error({ err: schemaErr }, "Leads: ensureSchema failed");
   });
 
-  backfillKnownMisspellings().catch((err) => {
-    logger.error({ err }, "Posts: backfillKnownMisspellings failed");
+  runDataMigrations().catch((err) => {
+    logger.error({ err }, "Data migrations: failed");
   });
 
   if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
