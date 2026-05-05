@@ -12,7 +12,7 @@
 
 const API_BASE = "https://deerpark-api.fly.dev";
 const SITE_URL = "https://www.deerpark.io";
-const DEFAULT_OG_IMAGE = `${SITE_URL}/og-image.png`;
+const DEFAULT_OG_IMAGE = `${SITE_URL}/opengraph.jpg`;
 
 const escapeHtml = (s) =>
   String(s)
