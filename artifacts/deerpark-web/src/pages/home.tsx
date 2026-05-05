@@ -88,10 +88,12 @@ const Hero = () => {
           </FadeIn>
 
           <FadeIn delay={0.4}>
-            <div className="flex gap-10 border-t border-foreground/15 pt-8">
+            <div className="flex gap-8 border-t border-foreground/15 pt-8">
                 {[
                 { stat: "8 wks", label: "from readiness review to live rollout" },
                 { stat: "100%", label: "code, prompts, and data stay in your accounts" },
+                { stat: "90%+", label: "reduction in manual effort on shipped workflows" },
+                { stat: "0", label: "per-seat AI license fees, ever" },
               ].map(({ stat, label }) => (
                 <div key={stat}>
                   <div className="text-2xl font-serif text-foreground mb-1">{stat}</div>
