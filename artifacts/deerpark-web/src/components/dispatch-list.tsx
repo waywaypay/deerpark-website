@@ -11,9 +11,9 @@ export const DispatchList = ({ entries }: { entries: DispatchEntry[] }) => (
             <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">{entry.date}</div>
             <div className="text-sm font-serif text-foreground mt-1">{entry.dateLong}</div>
           </div>
-          <div className="col-span-9 md:col-span-8 flex flex-col gap-1">
+          <div className="col-span-9 md:col-span-8 flex flex-col gap-1.5">
             <div className="text-base md:text-lg font-serif leading-snug text-foreground">{entry.title}</div>
-            <div className="text-sm text-muted-foreground font-light leading-relaxed line-clamp-2">{entry.dek}</div>
+            <div className="text-[15px] md:text-base text-muted-foreground font-light leading-relaxed line-clamp-2">{entry.dek}</div>
           </div>
           <div className="hidden md:flex col-span-2 items-baseline justify-end gap-3">
             <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground border border-foreground/20 px-2 py-1">
