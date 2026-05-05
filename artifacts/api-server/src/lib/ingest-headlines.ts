@@ -78,6 +78,7 @@ async function fetchRss(source: SourceConfig): Promise<NormalizedItem[]> {
   const feed = await parser.parseURL(source.url);
   return (feed.items ?? [])
     .filter((item) => item.link && item.title)
+    .filter((item) => !source.aiFilter || isAiRelevant(item.title!))
     .map((item) => ({
       source: source.displayName,
       category: source.category,

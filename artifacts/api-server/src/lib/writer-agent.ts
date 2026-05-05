@@ -595,33 +595,37 @@ function citationJaccard(a: string[], b: string[]): number {
   return union === 0 ? 0 : intersection / union;
 }
 
-// Recurring model hallucination: writes "Anthropologic" (a real English word
-// meaning 'relating to anthropology') when it means the AI lab "Anthropic".
-// Negative lookahead skips real adjectives like 'Anthropological' / 'Anthropologically'
-// while still catching possessives ("Anthropologic's") and bare uses.
-export function sanitizeKnownMisspellings(text: string): string {
-  return text.replace(/\bAnthropologic(?![a-z])/g, "Anthropic");
-}
+// Canonical entity names + observed model hallucinations. Each rule maps a
+// regex matching a known misspelling to the canonical replacement. Add a new
+// rule whenever we observe a new consistent hallucination — keep entries
+// conservative: patterns must be specific enough that no legitimate sentence
+// is rewritten.
+//
+// Rules apply at runtime, before persist. To clean up rows written before a
+// rule landed, add a corresponding migration in lib/db/migrations/.
+type MisspellingRule = {
+  description: string;
+  pattern: RegExp;
+  replacement: string;
+};
 
-// One-time data fix: rewrite "Anthropologic" → "Anthropic" in any persisted
-// post. Idempotent — subsequent boots find no rows to update. Runs on startup
-// to clean up posts written before the sanitizer landed.
-export async function backfillKnownMisspellings(): Promise<void> {
-  // Postgres POSIX regex: \m is start-of-word; (?![a-z]) skips real
-  // adjectives like 'Anthropological'. PG 9.x+ supports lookaheads.
-  // Backslash is doubled so the JS template literal preserves it for PG.
-  const result = await db.execute(sql`
-    UPDATE posts
-    SET
-      title = regexp_replace(title, '\\mAnthropologic(?![a-z])', 'Anthropic', 'g'),
-      dek = regexp_replace(dek, '\\mAnthropologic(?![a-z])', 'Anthropic', 'g'),
-      body_markdown = regexp_replace(body_markdown, '\\mAnthropologic(?![a-z])', 'Anthropic', 'g')
-    WHERE title LIKE '%Anthropologic%'
-       OR dek LIKE '%Anthropologic%'
-       OR body_markdown LIKE '%Anthropologic%'
-  `);
-  const count = (result as { rowCount?: number | null }).rowCount ?? 0;
-  if (count > 0) logger.info({ count }, "Posts: backfilled Anthropologic → Anthropic");
+const MISSPELLING_RULES: MisspellingRule[] = [
+  {
+    description: "Anthropologic (real adjective) when meaning the AI lab Anthropic",
+    // \b + negative lookahead skips real English adjectives like
+    // 'Anthropological' / 'Anthropologically' while catching the bare word
+    // and possessives ("Anthropologic's").
+    pattern: /\bAnthropologic(?![a-z])/g,
+    replacement: "Anthropic",
+  },
+];
+
+export function sanitizeKnownMisspellings(text: string): string {
+  let out = text;
+  for (const rule of MISSPELLING_RULES) {
+    out = out.replace(rule.pattern, rule.replacement);
+  }
+  return out;
 }
 
 const validateDraft = (
