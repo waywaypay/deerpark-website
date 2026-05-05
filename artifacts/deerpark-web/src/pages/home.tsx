@@ -1089,6 +1089,56 @@ const QUESTIONS: Question[] = [
       { label: "A creative co-pilot for marketing and content", weights: { gpt: 3 } },
     ],
   },
+  {
+    id: "build",
+    prompt: "How much custom building do you expect in the first year?",
+    choices: [
+      { label: "Heavy — internal apps, agents, and workflow automation", weights: { claude: 3, gpt: 1 } },
+      { label: "Some — light scripting, integrations, and prompt tooling", weights: { claude: 2, gpt: 2 } },
+      { label: "Almost none — we just want a great chat assistant", weights: { gpt: 3, gemini: 1 } },
+      { label: "We need full control of the model, weights, and pipeline", weights: { openSource: 4 } },
+    ],
+  },
+  {
+    id: "governance",
+    prompt: "How strict are your data governance and compliance requirements?",
+    choices: [
+      { label: "Strict — regulated industry, audit trails, data residency rules", weights: { openSource: 3, claude: 2 } },
+      { label: "Moderate — vendor DPAs and zero-retention agreements are enough", weights: { claude: 3, gpt: 1 } },
+      { label: "Light — standard enterprise terms cover us", weights: { gpt: 2, gemini: 2 } },
+      { label: "We haven't really nailed this down yet", weights: { gpt: 2, claude: 1 } },
+    ],
+  },
+  {
+    id: "multimodal",
+    prompt: "How often will the team work with images, audio, or video?",
+    choices: [
+      { label: "Constantly — it's core to what we do", weights: { gemini: 3, gpt: 2 } },
+      { label: "Often — marketing assets, screenshots, recorded meetings", weights: { gpt: 3, gemini: 1 } },
+      { label: "Occasionally — mostly text with the odd image", weights: { claude: 1, gpt: 1, gemini: 1 } },
+      { label: "Rarely — we live in documents and prose", weights: { claude: 3 } },
+    ],
+  },
+  {
+    id: "answer-style",
+    prompt: "What does a great answer look like to you?",
+    choices: [
+      { label: "Careful, well-reasoned, willing to say 'I'm not sure'", weights: { claude: 3 } },
+      { label: "Fast, confident, and happy to take a strong first pass", weights: { gpt: 3 } },
+      { label: "Grounded in current sources I can click through and verify", weights: { gemini: 3, claude: 1 } },
+      { label: "One I'm certain never left our network", weights: { openSource: 3, claude: 1 } },
+    ],
+  },
+  {
+    id: "rollout",
+    prompt: "How would you ideally roll this out across the team?",
+    choices: [
+      { label: "One vendor seat for everyone — simplest possible footprint", weights: { gpt: 3 } },
+      { label: "Bake it into the productivity suite we already pay for", weights: { gpt: 1, gemini: 2 } },
+      { label: "Mix-and-match — pick the best tool per workflow", weights: { claude: 2, gpt: 1, gemini: 1 } },
+      { label: "Self-host it behind our own access controls", weights: { openSource: 4 } },
+    ],
+  },
 ];
 
 type Recommendation = { primary: ModelKey; runnerUp: ModelKey; tally: Record<ModelKey, number> };
@@ -1247,13 +1297,13 @@ const LeadCapture = () => {
               <span className="section-label">Free Model-Fit Assessment</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-serif mb-6">
-              Find your AI model fit in 60 seconds.
+              Find your AI model fit in 2 minutes.
             </h2>
             <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6 max-w-xl">
-              Five blind questions, no labels on the answers. We score how you actually work and recommend the model that fits — then send a tailored deployment plan within two business days.
+              Ten blind questions, no labels on the answers. We score how you actually work and recommend the model that fits — then send a tailored deployment plan within two business days.
             </p>
             <div className="space-y-3 text-sm text-muted-foreground font-light">
-              <p>&bull; Five questions. ~60 seconds.</p>
+              <p>&bull; Ten questions. ~2 minutes.</p>
               <p>&bull; Scored across Claude, ChatGPT, Gemini, and open-source.</p>
               <p>&bull; No software purchase required.</p>
             </div>
