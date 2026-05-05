@@ -1,7 +1,7 @@
 import React, { FormEvent, useEffect, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
 import { FadeIn, Navbar, Footer, AssessmentFAB } from "@/components/site-layout";
 import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
 
@@ -320,6 +320,7 @@ type CaseStudyData = {
   mockup?: React.ReactNode;
   narrativeOnly?: boolean;
   testimonial?: { quote: string; attribution: string };
+  diagram?: React.ReactNode;
 };
 
 const SCHEDULE_MEETINGS = [
@@ -565,6 +566,38 @@ const SchedulingMockups = () => {
   );
 };
 
+const PR_WORKFLOW_STEPS = [
+  { icon: Mic, label: "Kick-off", detail: "Quarterly call transcript & notes" },
+  { icon: FolderInput, label: "Ingest", detail: "Auto-routed to project folder" },
+  { icon: Sparkles, label: "Skill", detail: "Custom Skill triggered in Claude" },
+  { icon: Files, label: "Publish", detail: "Formatted doc & deck" },
+] as const;
+
+const PRWorkflowDiagram = () => (
+  <div className="border border-background/20 p-6 md:p-8">
+    <div className="section-label !text-background/60 mb-6">How it runs</div>
+    <ol className="flex flex-col md:flex-row md:items-stretch gap-3">
+      {PR_WORKFLOW_STEPS.map((step, i) => {
+        const Icon = step.icon;
+        return (
+          <React.Fragment key={step.label}>
+            <li className="flex-1 min-w-0 flex flex-col items-center text-center gap-3 p-5 border border-background/15 bg-background/[0.02]">
+              <Icon className="w-6 h-6 text-primary" aria-hidden />
+              <div className="text-[10px] uppercase tracking-[0.18em] text-background/50 font-sans">{step.label}</div>
+              <div className="text-sm font-serif text-background/85 leading-snug">{step.detail}</div>
+            </li>
+            {i < PR_WORKFLOW_STEPS.length - 1 && (
+              <div className="flex items-center justify-center text-background/40 py-1 md:py-0 md:px-1" aria-hidden>
+                <ArrowRight className="w-4 h-4 rotate-90 md:rotate-0" />
+              </div>
+            )}
+          </React.Fragment>
+        );
+      })}
+    </ol>
+  </div>
+);
+
 const CASE_STUDIES: CaseStudyData[] = [
   {
     id: "scheduling-app",
@@ -605,6 +638,7 @@ const CASE_STUDIES: CaseStudyData[] = [
     eyebrow: "Workflow Automation",
     headline: "Public relations drafts, from half-day to minutes of review.",
     narrativeOnly: true,
+    diagram: <PRWorkflowDiagram />,
     intro: [
       "A communications team was drafting public relations materials on a recurring cadence — pulling from news coverage, internal briefing notes, and prior statements, then iterating through multiple review rounds. Each cycle consumed hours of senior comms time before anything went out the door.",
       "We rebuilt the drafting pipeline as an AI workflow with Skills integrated end-to-end across source ingestion, structured analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, while time-to-completion dropped by 90%. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
@@ -658,6 +692,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
             </p>
           ))}
         </div>
+        {data.diagram && <div className="mt-10">{data.diagram}</div>}
         {data.testimonial && (
           <figure className="mt-10 pt-8 border-t border-background/20">
             <blockquote className="text-xl md:text-2xl font-serif text-background leading-snug">
