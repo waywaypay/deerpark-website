@@ -8,13 +8,22 @@ const RESEND_API = "https://api.resend.com/emails";
 type DigestConfig = {
   fromEmail: string;
   resendApiKey: string;
-  hourUtc: number;
-  minuteUtc: number;
+  /**
+   * Send time in America/Los_Angeles (Pacific Time). DST-aware via
+   * Intl.DateTimeFormat in the tick — same wall-clock hour year-round
+   * regardless of PST/PDT.
+   */
+  hourPt: number;
+  minutePt: number;
   /** Public archive link in the email footer. */
   archiveUrl: string;
   /** Base URL for the unsubscribe link. */
   publicBaseUrl: string;
 };
+
+const DIGEST_TIMEZONE = "America/Los_Angeles";
+const DEFAULT_HOUR_PT = 15;
+const DEFAULT_MINUTE_PT = 30;
 
 /**
  * Trim whitespace and strip outer quotes from a config value. Common failure
@@ -34,8 +43,9 @@ function sanitizeEnv(raw: string | undefined): string | undefined {
 export function digestConfigStatus(): {
   hasFromEmail: boolean;
   hasResendKey: boolean;
-  hourUtc: number;
-  minuteUtc: number;
+  hourPt: number;
+  minutePt: number;
+  timezone: string;
   ready: boolean;
 } {
   const hasFromEmail = Boolean(sanitizeEnv(process.env["DAILY_DIGEST_FROM_EMAIL"]));
@@ -43,8 +53,9 @@ export function digestConfigStatus(): {
   return {
     hasFromEmail,
     hasResendKey,
-    hourUtc: Number(process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13"),
-    minuteUtc: Number(process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0"),
+    hourPt: Number(process.env["DAILY_DIGEST_HOUR_PT"] ?? String(DEFAULT_HOUR_PT)),
+    minutePt: Number(process.env["DAILY_DIGEST_MINUTE_PT"] ?? String(DEFAULT_MINUTE_PT)),
+    timezone: DIGEST_TIMEZONE,
     ready: hasFromEmail && hasResendKey,
   };
 }
@@ -55,23 +66,39 @@ function readConfig(): DigestConfig | { error: string } {
   if (!fromEmail) return { error: "DAILY_DIGEST_FROM_EMAIL not set" };
   if (!resendApiKey) return { error: "RESEND_API_KEY not set" };
 
-  const hourUtc = Number(process.env["DAILY_DIGEST_HOUR_UTC"] ?? "13");
-  const minuteUtc = Number(process.env["DAILY_DIGEST_MINUTE_UTC"] ?? "0");
-  if (!Number.isFinite(hourUtc) || hourUtc < 0 || hourUtc > 23) {
-    return { error: `Invalid DAILY_DIGEST_HOUR_UTC: ${hourUtc}` };
+  const hourPt = Number(process.env["DAILY_DIGEST_HOUR_PT"] ?? String(DEFAULT_HOUR_PT));
+  const minutePt = Number(process.env["DAILY_DIGEST_MINUTE_PT"] ?? String(DEFAULT_MINUTE_PT));
+  if (!Number.isFinite(hourPt) || hourPt < 0 || hourPt > 23) {
+    return { error: `Invalid DAILY_DIGEST_HOUR_PT: ${hourPt}` };
   }
-  if (!Number.isFinite(minuteUtc) || minuteUtc < 0 || minuteUtc > 59) {
-    return { error: `Invalid DAILY_DIGEST_MINUTE_UTC: ${minuteUtc}` };
+  if (!Number.isFinite(minutePt) || minutePt < 0 || minutePt > 59) {
+    return { error: `Invalid DAILY_DIGEST_MINUTE_PT: ${minutePt}` };
   }
 
   return {
     fromEmail,
     resendApiKey,
-    hourUtc,
-    minuteUtc,
+    hourPt,
+    minutePt,
     archiveUrl: sanitizeEnv(process.env["SUBSTACK_URL"]) ?? "https://deerparkai.substack.com",
     publicBaseUrl: sanitizeEnv(process.env["PUBLIC_API_BASE_URL"]) ?? "https://deerpark-api.fly.dev",
   };
+}
+
+/**
+ * Current Pacific-time minute-of-day (0–1439). Uses Intl.DateTimeFormat with
+ * `hourCycle: "h23"` so 12am reads as 0, not 24, regardless of host locale.
+ */
+function ptMinutesOfDay(now: Date = new Date()): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: DIGEST_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+  return hour * 60 + minute;
 }
 
 /**
@@ -113,11 +140,15 @@ export async function loadCandidates(): Promise<Post[]> {
 }
 
 async function alreadySentToday(): Promise<boolean> {
+  // Dedup is per Pacific-time day so the once-daily semantic matches the
+  // schedule (15:30 PT). Using UTC date would race the day-rollover for
+  // sends near 5 PM PT (= midnight UTC).
   const rows = await db.execute<{ count: string }>(sql`
     SELECT COUNT(*)::text AS count
     FROM posts
     WHERE sent_to_substack_at IS NOT NULL
-      AND sent_to_substack_at::date = (NOW() AT TIME ZONE 'UTC')::date
+      AND (sent_to_substack_at AT TIME ZONE ${DIGEST_TIMEZONE})::date
+        = (NOW() AT TIME ZONE ${DIGEST_TIMEZONE})::date
   `);
   const first = rows.rows[0];
   return first ? Number(first.count) > 0 : false;
@@ -349,10 +380,9 @@ export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
     const cfg = readConfig();
     if ("error" in cfg) return;
 
-    const now = new Date();
-    const targetMin = cfg.hourUtc * 60 + cfg.minuteUtc;
-    const nowMin = now.getUTCHours() * 60 + now.getUTCMinutes();
-    if (nowMin < targetMin) return; // too early; wait for the configured hour
+    const targetMin = cfg.hourPt * 60 + cfg.minutePt;
+    const nowMin = ptMinutesOfDay();
+    if (nowMin < targetMin) return; // too early in PT; wait for the configured hour
 
     try {
       await runDailyDigest();

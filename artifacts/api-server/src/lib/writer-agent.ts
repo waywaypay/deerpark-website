@@ -142,7 +142,7 @@ highly informed
 time-constrained
 skeptical of hype
 
-The format is a curated briefing, not an essay. Every post has the same shape: an executive summary that connects the day's themes, then a numbered top-10 of the day's headlines with 1–2 sentences of commentary each.
+The format is a curated briefing, not an essay. Every post has the same shape: an executive summary that connects the day's themes, then a numbered top-10 of the day's headlines with 2–4 sentences of commentary each.
 
 🔒 HARD RULES — NEVER BREAK
 Only write about events, releases, papers, or companies explicitly present in the input headlines.
@@ -172,17 +172,17 @@ Open with the day's framing thesis. Name the 1–2 themes that connect today's m
 Bad: "The week's announcements paint an interesting picture of where AI is heading."
 Good: "Today's 10 updates cluster around two themes: Anthropic's move into consulting and OpenAI's CFO push. The shift is from model-building to implementation services — and it changes which vendors enterprise buyers should be evaluating right now."
 
-PART 2 — Top 10 (numbered list, 1–2 sentences each)
+PART 2 — Top 10 (numbered list, 2–4 sentences each)
 Rank the 10 most consequential items from the headlines. For each:
 - Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y."
-- One sentence of commentary: what's new about it, why it matters, who it affects, or what it leaves unspecified.
-- Keep each item to 1–2 sentences. No item exceeds 2 sentences.
+- 1–3 sentences of commentary: what's new about it, why it matters, who it affects, or what it leaves unspecified. Use multiple sentences to add real substance — context, qualification, or pressure-testing — not filler.
+- Keep each item to 2–4 sentences. No item is shorter than 2 sentences or longer than 4.
 - Order by importance for an enterprise operator, not by recency.
 
 Format the list as standard markdown:
 
-1. **Anthropic released Claude Code 2.0.** Adds session memory and remote repo support — closing the gap with Cursor on persistent agentic workflows.
-2. **OpenAI hired its first CFO.** Signals a push toward enterprise sales discipline; expect tighter procurement terms in Q2.
+1. **Anthropic released Claude Code 2.0.** Adds session memory and remote repo support — closing the gap with Cursor on persistent agentic workflows. The release notes confirm tool-state survives across restarts but stop short of explaining the storage model, which matters for regulated buyers. For enterprise users on Bedrock, the feature lands behind the standard 1-release-cycle delay.
+2. **OpenAI hired its first CFO.** Signals a push toward enterprise sales discipline; expect tighter procurement terms in Q2. The hire follows two quarters of public commentary about cost-of-revenue from the model business. Procurement and legal teams should plan for renewals to slow.
 
 Each item bolds the lead clause (publisher + what shipped). Commentary follows in plain prose.
 
@@ -212,12 +212,12 @@ You may interpret the signal. You must NOT present it as proven reality.
 No abstract claims without evidence. If you write "switching costs increase" or "trust declines," you must specify which company, which product, what behavior changes. If you cannot anchor it to a headline, delete it.
 
 🧠 MODES
-free_pick (default — recap format, top 10 with 1–2 sentences each, ~500–700 total words)
-deep_dive (used sparingly — same recap format but the top 3 items get a 3rd sentence of additional context; items 4–10 stay at 1–2 sentences. ~700–900 total words.)
+free_pick (default — recap format, top 10 with 2–3 sentences each, ~700–900 total words)
+deep_dive (used sparingly — same recap format but the top 3 items lean toward 4 sentences of additional context; items 4–10 stay at 2–3 sentences. ~900–1100 total words.)
 
-Both modes use the executive summary + numbered top-10 shape above. The only difference is how much commentary the top items get.
+Both modes use the executive summary + numbered top-10 shape above. The only difference is how much commentary the top items get. Every item must still fit in the 2–4 sentence band.
 
-Default to free_pick unless 2–3 items genuinely warrant additional context.
+Default to free_pick unless 2–3 items genuinely warrant a 4th sentence of additional context.
 
 🚫 LANGUAGE DISCIPLINE
 Avoid generic business language: "positions itself," "leverages," "drives value," "in this landscape." Replace with specific actions and named actors. If a sentence could apply to any tech company, rewrite it.
@@ -584,17 +584,16 @@ const validateDraft = (
       };
     }
   }
-  // Per-mode minimum body length. The recap format is much shorter than the
-  // old long-form essay shape — exec summary + top 10 with 1–2 sentences each
-  // lands ~500–700 words for free_pick, ~700–900 for deep_dive.
+  // Per-mode minimum body length. Recap format with 2–4 sentences per item
+  // lands ~700–900 words for free_pick, ~900–1100 for deep_dive.
   const bodyLen = raw.bodyMarkdown.length;
   // ~5 chars/word for English. Floors set ~85% of the prompted lower bound
   // so we reject genuinely-too-short pieces without flagging tight recaps.
   const minByMode: Record<string, number> = {
-    deep_dive: 3000, // ~600 words (floor ≈ 700)
-    free_pick: 2000, // ~400 words (floor ≈ 500)
+    deep_dive: 4000, // ~800 words (floor ≈ 900)
+    free_pick: 3000, // ~600 words (floor ≈ 700)
   };
-  const minLen = minByMode[String(raw.mode)] ?? 2000;
+  const minLen = minByMode[String(raw.mode)] ?? 3000;
   if (bodyLen < minLen) {
     return { error: `Body too short for ${raw.mode}: ${bodyLen} chars (need ≥ ${minLen})` };
   }
@@ -1057,13 +1056,13 @@ export async function generateAndSavePost(opts: {
             : `The body is significantly shorter than the required minimum.`,
           "",
           "Hard requirements for this retry:",
-          `- Body MUST be at least ${need ?? 2000} characters of markdown.`,
+          `- Body MUST be at least ${need ?? 3000} characters of markdown.`,
           "- The post is an executive summary + numbered top-10 recap. Make sure both are present.",
           "- Open with a 2–3 sentence executive summary (~50–80 words) naming the day's connecting themes.",
-          "- Then a numbered list of exactly 10 items. Each item is 1–2 sentences. The lead clause (publisher + what shipped) is bolded; commentary follows in plain prose.",
-          "- For deep_dive mode, the top 3 items may have a 3rd sentence of additional context; items 4–10 stay at 1–2 sentences.",
+          "- Then a numbered list of exactly 10 items. Each item is 2–4 sentences. The lead clause (publisher + what shipped) is bolded; commentary follows in plain prose.",
+          "- For deep_dive mode, the top 3 items lean toward 4 sentences of additional context; items 4–10 stay at 2–3 sentences. Every item stays in the 2–4 sentence band.",
           "- Attribute each item by publisher name (Anthropic, OpenAI, TechCrunch, etc.). Never use meta-references like 'the corpus' or 'the headlines'.",
-          "- Do NOT pad items into mini-essays. Stay 1–2 sentences each. If the underlying material can't fill 10 substantive items, set abort:true with a rationale.",
+          "- Do NOT pad items into mini-essays. Stay 2–4 sentences each — every sentence must contribute substance (context, qualification, or pressure-test). If the underlying material can't fill 10 substantive items, set abort:true with a rationale.",
           "",
           "Re-emit the FULL post in the SAME JSON schema, no prose around it.",
         ].join("\n");
