@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db, leadsTable, insertLeadSchema } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { notifyNewLead } from "../lib/leads-notify";
 
 const router: IRouter = Router();
 
@@ -47,13 +48,39 @@ router.post("/leads", async (req, res) => {
   }
 
   try {
-    const [lead] = await db
+    const [inserted] = await db
       .insert(leadsTable)
       .values(parsed.data)
       .returning({ id: leadsTable.id });
 
-    req.log.info({ leadId: lead.id }, "Lead captured");
-    return res.status(201).json({ id: lead.id });
+    req.log.info({ leadId: inserted.id }, "Lead captured");
+
+    // Fire-and-forget notification email. Resolve full row so the email has the
+    // server-stamped timestamp + defaulted columns. Failures here must not turn
+    // a successful capture into a 500 — the lead is in the DB, that's the SOR.
+    void (async () => {
+      try {
+        const [full] = await db
+          .select()
+          .from(leadsTable)
+          .where(eq(leadsTable.id, inserted.id))
+          .limit(1);
+        if (!full) return;
+        const result = await notifyNewLead(full);
+        if (!result.ok) {
+          req.log.warn(
+            { leadId: inserted.id, reason: result.reason },
+            "Lead notify skipped or failed",
+          );
+        } else {
+          req.log.info({ leadId: inserted.id }, "Lead notify sent");
+        }
+      } catch (err) {
+        req.log.error({ err, leadId: inserted.id }, "Lead notify threw");
+      }
+    })();
+
+    return res.status(201).json({ id: inserted.id });
   } catch (err) {
     req.log.error({ err }, "Failed to insert lead");
     return res.status(500).json({ error: "Internal server error" });

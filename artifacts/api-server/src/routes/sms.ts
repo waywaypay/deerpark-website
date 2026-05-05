@@ -22,6 +22,7 @@ import {
   sendTwilioSms,
 } from "../lib/twilio";
 import { logger } from "../lib/logger";
+import { notifyNewLead } from "../lib/leads-notify";
 
 const router: IRouter = Router();
 
@@ -322,9 +323,19 @@ async function handleAsyncReply(args: {
           company,
           challenge: challenge.slice(0, 5000),
         })
-        .returning({ id: leadsTable.id });
+        .returning();
       updates.leadId = lead.id;
       logger.info({ phone, leadId: lead.id }, "sms: qualified, lead captured");
+      void (async () => {
+        try {
+          const result = await notifyNewLead(lead);
+          if (!result.ok) {
+            logger.warn({ leadId: lead.id, reason: result.reason }, "sms: lead notify skipped or failed");
+          }
+        } catch (err) {
+          logger.error({ err, leadId: lead.id }, "sms: lead notify threw");
+        }
+      })();
     } catch (err) {
       logger.error({ err, phone }, "sms: failed to insert qualified lead");
     }
