@@ -1,6 +1,7 @@
 import type { Lead } from "@workspace/db";
 
 const RESEND_API = "https://api.resend.com/emails";
+const DEFAULT_NOTIFY_EMAIL = "max@deerpark.io";
 
 function sanitizeEnv(raw: string | undefined): string | undefined {
   if (!raw) return raw;
@@ -21,11 +22,11 @@ function readConfig(): NotifyConfig | { error: string } {
   const fromEmail =
     sanitizeEnv(process.env["LEADS_NOTIFY_FROM_EMAIL"]) ??
     sanitizeEnv(process.env["DAILY_DIGEST_FROM_EMAIL"]);
-  const toEmail = sanitizeEnv(process.env["LEADS_NOTIFY_EMAIL"]);
+  const toEmail =
+    sanitizeEnv(process.env["LEADS_NOTIFY_EMAIL"]) ?? DEFAULT_NOTIFY_EMAIL;
   const resendApiKey = sanitizeEnv(process.env["RESEND_API_KEY"]);
   if (!resendApiKey) return { error: "RESEND_API_KEY not set" };
   if (!fromEmail) return { error: "LEADS_NOTIFY_FROM_EMAIL / DAILY_DIGEST_FROM_EMAIL not set" };
-  if (!toEmail) return { error: "LEADS_NOTIFY_EMAIL not set" };
   return { fromEmail, toEmail, resendApiKey };
 }
 
@@ -134,7 +135,7 @@ export async function notifyNewLead(lead: Lead): Promise<LeadNotifyResult> {
 /** Public-safe view of config state for /admin/health-style endpoints. */
 export function leadsNotifyStatus(): {
   hasFromEmail: boolean;
-  hasToEmail: boolean;
+  toEmail: string;
   hasResendKey: boolean;
   ready: boolean;
 } {
@@ -142,13 +143,14 @@ export function leadsNotifyStatus(): {
     sanitizeEnv(process.env["LEADS_NOTIFY_FROM_EMAIL"]) ??
       sanitizeEnv(process.env["DAILY_DIGEST_FROM_EMAIL"]),
   );
-  const hasToEmail = Boolean(sanitizeEnv(process.env["LEADS_NOTIFY_EMAIL"]));
+  const toEmail =
+    sanitizeEnv(process.env["LEADS_NOTIFY_EMAIL"]) ?? DEFAULT_NOTIFY_EMAIL;
   const hasResendKey = Boolean(sanitizeEnv(process.env["RESEND_API_KEY"]));
   return {
     hasFromEmail,
-    hasToEmail,
+    toEmail,
     hasResendKey,
-    ready: hasFromEmail && hasToEmail && hasResendKey,
+    ready: hasFromEmail && hasResendKey,
   };
 }
 
