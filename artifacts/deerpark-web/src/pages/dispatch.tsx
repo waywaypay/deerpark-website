@@ -10,6 +10,7 @@ import {
   SUBSTACK_URL,
   groupPostsToWeeks,
   usePosts,
+  type DispatchEntry,
 } from "@/lib/dispatch";
 
 type CoveredBy = {
@@ -120,7 +121,7 @@ const DispatchSubscribe = () => {
         onChange={(e) => setEmail(e.target.value)}
         placeholder="you@company.com"
         aria-label="Email address"
-        className="flex-1 h-12 px-4 bg-background border border-foreground/20 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground/60 transition-colors"
+        className="flex-1 h-12 px-4 bg-foreground/[0.04] border border-foreground/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors"
       />
       <Button
         type="submit"
@@ -131,6 +132,30 @@ const DispatchSubscribe = () => {
       </Button>
     </form>
   );
+};
+
+const LatestNotePreview = ({ entry }: { entry: DispatchEntry }) => {
+  const inner = (
+    <>
+      <span className="text-[10px] uppercase tracking-[0.18em] font-sans font-medium shrink-0 text-foreground/80">
+        Latest note
+      </span>
+      <span className="font-serif italic text-foreground/85 truncate min-w-0 flex-1">
+        "{entry.title}"
+      </span>
+      <ArrowRight className="w-3 h-3 shrink-0" />
+    </>
+  );
+  const wrapClass =
+    "mb-4 flex items-baseline gap-2 border-l-2 border-foreground/30 pl-3 text-xs text-foreground/70 hover:text-foreground hover:border-foreground/70 transition-colors overflow-hidden";
+  if (entry.id !== undefined) {
+    return (
+      <Link href={`/dispatch/${entry.id}`} className={wrapClass}>
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={wrapClass}>{inner}</div>;
 };
 
 const DispatchSection = () => {
@@ -145,6 +170,7 @@ const DispatchSection = () => {
 
   const visibleEntries = expanded ? latestWeek.entries : latestWeek.entries.slice(0, 3);
   const hasMore = latestWeek.entries.length > 3;
+  const latestEntry = latestWeek.entries[0];
 
   return (
     <section id="dispatch" className="pt-32 md:pt-40 pb-24 bg-background">
@@ -154,16 +180,17 @@ const DispatchSection = () => {
             <div className="h-[1px] w-12 bg-primary"></div>
             <span className="section-label">Dispatch</span>
           </div>
-          <div className="grid lg:grid-cols-12 gap-10 items-end mb-16">
-            <div className="lg:col-span-7">
+          <div className="flex flex-col gap-10 lg:grid lg:grid-cols-12 lg:items-end mb-16">
+            <div className="lg:col-span-7 min-w-0">
               <h2 className="text-4xl md:text-6xl font-serif leading-[1.05] pb-1">
                 The Daily Writing
               </h2>
             </div>
-            <div className="lg:col-span-5">
+            <div className="lg:col-span-5 min-w-0">
               <p className="text-muted-foreground font-light leading-relaxed mb-6">
                 A short analytical note every business day from our in-house agent — grounded in the headlines we're tracking, with what they mean for operators.
               </p>
+              {latestEntry && <LatestNotePreview entry={latestEntry} />}
               <DispatchSubscribe />
               <div className="mt-4 text-xs font-sans text-muted-foreground">
                 Delivered via Substack &bull;{" "}
@@ -238,102 +265,97 @@ const HeadlineFeed = () => {
     <section id="headline-feed" className="py-20 border-t border-foreground/15 bg-background">
       <div className="max-w-7xl mx-auto px-6">
         <FadeIn>
-          <div className="flex items-end justify-between mb-6 border-b border-foreground/15 pb-5 gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <Rss className="w-3.5 h-3.5 text-foreground/60" />
-                <span className="section-label">Full feed</span>
-              </div>
-              <h3 className="text-xl md:text-2xl font-serif leading-snug text-foreground/90">
-                {headlineMode === "top"
-                  ? "Everything we're tracking this week."
-                  : "Latest, straight from the labs and the boards."}
-              </h3>
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <Rss className="w-3.5 h-3.5 text-foreground/60" />
+              <span className="section-label">Full feed</span>
             </div>
-            <div className="flex flex-col items-end gap-3 shrink-0">
-              <div className="inline-flex border border-foreground/20" role="tablist" aria-label="Headline view">
-                {(["top", "latest"] as const).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    role="tab"
-                    aria-selected={headlineMode === m}
-                    onClick={() => setHeadlineMode(m)}
-                    className={`px-4 py-2 text-[10px] uppercase tracking-[0.2em] font-sans transition-colors ${
-                      headlineMode === m
-                        ? "bg-foreground text-background"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {m === "top" ? "This week" : "Latest"}
-                  </button>
-                ))}
-              </div>
-              <div className="hidden md:block text-xs uppercase tracking-[0.18em] text-muted-foreground font-sans">
-                {headlinesQuery.isLoading
-                  ? "Syncing…"
-                  : headlinesQuery.isError
-                    ? "Sync unavailable"
-                    : `Last sync • ${lastSync ? formatRelative(lastSync) : "just now"}`}
-              </div>
+            <h3 className="text-xl md:text-2xl font-serif leading-snug text-foreground/90">
+              {headlineMode === "top"
+                ? "Everything we're tracking this week."
+                : "Latest, straight from the labs and the boards."}
+            </h3>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-foreground/15 pb-3">
+            <div className="inline-flex border border-foreground/25" role="tablist" aria-label="Headline view">
+              {(["top", "latest"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  role="tab"
+                  aria-selected={headlineMode === m}
+                  onClick={() => setHeadlineMode(m)}
+                  className={`px-5 py-2.5 text-[11px] uppercase tracking-[0.2em] font-sans font-medium transition-colors ${
+                    headlineMode === m
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]"
+                  }`}
+                >
+                  {m === "top" ? "This week" : "Latest"}
+                </button>
+              ))}
+            </div>
+            <div className="text-[10px] md:text-xs uppercase tracking-[0.18em] text-muted-foreground font-sans">
+              {headlinesQuery.isLoading
+                ? "Syncing…"
+                : headlinesQuery.isError
+                  ? "Sync unavailable"
+                  : `Last sync • ${lastSync ? formatRelative(lastSync) : "just now"}`}
             </div>
           </div>
         </FadeIn>
 
         <FadeIn delay={0.1}>
-          <div className="border border-foreground/15">
-            <div className="hidden md:grid grid-cols-12 gap-4 px-6 py-4 border-b border-foreground/15 bg-foreground/[0.02]">
-              <div className="col-span-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-sans">When</div>
-              <div className="col-span-3 text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-sans">Source</div>
-              <div className="col-span-7 text-[10px] uppercase tracking-[0.2em] text-muted-foreground font-sans">Headline</div>
-            </div>
-            <div className="divide-y divide-foreground/10">
-              {headlines.map((item) => {
-                const d = new Date(item.publishedAt);
-                const key = `${item.source}-${item.publishedAt}-${item.title}`;
-                const titleNode = (
-                  <span className="inline-flex items-start gap-2">
-                    <span>{item.title}</span>
-                    <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-1" />
-                  </span>
-                );
-                return (
-                  <div key={key} className="grid grid-cols-1 md:grid-cols-12 gap-2 md:gap-4 px-6 py-4 items-baseline hover:bg-foreground/[0.02] transition-colors">
-                    <div className="md:col-span-2 flex items-baseline gap-2 text-xs uppercase tracking-[0.15em] text-muted-foreground">
-                      <span className="font-serif normal-case tracking-normal text-foreground text-sm">{HEADLINE_DATE_FMT.format(d)}</span>
-                      <span>{HEADLINE_TIME_FMT.format(d)}</span>
-                    </div>
-                    <div className="md:col-span-3 flex items-baseline gap-3">
-                      <span className="text-sm font-serif text-foreground">{item.source}</span>
-                      <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground">{item.category}</span>
-                    </div>
-                    <div className="md:col-span-7 text-base font-light text-foreground leading-snug flex flex-col gap-2">
-                      {item.url ? (
-                        <a
-                          href={item.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="hover:text-foreground/80 transition-colors"
-                        >
-                          {titleNode}
-                        </a>
-                      ) : (
-                        titleNode
-                      )}
-                      {item.coveredBy && (
-                        <Link
-                          href={`/dispatch/${item.coveredBy.postId}`}
-                          className="inline-flex items-center gap-2 self-start text-[10px] uppercase tracking-[0.18em] text-foreground/70 border border-foreground/20 px-2 py-1 hover:text-foreground hover:border-foreground/50 transition-colors"
-                        >
-                          Covered in Dispatch
-                          <ArrowRight className="w-3 h-3" />
-                        </Link>
-                      )}
-                    </div>
+          <div className="divide-y divide-foreground/10 border-b border-foreground/15">
+            {headlines.map((item) => {
+              const d = new Date(item.publishedAt);
+              const key = `${item.source}-${item.publishedAt}-${item.title}`;
+              return (
+                <article
+                  key={key}
+                  className="group px-1 md:px-3 py-6 hover:bg-foreground/[0.02] transition-colors"
+                >
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-2">
+                    <span className="text-sm font-serif text-foreground">{item.source}</span>
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans border border-foreground/15 px-1.5 py-0.5">
+                      {item.category}
+                    </span>
+                    <span className="ml-auto text-[10px] md:text-[11px] uppercase tracking-[0.15em] text-muted-foreground font-sans">
+                      {HEADLINE_DATE_FMT.format(d)} <span className="opacity-60">·</span> {HEADLINE_TIME_FMT.format(d)}
+                    </span>
                   </div>
-                );
-              })}
-            </div>
+                  {item.url ? (
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-start gap-2 text-base md:text-lg font-serif leading-snug text-foreground hover:text-foreground/75 transition-colors"
+                    >
+                      <span>{item.title}</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-1.5 group-hover:text-foreground transition-colors" />
+                    </a>
+                  ) : (
+                    <span className="text-base md:text-lg font-serif leading-snug text-foreground">
+                      {item.title}
+                    </span>
+                  )}
+                  {item.coveredBy && (
+                    <Link
+                      href={`/dispatch/${item.coveredBy.postId}`}
+                      className="mt-3 flex items-baseline gap-2 border-l-2 border-foreground/30 pl-3 text-xs text-foreground/70 hover:text-foreground hover:border-foreground/70 transition-colors overflow-hidden"
+                    >
+                      <span className="text-[10px] uppercase tracking-[0.18em] font-sans font-medium shrink-0">
+                        Covered in Dispatch
+                      </span>
+                      <span className="font-serif italic truncate min-w-0 flex-1">
+                        "{item.coveredBy.postTitle}"
+                      </span>
+                      <ArrowRight className="w-3 h-3 shrink-0" />
+                    </Link>
+                  )}
+                </article>
+              );
+            })}
           </div>
         </FadeIn>
 
