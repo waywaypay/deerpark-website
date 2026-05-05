@@ -421,7 +421,7 @@ const HeadlineFeed = () => {
                       : "text-muted-foreground hover:text-foreground hover:bg-foreground/[0.03]"
                   }`}
                 >
-                  {m === "top" ? "This week" : "Latest"}
+                  {m === "top" ? "Top 10" : "Latest"}
                 </button>
               ))}
             </div>
