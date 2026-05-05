@@ -9,6 +9,7 @@ import {
   DISPATCH_WEEKS,
   SUBSTACK_URL,
   groupPostsToWeeks,
+  useHeadlinesByIds,
   usePosts,
   type DispatchEntry,
 } from "@/lib/dispatch";
@@ -175,28 +176,84 @@ const DispatchSubscribe = () => {
   );
 };
 
-const LatestNotePreview = ({ entry }: { entry: DispatchEntry }) => {
-  const inner = (
+const TodayNoteCard = ({ entry }: { entry: DispatchEntry }) => {
+  const headlinesQuery = useHeadlinesByIds(entry.sourceHeadlineIds);
+  const topHeadlines = (headlinesQuery.data ?? []).slice(0, 3);
+  const hasLink = entry.id !== undefined;
+  const titleAndDek = (
     <>
-      <span className="text-[10px] uppercase tracking-[0.18em] font-sans font-medium shrink-0 text-foreground/80">
-        Latest note
-      </span>
-      <span className="font-serif italic text-foreground/85 truncate min-w-0 flex-1">
-        "{entry.title}"
-      </span>
-      <ArrowRight className="w-3 h-3 shrink-0" />
+      <h3 className="text-2xl md:text-3xl font-serif leading-snug text-foreground mb-3">
+        {entry.title}
+      </h3>
+      <p className="text-base md:text-lg font-light leading-relaxed text-foreground/85">
+        {entry.dek}
+      </p>
     </>
   );
-  const wrapClass =
-    "mb-4 flex items-baseline gap-2 border-l-2 border-foreground/30 pl-3 text-xs text-foreground/70 hover:text-foreground hover:border-foreground/70 transition-colors overflow-hidden";
-  if (entry.id !== undefined) {
-    return (
-      <Link href={`/dispatch/${entry.id}`} className={wrapClass}>
-        {inner}
-      </Link>
-    );
-  }
-  return <div className={wrapClass}>{inner}</div>;
+
+  return (
+    <article className="border border-foreground/15 bg-foreground/[0.015] p-6 md:p-8 mb-12">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-4">
+        <span className="text-[10px] uppercase tracking-[0.2em] font-sans font-semibold text-foreground/85">
+          Today's note
+        </span>
+        <span className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-sans">
+          {entry.dateLong}
+        </span>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans border border-foreground/20 px-2 py-0.5">
+          {entry.tag}
+        </span>
+      </div>
+      {hasLink ? (
+        <Link
+          href={`/dispatch/${entry.id}`}
+          className="group block hover:text-foreground/85 transition-colors"
+        >
+          {titleAndDek}
+          <span className="mt-4 inline-flex items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-muted-foreground group-hover:text-foreground transition-colors">
+            Read the recap
+            <ArrowRight className="w-3.5 h-3.5" />
+          </span>
+        </Link>
+      ) : (
+        titleAndDek
+      )}
+      {topHeadlines.length > 0 && (
+        <div className="mt-6 pt-6 border-t border-foreground/15">
+          <div className="flex items-baseline gap-3 mb-3">
+            <span className="text-[10px] uppercase tracking-[0.18em] font-sans font-medium text-foreground/70">
+              Today's top stories
+            </span>
+          </div>
+          <ul className="divide-y divide-foreground/10">
+            {topHeadlines.map((h, i) => (
+              <li key={h.id}>
+                <a
+                  href={h.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group grid grid-cols-[auto_1fr_auto] items-baseline gap-3 py-3 hover:bg-foreground/[0.03] transition-colors"
+                >
+                  <span className="text-xs font-sans tabular-nums text-muted-foreground shrink-0">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="text-xs font-sans text-muted-foreground uppercase tracking-[0.12em] mr-2">
+                      {h.source}
+                    </span>
+                    <span className="text-sm md:text-base font-serif leading-snug text-foreground">
+                      {h.title}
+                    </span>
+                  </span>
+                  <ExternalLink className="w-3.5 h-3.5 text-muted-foreground shrink-0 group-hover:text-foreground transition-colors" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </article>
+  );
 };
 
 const DispatchSection = () => {
@@ -209,9 +266,12 @@ const DispatchSection = () => {
     return DISPATCH_WEEKS[0];
   }, [postsQuery.data]);
 
-  const visibleEntries = expanded ? latestWeek.entries : latestWeek.entries.slice(0, 3);
-  const hasMore = latestWeek.entries.length > 3;
   const latestEntry = latestWeek.entries[0];
+  // Today's entry is featured in TodayNoteCard above; the weekly list shows
+  // the rest of the week so we don't duplicate the headline title.
+  const restOfWeek = latestWeek.entries.slice(1);
+  const visibleEntries = expanded ? restOfWeek : restOfWeek.slice(0, 3);
+  const hasMore = restOfWeek.length > 3;
 
   return (
     <section id="dispatch" className="pt-32 md:pt-40 pb-24 bg-background">
@@ -229,9 +289,8 @@ const DispatchSection = () => {
             </div>
             <div className="lg:col-span-5 min-w-0">
               <p className="text-muted-foreground font-light leading-relaxed mb-6">
-                A short analytical note every business day from our in-house agent — grounded in the headlines we're tracking, with what they mean for operators.
+                A daily executive briefing from our in-house agent: 2–3 sentences on what connects today's headlines, then the day's top 10 with a sentence of context on each.
               </p>
-              {latestEntry && <LatestNotePreview entry={latestEntry} />}
               <DispatchSubscribe />
               <div className="mt-4 text-xs font-sans text-muted-foreground">
                 Delivered to your inbox each business day &bull;{" "}
@@ -248,18 +307,28 @@ const DispatchSection = () => {
           </div>
         </FadeIn>
 
-        <FadeIn delay={0.05}>
-          <div className="flex items-baseline justify-between mb-2">
-            <span className="section-label">Week of {latestWeek.label}</span>
-            <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
-              {latestWeek.sublabel}
-            </span>
-          </div>
-        </FadeIn>
+        {latestEntry && (
+          <FadeIn delay={0.05}>
+            <TodayNoteCard entry={latestEntry} />
+          </FadeIn>
+        )}
 
-        <FadeIn delay={0.1}>
-          <DispatchList entries={visibleEntries} />
-        </FadeIn>
+        {visibleEntries.length > 0 && (
+          <>
+            <FadeIn delay={0.1}>
+              <div className="flex items-baseline justify-between mb-2">
+                <span className="section-label">Earlier this week</span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
+                  {latestWeek.label}
+                </span>
+              </div>
+            </FadeIn>
+
+            <FadeIn delay={0.15}>
+              <DispatchList entries={visibleEntries} />
+            </FadeIn>
+          </>
+        )}
 
         <FadeIn delay={0.15}>
           <div className="mt-10 flex flex-wrap items-center justify-between gap-4">
