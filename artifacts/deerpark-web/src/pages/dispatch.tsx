@@ -402,7 +402,7 @@ const HeadlineFeed = () => {
             </div>
             <h3 className="text-xl md:text-2xl font-serif leading-snug text-foreground/90">
               {headlineMode === "top"
-                ? "Everything we're tracking this week."
+                ? "Everything we're tracking today."
                 : "Latest, straight from the labs and the boards."}
             </h3>
           </div>
