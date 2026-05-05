@@ -12,15 +12,17 @@
     <meta property="og:site_name" content="DeerPark.io" />
     <meta property="og:title" content="DeerPark — From AI curious to AI capable." />
     <meta property="og:description" content="We assess, build, deploy, and train — so your team actually uses what we ship. Kickoff to handoff in six to eight weeks." />
-    <meta property="og:url" content="https://deerpark.io" />
-    <meta property="og:image" content="https://deerpark.io/og-image.png" />
+    <meta property="og:url" content="https://www.deerpark.io" />
+    <meta property="og:image" content="https://www.deerpark.io/opengraph.jpg" />
+    <meta property="og:image:width" content="1280" />
+    <meta property="og:image:height" content="720" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="DeerPark — From AI curious to AI capable." />
     <meta name="twitter:description" content="AI enablement for organizations. Kickoff to handoff in six to eight weeks." />
-    <meta name="twitter:image" content="https://deerpark.io/og-image.png" />
+    <meta name="twitter:image" content="https://www.deerpark.io/opengraph.jpg" />
 
-    <link rel="canonical" href="https://deerpark.io" />
+    <link rel="canonical" href="https://www.deerpark.io" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
@@ -34,9 +36,76 @@
         "@context": "https://schema.org",
         "@type": "Organization",
         "name": "DeerPark.io",
-        "url": "https://deerpark.io",
+        "url": "https://www.deerpark.io",
         "description": "AI enablement for organizations. We assess, build, deploy, and train so the tools get adopted instead of shelved.",
-        "email": "contact@deerpark.io"
+        "email": "contact@deerpark.io",
+        "logo": "https://www.deerpark.io/favicon-192.png"
+      }
+    </script>
+
+    <!-- FAQPage schema. Source of truth: FAQ_ITEMS in src/pages/home.tsx — keep in sync if FAQs change. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "Do you train our team, or just build the tool?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Both, and the training is not an afterthought. Every engagement includes executive briefings, role-based workshops, and hands-on training on the application we ship — scoped in week one and running alongside the build so your team is live the day we hand over."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Our team isn't technical. Is this for us?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. We work with organizations at every level of AI maturity. Our engagements are designed for operations, ops leadership, and domain teams — we handle the technical build, then train your people in plain language on the workflows they actually run."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Who owns the code and prompts?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "You do. We deliver everything in your repositories, on your cloud accounts, under your licenses. No per-seat AI tax and no DeerPark runtime dependency."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What about data security and compliance?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "We deploy inside your VPC or cloud tenant, use your existing IAM, and route through vetted model providers. We have worked with HIPAA, SOC 2, and FINRA-adjacent environments."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Which models do you use?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Model-agnostic. We benchmark the top-tier frontier models plus one or two open-weight options against your actual evals and pick based on cost, latency, and accuracy — not brand."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens after the engagement ends?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Your team owns the system. We provide runbooks, eval suites, and a 30-day on-call window. Optional quarterly reviews are available but never required."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Do you replace my existing vendors?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Only if they are underperforming. Most engagements augment your current stack — we build the agents and glue, and keep you on the SaaS tools your team already trusts."
+            }
+          }
+        ]
       }
     </script>
   </head>

@@ -1403,6 +1403,16 @@ const Admin = () => {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(TOKEN_KEY));
   const [view, setView] = useState<View>("home");
 
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex,nofollow,noarchive";
+    document.head.appendChild(meta);
+    return () => {
+      document.head.removeChild(meta);
+    };
+  }, []);
+
   if (!token) {
     return <Login onAuthed={setToken} />;
   }
