@@ -61,16 +61,15 @@ const ProductsNavDesktop = () => {
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
-      <button
-        type="button"
+      <Link
+        href="/products"
         className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-        aria-expanded={open}
         aria-haspopup="menu"
-        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
       >
         Products
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+      </Link>
       {open && (
         <div
           role="menu"
@@ -88,6 +87,15 @@ const ProductsNavDesktop = () => {
                 {label}
               </Link>
             ))}
+            <div className="my-1 border-t border-foreground/10" />
+            <Link
+              href="/products"
+              role="menuitem"
+              className="block px-4 py-2.5 text-left text-xs uppercase tracking-widest text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
+              onClick={() => setOpen(false)}
+            >
+              View all products →
+            </Link>
           </div>
         </div>
       )}
@@ -120,6 +128,13 @@ const ProductsNavMobile = ({ onNavigate }: { onNavigate: () => void }) => {
               {label}
             </Link>
           ))}
+          <Link
+            href="/products"
+            className="text-xs uppercase tracking-widest text-muted-foreground/80 hover:text-foreground transition-colors"
+            onClick={onNavigate}
+          >
+            View all products →
+          </Link>
         </div>
       )}
     </div>
@@ -225,7 +240,11 @@ export const Footer = () => (
           <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Company</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
             <li><a href="/#case-study" className="hover:text-foreground transition-colors">Case Studies</a></li>
-            <li className="pt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground">Products</li>
+            <li className="pt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground">
+              <Link href="/products" className="hover:text-foreground/70 transition-colors">
+                Products
+              </Link>
+            </li>
             {PRODUCT_LINKS.map(({ href, label }) => (
               <li key={href} className="pl-2">
                 <Link href={href} className="hover:text-foreground transition-colors">
