@@ -12,7 +12,11 @@ import {
   dedupeNearDuplicates,
   ensurePapersInSelection,
 } from "../lib/headline-rank";
-import { MIN_TOP_RELEVANCE_SCORE } from "../lib/headline-judge";
+import {
+  MIN_TOP_RELEVANCE_SCORE,
+  getJudgeStats,
+  getLastRun,
+} from "../lib/headline-judge";
 
 const router: IRouter = Router();
 
@@ -226,6 +230,23 @@ router.get("/headlines/by-ids", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to load headlines by ids");
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Public read-only judge status. Returns counts of scored/unscored items
+// in the lookback window, the last-run summary (timestamp, batches, errors,
+// model), and lowest+highest 10 scores for spot-checking. Same data shape
+// is already implicit in /api/headlines (which exposes scores per item),
+// so there's no leak risk in keeping this unauthenticated.
+router.get("/headlines/judge-status", async (_req, res) => {
+  try {
+    const [stats, lastRun] = await Promise.all([getJudgeStats(), getLastRun()]);
+    res.setHeader("Cache-Control", "public, max-age=10, s-maxage=10");
+    return res.json({ stats, lastRun });
+  } catch (err) {
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Internal server error",
+    });
   }
 });
 
