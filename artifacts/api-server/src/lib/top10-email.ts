@@ -21,10 +21,17 @@ import {
   asDataUrl,
 } from "./image-gen";
 import { logger } from "./logger";
-import { LOGO_DATA_URL } from "./brand-assets";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+
+// Use the apex `www.` host for the logo so email clients that don't follow
+// redirects on <img> requests (notably some Outlook builds) load it directly.
+// Bare `deerpark.io` 307s to `www.deerpark.io`.
+const PUBLIC_SITE_URL = (
+  process.env["PUBLIC_SITE_URL"] ?? "https://www.deerpark.io"
+).replace(/\/$/, "");
+const LOGO_URL = `${PUBLIC_SITE_URL}/favicon-192.png`;
 
 export type ComposedEmail = {
   subject: string;
@@ -158,8 +165,8 @@ function renderHtml({
   <div style="max-width:600px;margin:0 auto;padding:32px 24px;background:#ffffff;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px 0;">
       <tr>
-        <td style="vertical-align:middle;">
-          <img src="${LOGO_DATA_URL}" alt="DeerPark" width="40" height="40" style="display:block;border:0;outline:none;" />
+        <td style="vertical-align:middle;width:120px;">
+          <img src="${LOGO_URL}" alt="DeerPark" width="40" height="40" style="display:block;border:0;outline:none;" />
         </td>
         <td style="vertical-align:middle;text-align:right;font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#888;">
           Daily dispatch &middot; ${escapeHtml(dateLabel)}
