@@ -313,7 +313,7 @@ router.post("/admin/writers/:id/run", async (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
   const modeQuery = String(req.query["mode"] ?? "auto");
-  const allowedModes: (WriterMode | "auto")[] = ["auto", "deep_dive", "free_pick"];
+  const allowedModes: (WriterMode | "auto")[] = ["auto", "deep_dive", "free_pick", "weekly_recap"];
   const modeHint = (allowedModes as string[]).includes(modeQuery)
     ? (modeQuery as WriterMode | "auto")
     : "auto";

@@ -698,6 +698,7 @@ const WRITER_MODES = [
   { id: "auto", label: "Auto (agent picks)" },
   { id: "deep_dive", label: "Deep dive" },
   { id: "free_pick", label: "Free pick" },
+  { id: "weekly_recap", label: "Weekly recap (week's top-10)" },
 ] as const;
 
 type WriterModeId = (typeof WRITER_MODES)[number]["id"];

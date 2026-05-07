@@ -18,6 +18,7 @@ import {
   dedupeNearDuplicates,
   ensurePapersInSelection,
 } from "./headline-rank";
+import { selectTopHeadlines } from "./top-headlines";
 
 // Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
 // override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
@@ -109,7 +110,11 @@ function scoreCorpusItem(
 //      Y) rather than free-form analysis with no source.
 
 const ALLOWED_TAGS = ["Analysis", "Market", "Practice", "Signals", "Field Notes"] as const;
-const ALLOWED_MODES = ["deep_dive", "free_pick"] as const;
+// `weekly_recap` is the once-per-week version of the recap: same 2-4
+// sentence-per-item shape, but framed around "this week's" top stories
+// (selection biased toward the dispatch-judge's top-weighted items across
+// the full 7-day window). At-most-one weekly_recap per ISO week.
+const ALLOWED_MODES = ["deep_dive", "free_pick", "weekly_recap"] as const;
 
 export type WriterMode = (typeof ALLOWED_MODES)[number];
 export type WriterTag = (typeof ALLOWED_TAGS)[number];
@@ -212,12 +217,13 @@ You may interpret the signal. You must NOT present it as proven reality.
 No abstract claims without evidence. If you write "switching costs increase" or "trust declines," you must specify which company, which product, what behavior changes. If you cannot anchor it to a headline, delete it.
 
 🧠 MODES
-free_pick (default — recap format, top 10 with 2–3 sentences each, ~700–900 total words)
-deep_dive (used sparingly — same recap format but the top 3 items lean toward 4 sentences of additional context; items 4–10 stay at 2–3 sentences. ~900–1100 total words.)
+free_pick (default — daily recap, top 10 with 2–3 sentences each, ~700–900 total words)
+deep_dive (used sparingly — same daily recap shape but the top 3 items lean toward 4 sentences of additional context; items 4–10 stay at 2–3 sentences. ~900–1100 total words.)
+weekly_recap (once per ISO week — same shape as free_pick, but the executive summary frames "the week" rather than "today" and the top-10 are the week's most-weighted stories per the dispatch judge. Reuse this week's PRIORITY LIST verbatim when it's provided; do not substitute lower-weighted items unless one is unsupportable on the available headlines. ~700–900 total words.)
 
-Both modes use the executive summary + numbered top-10 shape above. The only difference is how much commentary the top items get. Every item must still fit in the 2–4 sentence band.
+All three modes use the executive summary + numbered top-10 shape above. The only difference is framing (today vs the week) and how much commentary the top items get. Every item must still fit in the 2–4 sentence band.
 
-Default to free_pick unless 2–3 items genuinely warrant a 4th sentence of additional context.
+Default to free_pick for daily ticks. Use weekly_recap only when the user message explicitly asks for it. Use deep_dive only when 2–3 items genuinely warrant a 4th sentence of additional context.
 
 🚫 LANGUAGE DISCIPLINE
 Avoid generic business language: "positions itself," "leverages," "drives value," "in this landscape." Replace with specific actions and named actors. If a sentence could apply to any tech company, rewrite it.
@@ -244,7 +250,7 @@ Dek
 Return ONLY:
 
 {
-  "mode": "deep_dive" | "free_pick",
+  "mode": "deep_dive" | "free_pick" | "weekly_recap",
   "tag": "Analysis" | "Market" | "Practice" | "Signals" | "Field Notes",
   "title": string,
   "dek": string,
@@ -592,6 +598,7 @@ const validateDraft = (
   const minByMode: Record<string, number> = {
     deep_dive: 4000, // ~800 words (floor ≈ 900)
     free_pick: 3000, // ~600 words (floor ≈ 700)
+    weekly_recap: 3000, // matches free_pick — same shape, weekly framing
   };
   const minLen = minByMode[String(raw.mode)] ?? 3000;
   if (bodyLen < minLen) {
@@ -797,6 +804,27 @@ export async function generateAndSavePost(opts: {
     return { ok: false, error: `Corpus too thin for top-10 recap: ${corpus.length} items in window` };
   }
 
+  // For weekly_recap, pre-compute the dispatch top-10 over the full week
+  // and pass it through as a PRIORITY LIST so the writer agent leans on
+  // the same items the website surfaces. Resolve corpus IDs by URL to
+  // tolerate any case where selectTopHeadlines includes an item that the
+  // writer's per-source-capped corpus drops.
+  let priorityList: CorpusItem[] = [];
+  if (modeHint === "weekly_recap") {
+    try {
+      const top = await selectTopHeadlines({ days: 7, limit: 10 });
+      const corpusByUrl = new Map(corpus.map((c) => [c.url, c]));
+      priorityList = top
+        .map((t) => corpusByUrl.get(t.url))
+        .filter((c): c is CorpusItem => c !== undefined);
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "weekly_recap: failed to load priority top-10; falling back to corpus only",
+      );
+    }
+  }
+
   // Load recent posts so the agent knows what it has already covered. Without
   // this it has no memory across runs and will re-pick the same cluster from
   // the rolling corpus — the dup-pair root cause.
@@ -810,13 +838,32 @@ export async function generateAndSavePost(opts: {
 
   const { prompt: systemPrompt } = await getSystemPrompt(agentId);
 
+  // For weekly_recap we relax the "don't retread recent posts" guidance —
+  // the user explicitly wants a weekly roundup, so overlap with the daily
+  // posts from the same week is expected and desirable.
+  const isWeekly = modeHint === "weekly_recap";
+
+  const priorityBlock = isWeekly && priorityList.length > 0
+    ? [
+        "",
+        `PRIORITY LIST — these ${priorityList.length} headlines are the dispatch top-10 for the past 7 days, ranked by the judge + selection algorithm. Lead with these; only swap one out if the headlines genuinely don't support 2+ sentences of substantive commentary. Order them by importance for an enterprise operator, not by recency.`,
+        "",
+        formatCorpus(priorityList),
+        "",
+      ].join("\n")
+    : "";
+
   const userMessage = [
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
     modeHint === "auto"
       ? "Pick whichever mode the headlines best support."
-      : `Mode hint: ${modeHint}. (You may override if the headlines don't support it — explain in rationale.)`,
-    "",
-    "Recent posts you (or your predecessor) have already published. Do NOT retread these — pick a substantively different thesis using different evidence. If every fresh angle the headlines support is already covered below, return { abort: true, rationale: \"...\" }.",
+      : isWeekly
+        ? `Mode hint: weekly_recap. This is the once-per-week roundup of the week's top stories. Frame the executive summary around "the week" rather than "today." Use the PRIORITY LIST below as the basis for the top-10.`
+        : `Mode hint: ${modeHint}. (You may override if the headlines don't support it — explain in rationale.)`,
+    priorityBlock,
+    isWeekly
+      ? "Recent posts already published this week. The weekly recap is allowed to revisit these stories — the framing is the WEEKLY view, not a fresh thesis. Do not duplicate the daily posts' commentary verbatim, but covering the same headlines is expected."
+      : "Recent posts you (or your predecessor) have already published. Do NOT retread these — pick a substantively different thesis using different evidence. If every fresh angle the headlines support is already covered below, return { abort: true, rationale: \"...\" }.",
     "",
     formatRecentPosts(recentPosts),
     "",
@@ -937,7 +984,9 @@ export async function generateAndSavePost(opts: {
       };
     }
 
-    const result = validateDraft(raw, corpus, recentPosts);
+    // Skip the topical-overlap guard for weekly_recap — re-covering the
+    // week's stories is the whole point of the mode.
+    const result = validateDraft(raw, corpus, isWeekly ? [] : recentPosts);
     if (!("error" in result)) {
       validated = result;
       break;
@@ -1331,4 +1380,150 @@ export function startWriterScheduler(intervalMs = WRITER_TICK_MS): void {
   // Kick off after 30s so the server is fully up; then every interval.
   setTimeout(() => void tick(), 30_000);
   writerHandle = setInterval(() => void tick(), intervalMs);
+}
+
+// ============================================================================
+// Weekly recap scheduler
+// ============================================================================
+// Once-per-ISO-week tick. Default: Monday 09:00 PT. Idempotent via the
+// posts table — if a row with mode='weekly_recap' already exists for the
+// current ISO week, the tick no-ops.
+
+const WEEKLY_TIMEZONE = "America/Los_Angeles";
+const DEFAULT_WEEKLY_DOW_PT = 1; // 1 = Monday (Sun=0)
+const DEFAULT_WEEKLY_HOUR_PT = 9;
+const DEFAULT_WEEKLY_MINUTE_PT = 0;
+// Tick every 30 minutes; the day-of-week + minute-of-day check inside
+// the tick gates the actual work to a single ~30-min window per week.
+const WEEKLY_TICK_MS = 30 * 60 * 1000;
+
+let weeklyHandle: NodeJS.Timeout | null = null;
+
+function ptParts(now: Date = new Date()): {
+  dayOfWeek: number;
+  minutesOfDay: number;
+  isoWeekKey: string;
+} {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: WEEKLY_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = fmt.formatToParts(now);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
+  const weekdayMap: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  const dayOfWeek = weekdayMap[get("weekday")] ?? 0;
+  const hour = Number(get("hour") || "0");
+  const minute = Number(get("minute") || "0");
+  const minutesOfDay = hour * 60 + minute;
+
+  // ISO week key (e.g. "2026-W19") computed in PT so the boundary is
+  // Monday 00:00 PT, matching the cadence the scheduler enforces.
+  const yyyy = Number(get("year"));
+  const mm = Number(get("month"));
+  const dd = Number(get("day"));
+  const isoWeekKey = formatIsoWeek(new Date(Date.UTC(yyyy, mm - 1, dd)));
+
+  return { dayOfWeek, minutesOfDay, isoWeekKey };
+}
+
+/** Returns the ISO-8601 week key (e.g. "2026-W19") for a given date. */
+function formatIsoWeek(d: Date): string {
+  // Standard ISO week algorithm: Thursday-of-the-week determines the year.
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const weekNo = Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+}
+
+/** True if a weekly_recap post has been published for the current PT ISO week. */
+async function weeklyRecapAlreadyPublishedThisWeek(): Promise<boolean> {
+  const { isoWeekKey } = ptParts();
+  // Find the most recent weekly_recap post and compare its ISO week key.
+  const [latest] = await db
+    .select({ publishedAt: postsTable.publishedAt })
+    .from(postsTable)
+    .where(eq(postsTable.mode, "weekly_recap"))
+    .orderBy(desc(postsTable.publishedAt))
+    .limit(1);
+  if (!latest) return false;
+  return formatIsoWeek(latest.publishedAt) === isoWeekKey;
+}
+
+export type WeeklyRunResult =
+  | { ran: true; ok: boolean; postId?: number; error?: string }
+  | { ran: false; reason: string };
+
+/**
+ * Run one weekly_recap. Idempotent: no-ops if one is already published for
+ * the current PT ISO week. Exposed so the admin "Run weekly now" button
+ * can call it directly.
+ */
+export async function runWeeklyRecap(opts: { force?: boolean } = {}): Promise<WeeklyRunResult> {
+  if (!process.env["LLM_API_KEY"]) {
+    return { ran: false, reason: "LLM_API_KEY not configured" };
+  }
+  if (!opts.force && (await weeklyRecapAlreadyPublishedThisWeek())) {
+    return { ran: false, reason: "weekly_recap already published this ISO week" };
+  }
+  const result = await generateAndSavePost({ modeHint: "weekly_recap" });
+  if (result.ok) {
+    return { ran: true, ok: true, postId: result.postId };
+  }
+  return { ran: true, ok: false, error: result.error };
+}
+
+export function startWeeklyRecapScheduler(intervalMs = WEEKLY_TICK_MS): void {
+  if (weeklyHandle) return;
+
+  const targetDow = Number(process.env["WEEKLY_RECAP_DOW_PT"] ?? String(DEFAULT_WEEKLY_DOW_PT));
+  const targetHour = Number(process.env["WEEKLY_RECAP_HOUR_PT"] ?? String(DEFAULT_WEEKLY_HOUR_PT));
+  const targetMinute = Number(
+    process.env["WEEKLY_RECAP_MINUTE_PT"] ?? String(DEFAULT_WEEKLY_MINUTE_PT),
+  );
+  const targetMinutesOfDay = targetHour * 60 + targetMinute;
+
+  const tick = async () => {
+    try {
+      const { dayOfWeek, minutesOfDay } = ptParts();
+      // Only fire on the configured weekday, and only after the configured
+      // wall-clock minute. The idempotency check below stops same-day
+      // duplicate work; this gate just avoids early-of-day fires.
+      if (dayOfWeek !== targetDow) return;
+      if (minutesOfDay < targetMinutesOfDay) return;
+      if (await weeklyRecapAlreadyPublishedThisWeek()) return;
+      logger.info("Weekly recap tick: generating");
+      const result = await runWeeklyRecap();
+      if (!result.ran) {
+        logger.info({ reason: result.reason }, "Weekly recap skipped");
+        return;
+      }
+      if (result.ok) {
+        logger.info({ postId: result.postId }, "Weekly recap published");
+      } else {
+        logger.warn({ error: result.error }, "Weekly recap failed");
+      }
+    } catch (err) {
+      logger.error({ err }, "Weekly recap tick threw");
+    }
+  };
+
+  // Kick off after 60s; then every interval.
+  setTimeout(() => void tick(), 60_000);
+  weeklyHandle = setInterval(() => void tick(), intervalMs);
 }
