@@ -4,7 +4,6 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Check, ExternalLink, Rss } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
-import { SUBSTACK_URL } from "@/lib/dispatch";
 
 type CoveredBy = {
   postId: number;
@@ -98,16 +97,6 @@ const DispatchSubscribe = () => {
     e.preventDefault();
     setStatus({ state: "loading" });
 
-    // Open Substack in a new tab synchronously inside the user gesture so
-    // popup blockers don't trip. Substack's redirect strips the email param,
-    // so the user has to confirm their email on Substack — but the local
-    // capture still gets the address.
-    const substackTab = window.open(
-      `${SUBSTACK_URL}/subscribe?utm_source=deerpark-website`,
-      "_blank",
-      "noopener,noreferrer",
-    );
-
     try {
       const res = await fetch("/api/subscribe", {
         method: "POST",
@@ -124,20 +113,13 @@ const DispatchSubscribe = () => {
       const message =
         res.status === 400
           ? "Please enter a valid email address."
-          : "Couldn't reach our subscribe service. Finish on Substack in the new tab, or email contact@deerpark.io.";
+          : "Couldn't reach our subscribe service. Try again in a moment, or email contact@deerpark.io.";
       setStatus({ state: "error", message });
     } catch {
       setStatus({
         state: "error",
-        message: "Network error on our end. Finish on Substack in the new tab, or email contact@deerpark.io.",
+        message: "Network error on our end. Try again in a moment, or email contact@deerpark.io.",
       });
-    }
-    if (!substackTab) {
-      setStatus((prev) =>
-        prev.state === "success"
-          ? prev
-          : { state: "error", message: "We couldn't open Substack in a new tab — allow popups and try again, or visit substack.com/@deerparkai." },
-      );
     }
   };
 
@@ -146,7 +128,7 @@ const DispatchSubscribe = () => {
       <div className="flex items-start gap-3 border border-primary/40 bg-primary/[0.06] px-4 py-3 text-sm font-sans">
         <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
         <span className="text-foreground/90 leading-snug">
-          We've got your email. Finish your Substack subscription in the new tab to lock it in.
+          You're subscribed. The next Dispatch will hit your inbox at 3:30 PM PT.
         </span>
       </div>
     );
@@ -199,17 +181,6 @@ const SubscribeHero = () => (
               Daily relevant AI news in your inbox at 3:30 PM PT — the day's top 10, with 2–4 sentences of context on each. Email only; nothing on the site.
             </p>
             <DispatchSubscribe />
-            <div className="mt-4 text-xs font-sans text-muted-foreground">
-              Delivered via Substack &bull;{" "}
-              <a
-                href={SUBSTACK_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline underline-offset-4 hover:text-foreground transition-colors"
-              >
-                Read on Substack
-              </a>
-            </div>
           </div>
         </div>
       </FadeIn>
