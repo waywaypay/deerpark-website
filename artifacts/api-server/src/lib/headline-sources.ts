@@ -334,6 +334,22 @@ export const SOURCES: SourceConfig[] = [
   },
 ];
 
+// Source displayNames whose feeds carry broad business/AI press where the
+// macro-trend / clickbait mode of failure is "AI Boom Drives Earnings
+// Growth"-style headlines with no specific company action. The headlines
+// route uses this set as a structural guard: when the LLM judge hasn't
+// scored an item yet (e.g. mid-rate-limit), broad-press items must have
+// at least one named-entity anchor (extractOrgs from headline-rank) in
+// their title/URL/source to qualify for the top view.
+//
+// Derived from SOURCES.aiFilter — those entries are exactly the broad-
+// topic feeds that already need an AI keyword check at ingest. Computing
+// from SOURCES means a new aiFilter feed automatically picks up the
+// structural filter without a second list to keep in sync.
+export const BROAD_PRESS_SOURCES: ReadonlySet<string> = new Set(
+  SOURCES.filter((s) => s.aiFilter === true).map((s) => s.displayName),
+);
+
 // Display name for the earnings source, used by the dynamic-tier helper so
 // the tier promotion can't drift if SOURCES is re-ordered.
 export const EARNINGS_TRANSCRIPTS_DISPLAY_NAME = "Earnings transcripts";
