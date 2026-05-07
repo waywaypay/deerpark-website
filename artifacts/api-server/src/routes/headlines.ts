@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, headlinesTable, postsTable } from "@workspace/db";
-import { desc, inArray, sql } from "drizzle-orm";
+import { db, headlinesTable } from "@workspace/db";
+import { inArray, sql } from "drizzle-orm";
 import { ingestAllSources } from "../lib/ingest-headlines";
 import {
   SOURCES,
@@ -28,44 +28,8 @@ type HeadlineRow = {
   url: string;
   publishedAt: Date;
   relevanceScore: number | null;
+  commentary: string | null;
 };
-
-type CoveredBy = {
-  postId: number;
-  postTitle: string;
-  publishedAt: string;
-};
-
-// Build a map of headlineId → most-recent dispatch post that cited it.
-// We pull the recent post window once, then JS-join in memory — avoids a
-// jsonb_array_elements correlated subquery and keeps the SQL legible.
-async function loadCoveredByMap(days: number): Promise<Map<number, CoveredBy>> {
-  const recentPosts = await db
-    .select({
-      id: postsTable.id,
-      title: postsTable.title,
-      sourceHeadlineIds: postsTable.sourceHeadlineIds,
-      publishedAt: postsTable.publishedAt,
-    })
-    .from(postsTable)
-    .where(sql`${postsTable.publishedAt} >= NOW() - (${days} || ' days')::interval`)
-    .orderBy(desc(postsTable.publishedAt));
-
-  const map = new Map<number, CoveredBy>();
-  for (const p of recentPosts) {
-    for (const hid of p.sourceHeadlineIds ?? []) {
-      // First write wins because we iterate newest-first.
-      if (!map.has(hid)) {
-        map.set(hid, {
-          postId: p.id,
-          postTitle: p.title,
-          publishedAt: p.publishedAt.toISOString(),
-        });
-      }
-    }
-  }
-  return map;
-}
 
 /** Map SQL row keys from Drizzle execute() payload to HeadlineRow. */
 const mapSqlRowToHeadline = (
@@ -81,31 +45,11 @@ const mapSqlRowToHeadline = (
     row["relevance_score"] === null || row["relevance_score"] === undefined
       ? null
       : Number(row["relevance_score"]),
+  commentary:
+    row["commentary"] === null || row["commentary"] === undefined
+      ? null
+      : String(row["commentary"]),
 });
-
-/**
- * Walk items in display order and keep `coveredBy` only on the FIRST item
- * that references each post; later siblings get null. Without this, a single
- * dispatch post that cited 3+ headlines causes its title to repeat under
- * every cited headline in the feed — visual noise the user called out.
- *
- * The first hit is the highest-ranked one in the page's order, so the badge
- * appears next to the most prominent matching headline.
- */
-function dedupeCoveredByInDisplayOrder<T extends { coveredBy?: CoveredBy | null }>(
-  items: T[],
-): T[] {
-  const seenPostIds = new Set<number>();
-  return items.map((it) => {
-    const cb = it.coveredBy ?? null;
-    if (!cb) return it;
-    if (seenPostIds.has(cb.postId)) {
-      return { ...it, coveredBy: null };
-    }
-    seenPostIds.add(cb.postId);
-    return it;
-  });
-}
 
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
 // Tier 1 → weight 4, Tier 4 → weight 1. Linear by design — easy to read,
@@ -162,13 +106,13 @@ router.get("/headlines", async (req, res) => {
       const result = await db.execute(sql`
         WITH ranked AS (
           SELECT
-            id, source, category, title, url, published_at, relevance_score,
+            id, source, category, title, url, published_at, relevance_score, commentary,
             ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
           FROM headlines
           WHERE published_at >= NOW() - (${days} || ' days')::interval
             AND (relevance_score IS NULL OR relevance_score >= ${MIN_TOP_RELEVANCE_SCORE})
         )
-        SELECT id, source, category, title, url, published_at, relevance_score
+        SELECT id, source, category, title, url, published_at, relevance_score, commentary
         FROM ranked
         WHERE rn <= 2
       `);
@@ -183,11 +127,8 @@ router.get("/headlines", async (req, res) => {
       );
       const deduped = dedupeNearDuplicates(candidates);
       const initialTop = deduped.slice(0, limit);
-      const rows = ensurePapersInSelection(initialTop, deduped, 2)
+      const items = ensurePapersInSelection(initialTop, deduped, 2)
         .sort((a, b) => scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay));
-      const coveredBy = await loadCoveredByMap(30);
-      const itemsRaw = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
-      const items = dedupeCoveredByInDisplayOrder(itemsRaw);
       res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
       return res.json({ items, mode, days });
     }
@@ -196,22 +137,19 @@ router.get("/headlines", async (req, res) => {
     const result = await db.execute(sql`
       WITH ranked AS (
         SELECT
-          id, source, category, title, url, published_at, relevance_score,
+          id, source, category, title, url, published_at, relevance_score, commentary,
           ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
         FROM headlines
       )
-      SELECT id, source, category, title, url, published_at, relevance_score
+      SELECT id, source, category, title, url, published_at, relevance_score, commentary
       FROM ranked
       WHERE rn <= ${perSource}
       ORDER BY published_at DESC
       LIMIT ${limit}
     `);
-    const rows: HeadlineRow[] = result.rows.map((r) =>
+    const items: HeadlineRow[] = result.rows.map((r) =>
       mapSqlRowToHeadline(r as Record<string, unknown>),
     );
-    const coveredBy = await loadCoveredByMap(30);
-    const itemsRaw = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
-    const items = dedupeCoveredByInDisplayOrder(itemsRaw);
     res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
     return res.json({ items, mode });
   } catch (err) {
