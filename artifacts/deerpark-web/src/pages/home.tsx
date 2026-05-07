@@ -1537,8 +1537,8 @@ export default function Home() {
         <Problem />
         <Services />
         <CaseStudy />
-        <FAQ />
         <LeadCapture />
+        <FAQ />
       </main>
       <AssessmentFAB />
       <Footer />
