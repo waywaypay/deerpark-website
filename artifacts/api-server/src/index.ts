@@ -5,6 +5,7 @@ import { startWriterScheduler } from "./lib/writer-agent";
 import { startDailyDigestScheduler } from "./lib/daily-digest";
 import { ensureLeadsSchema } from "./routes/leads";
 import { runDataMigrations } from "./lib/migrate";
+import { ensureJudgeSchema } from "./lib/headline-judge";
 
 const rawPort = process.env["PORT"];
 
@@ -34,6 +35,10 @@ app.listen(port, (err) => {
 
   runDataMigrations().catch((err) => {
     logger.error({ err }, "Data migrations: failed");
+  });
+
+  ensureJudgeSchema().catch((err) => {
+    logger.error({ err }, "Headline judge: ensureSchema failed");
   });
 
   if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {

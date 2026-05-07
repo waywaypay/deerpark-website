@@ -4,6 +4,7 @@ import { db, headlinesTable, type InsertHeadline } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { SOURCES, type SourceConfig } from "./headline-sources";
 import { logger } from "./logger";
+import { scoreUnscoredHeadlines } from "./headline-judge";
 
 type NormalizedItem = Omit<InsertHeadline, "id" | "createdAt" | "relevanceScore">;
 
@@ -467,6 +468,13 @@ export async function ingestAllSources(): Promise<IngestResult[]> {
     ) old
     WHERE h.id = old.id
   `);
+
+  // Score newly-ingested rows for AI relevance. Don't await — judging is the
+  // top-view's quality gate, not part of the ingest contract; if the LLM is
+  // slow or unconfigured we still want ingest to return cleanly.
+  scoreUnscoredHeadlines().catch((err) => {
+    logger.warn({ err }, "Headline judge: post-ingest scoring failed");
+  });
 
   return results;
 }
