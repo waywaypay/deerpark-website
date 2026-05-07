@@ -12,9 +12,14 @@
 // sources, we make ~6 calls/day for this — negligible vs the writer agent.
 
 import OpenAI from "openai";
-import { db, headlinesTable } from "@workspace/db";
-import { and, isNull, gte, sql } from "drizzle-orm";
+import { db, headlinesTable, settingsTable } from "@workspace/db";
+import { and, isNull, gte, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
+
+// settings-table key for the most recent judge run summary. Persisted so
+// `/api/headlines/judge-status` can surface what happened on the last run
+// without scraping Fly logs.
+const LAST_RUN_SETTINGS_KEY = "headline_judge.last_run";
 
 // Anything below this is dropped from the "top" view. NULL (un-judged) rows
 // pass through so a missing/misconfigured judge doesn't empty the feed.
@@ -24,9 +29,10 @@ export const MIN_TOP_RELEVANCE_SCORE = 40;
 // worth a model call since the top-view only looks at the last 7 days.
 const JUDGE_LOOKBACK_DAYS = 14;
 
-// Batch size for one LLM call. Large enough to amortize prompt overhead,
-// small enough that one bad item can't ruin the whole batch's JSON.
-const BATCH_SIZE = 25;
+// Batch size for one LLM call. Smaller is better when the model is a
+// reasoning Claude on Venice — reasoning_content burns the same max_tokens
+// budget as the visible output, so a smaller batch leaves headroom.
+const BATCH_SIZE = 10;
 
 // Default base URL + model mirror writer-agent so a single LLM_API_KEY works
 // for both. JUDGE_MODEL can override LLM_MODEL — the judge benefits from a
@@ -68,10 +74,12 @@ function getClient(): { client: OpenAI; model: string } | null {
   const baseURL = process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL;
   const model =
     process.env["JUDGE_MODEL"] ?? process.env["LLM_MODEL"] ?? DEFAULT_MODEL;
-  // 60s — judge calls are short JSON responses; if a provider hangs we'd
-  // rather give up and try again on the next ingest tick than block the
-  // pipeline.
-  const client = new OpenAI({ apiKey, baseURL, timeout: 60_000 });
+  // 4 min per call. Reasoning-Claude burns most of the budget thinking
+  // before emitting JSON; 60s wasn't enough to ride out a cold model. The
+  // writer-agent uses 8 min for a much larger prompt — half that is plenty
+  // here. If a provider hangs past this, we abandon the batch and the next
+  // ingest tick re-tries the still-NULL rows.
+  const client = new OpenAI({ apiKey, baseURL, timeout: 4 * 60_000 });
   return { client, model };
 }
 
@@ -133,10 +141,16 @@ async function scoreBatch(
   const expectedIds = new Set(items.map((it) => it.id));
   const userMessage = `Score these ${items.length} headlines:\n\n${formatBatch(items)}`;
 
+  // 32768 to match writer-agent: Claude on Venice exposes reasoning via
+  // message.reasoning_content, and reasoning counts against max_tokens.
+  // 4096 was getting eaten by reasoning before the JSON output landed,
+  // truncating the response and yielding zero parseable scores. Only used
+  // tokens are billed so the higher cap has zero average-case cost.
+  // No `temperature` set — writer-agent doesn't, and Venice has been
+  // observed to reject `temperature: 0` for some Claude variants.
   const response = await client.chat.completions.create({
     model,
-    max_tokens: 4096,
-    temperature: 0,
+    max_tokens: 32768,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
       { role: "user", content: userMessage },
@@ -246,6 +260,45 @@ export async function getJudgeStats(): Promise<{
   };
 }
 
+// Persist a small JSON blob describing the last run so the public status
+// endpoint can surface progress without prod log access. Written once per
+// run; written even on early-exits and on errors so a "stuck" judge is
+// visible.
+async function persistLastRun(payload: {
+  finishedAt: string;
+  summary: JudgeRunSummary;
+  model: string;
+  lastError?: string;
+}): Promise<void> {
+  const value = JSON.stringify(payload);
+  await db
+    .insert(settingsTable)
+    .values({ key: LAST_RUN_SETTINGS_KEY, value })
+    .onConflictDoUpdate({
+      target: settingsTable.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+export async function getLastRun(): Promise<{
+  finishedAt: string;
+  summary: JudgeRunSummary;
+  model: string;
+  lastError?: string;
+} | null> {
+  const [row] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.key, LAST_RUN_SETTINGS_KEY))
+    .limit(1);
+  if (!row?.value) return null;
+  try {
+    return JSON.parse(row.value);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Score every headline that hasn't been judged yet (and is recent enough to
  * matter). Called fire-and-forget after each ingest tick.
@@ -256,6 +309,12 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
   const setup = getClient();
   if (!setup) {
     logger.info("Headline judge: LLM_API_KEY not set — skipping");
+    await persistLastRun({
+      finishedAt: new Date().toISOString(),
+      summary,
+      model: "(unconfigured)",
+      lastError: "LLM_API_KEY not set",
+    });
     return summary;
   }
 
@@ -275,8 +334,16 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
     );
 
   summary.candidates = candidates.length;
-  if (candidates.length === 0) return summary;
+  if (candidates.length === 0) {
+    await persistLastRun({
+      finishedAt: new Date().toISOString(),
+      summary,
+      model: setup.model,
+    });
+    return summary;
+  }
 
+  let lastError: string | undefined;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
     summary.batches++;
@@ -289,13 +356,20 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
       // score; "unjudged" and "judged as 0" need to remain distinguishable.
     } catch (err) {
       summary.errors++;
+      lastError = err instanceof Error ? err.message : String(err);
       logger.warn(
-        { err: err instanceof Error ? err.message : String(err), batchSize: batch.length },
+        { err: lastError, batchSize: batch.length },
         "Headline judge: batch failed",
       );
     }
   }
 
   logger.info(summary, "Headline judge: scoring complete");
+  await persistLastRun({
+    finishedAt: new Date().toISOString(),
+    summary,
+    model: setup.model,
+    lastError,
+  });
   return summary;
 }
