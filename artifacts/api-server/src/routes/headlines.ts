@@ -83,6 +83,30 @@ const mapSqlRowToHeadline = (
       : Number(row["relevance_score"]),
 });
 
+/**
+ * Walk items in display order and keep `coveredBy` only on the FIRST item
+ * that references each post; later siblings get null. Without this, a single
+ * dispatch post that cited 3+ headlines causes its title to repeat under
+ * every cited headline in the feed — visual noise the user called out.
+ *
+ * The first hit is the highest-ranked one in the page's order, so the badge
+ * appears next to the most prominent matching headline.
+ */
+function dedupeCoveredByInDisplayOrder<T extends { coveredBy?: CoveredBy | null }>(
+  items: T[],
+): T[] {
+  const seenPostIds = new Set<number>();
+  return items.map((it) => {
+    const cb = it.coveredBy ?? null;
+    if (!cb) return it;
+    if (seenPostIds.has(cb.postId)) {
+      return { ...it, coveredBy: null };
+    }
+    seenPostIds.add(cb.postId);
+    return it;
+  });
+}
+
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
 // Tier 1 → weight 4, Tier 4 → weight 1. Linear by design — easy to read,
 // easy to override per-row if we ever add per-headline overrides.
@@ -162,7 +186,8 @@ router.get("/headlines", async (req, res) => {
       const rows = ensurePapersInSelection(initialTop, deduped, 2)
         .sort((a, b) => scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay));
       const coveredBy = await loadCoveredByMap(30);
-      const items = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
+      const itemsRaw = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
+      const items = dedupeCoveredByInDisplayOrder(itemsRaw);
       res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
       return res.json({ items, mode, days });
     }
@@ -185,7 +210,8 @@ router.get("/headlines", async (req, res) => {
       mapSqlRowToHeadline(r as Record<string, unknown>),
     );
     const coveredBy = await loadCoveredByMap(30);
-    const items = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
+    const itemsRaw = rows.map((r) => ({ ...r, coveredBy: coveredBy.get(r.id) ?? null }));
+    const items = dedupeCoveredByInDisplayOrder(itemsRaw);
     res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
     return res.json({ items, mode });
   } catch (err) {
