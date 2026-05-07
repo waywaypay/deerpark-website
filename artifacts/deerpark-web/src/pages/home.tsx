@@ -48,7 +48,7 @@ const Hero = () => {
 
           <FadeIn delay={0.2}>
             <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-md mb-10 font-sans font-light">
-              We help organizations get ready for AI, build the applications their teams need, and train their people to run them. From exploring AI to operating it in eight weeks.
+              We help organizations get ready for AI, build the applications their teams need, and train their people to run them. From exploring AI to operating it in 90 days.
             </p>
           </FadeIn>
 
@@ -90,7 +90,7 @@ const Hero = () => {
           <FadeIn delay={0.4}>
             <div className="flex gap-8 border-t border-foreground/15 pt-8">
                 {[
-                { stat: "8 wks", label: "from readiness review to live rollout" },
+                { stat: "90 days", label: "from readiness review to live rollout" },
                 { stat: "100%", label: "code, prompts, and data stay in your accounts" },
                 { stat: "−90%", label: "manual effort on shipped workflows" },
                 { stat: "+25%", label: "lift in output quality vs baseline LLM workflows" },
@@ -110,9 +110,9 @@ const Hero = () => {
               <h2 className="text-3xl md:text-4xl font-serif mb-6">From readiness review to a team that runs it.</h2>
               <div className="space-y-4 text-sm font-light text-muted-foreground">
                 {[
-                  "Week 1: AI readiness review and priority workflows.",
-                  "Week 2-5: the custom application, integrations, and automations.",
-                  "Week 6-8: live rollout with hands-on training for your team.",
+                  "Week 1-2: AI readiness review and priority workflows.",
+                  "Week 3-8: the custom application, integrations, and automations.",
+                  "Week 9-13: live rollout with hands-on training for your team.",
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-3">
                     <Check className="w-4 h-4 mt-0.5 text-primary shrink-0" />
@@ -226,9 +226,9 @@ const SERVICE_PILLARS = [
 
 const TIMELINE_PHASES: { phase: string; title: string; icon: typeof ScanSearch; start: number; span: number }[] = [
   { phase: "01", title: "Assess", icon: ScanSearch, start: 1, span: 2 },
-  { phase: "02", title: "Build", icon: Layers, start: 2, span: 4 },
-  { phase: "03", title: "Deploy", icon: Rocket, start: 6, span: 2 },
-  { phase: "04", title: "Train", icon: GraduationCap, start: 1, span: 8 },
+  { phase: "02", title: "Build", icon: Layers, start: 3, span: 6 },
+  { phase: "03", title: "Deploy", icon: Rocket, start: 9, span: 5 },
+  { phase: "04", title: "Train", icon: GraduationCap, start: 1, span: 13 },
 ];
 
 const Services = () => (
@@ -249,10 +249,10 @@ const Services = () => (
         <div className="hidden md:block mb-20 border border-foreground/15 bg-foreground/[0.02] p-8">
           <div className="flex items-baseline justify-between mb-6">
             <span className="section-label">Engagement timeline</span>
-            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-sans">8 weeks · kickoff to handoff</span>
+            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-sans">90 days · kickoff to handoff</span>
           </div>
-          <div className="grid grid-cols-8 gap-px mb-3 border-b border-foreground/10 pb-3">
-            {Array.from({ length: 8 }, (_, i) => (
+          <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-px mb-3 border-b border-foreground/10 pb-3">
+            {Array.from({ length: 13 }, (_, i) => (
               <div key={i} className="text-center">
                 <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">Wk</div>
                 <div className="text-sm font-serif text-foreground">{i + 1}</div>
@@ -261,7 +261,7 @@ const Services = () => (
           </div>
           <div className="space-y-2">
             {TIMELINE_PHASES.map((p) => (
-              <div key={p.phase} className="grid grid-cols-8 gap-px">
+              <div key={p.phase} className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-px">
                 <div
                   className="h-10 bg-foreground/[0.06] border border-foreground/10 flex items-center gap-3 px-4 hover:bg-foreground/[0.1] transition-colors"
                   style={{ gridColumnStart: p.start, gridColumnEnd: p.start + p.span }}
