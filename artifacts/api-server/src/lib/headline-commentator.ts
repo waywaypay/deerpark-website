@@ -12,7 +12,7 @@
 
 import OpenAI from "openai";
 import { db, headlinesTable } from "@workspace/db";
-import { and, gte, isNull, sql } from "drizzle-orm";
+import { and, gte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
 
@@ -27,6 +27,17 @@ const COMMENTATOR_LOOKBACK_DAYS = 7;
 // chars), so 10 items → ~3.2k output chars. With reasoning overhead on a
 // Claude class model, this comfortably fits a single call.
 const BATCH_SIZE = 10;
+
+// Stop the run after this many back-to-back 429s. Venice's "too many
+// failed attempts (>20)" guard cascades — once we trip it, every
+// subsequent batch in this run also returns 429, burning quota for
+// nothing. Bail and let the next ingest tick (15 min later) try again
+// after the cooldown clears.
+const RATE_LIMIT_STREAK_BREAK = 3;
+const isRateLimitErr = (err: unknown): boolean => {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /\b429\b|rate.?limit|too many/i.test(msg);
+};
 
 const SYSTEM_PROMPT = `You write 2-4 sentence commentary for AI/tech headlines aimed at enterprise AI buyers and operators (CIOs, IT directors, AI program owners). Skeptical, concrete, naming actual companies.
 
@@ -195,10 +206,14 @@ export type CommentatorRunSummary = {
 
 /**
  * Generate commentary for top-eligible headlines that don't have it yet.
- * Top-eligible = published in the last 7 days AND
- *                relevance_score >= MIN_TOP_RELEVANCE_SCORE.
- * Idempotent — rows with non-NULL commentary are skipped, so calling this
- * after every ingest tick costs nothing on quiet days.
+ * Top-eligible matches the /api/headlines?mode=top SQL gate: published in
+ * the last 7 days AND (relevance_score IS NULL OR >= MIN_TOP_RELEVANCE).
+ * Items the judge hasn't reached still get commentary so the website
+ * doesn't go empty when the judge is backlogged or rate-limited.
+ *
+ * Idempotent — rows with non-NULL commentary are skipped, so calling
+ * this after every ingest tick costs nothing on quiet days. Bails on a
+ * rate-limit streak instead of burning the rest of the candidate list.
  */
 export async function generateMissingCommentary(): Promise<CommentatorRunSummary> {
   const summary: CommentatorRunSummary = {
@@ -228,13 +243,17 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
       and(
         isNull(headlinesTable.commentary),
         gte(headlinesTable.publishedAt, since),
-        gte(headlinesTable.relevanceScore, MIN_TOP_RELEVANCE_SCORE),
+        or(
+          isNull(headlinesTable.relevanceScore),
+          gte(headlinesTable.relevanceScore, MIN_TOP_RELEVANCE_SCORE),
+        ),
       ),
     );
 
   summary.candidates = candidates.length;
   if (candidates.length === 0) return summary;
 
+  let rateLimitStreak = 0;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
     summary.batches++;
@@ -242,15 +261,30 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
       const out = await commentBatch(setup.client, setup.model, batch);
       await persistCommentary(out);
       summary.commented += out.size;
+      rateLimitStreak = 0;
     } catch (err) {
       summary.errors++;
+      const rateLimited = isRateLimitErr(err);
       logger.warn(
         {
           err: err instanceof Error ? err.message : String(err),
           batchSize: batch.length,
+          rateLimited,
         },
         "Headline commentator: batch failed",
       );
+      if (rateLimited) {
+        rateLimitStreak++;
+        if (rateLimitStreak >= RATE_LIMIT_STREAK_BREAK) {
+          logger.warn(
+            { streak: rateLimitStreak, remainingBatches: Math.ceil((candidates.length - i - BATCH_SIZE) / BATCH_SIZE) },
+            "Headline commentator: bailing on rate-limit streak — next ingest tick will retry",
+          );
+          break;
+        }
+      } else {
+        rateLimitStreak = 0;
+      }
     }
   }
 
