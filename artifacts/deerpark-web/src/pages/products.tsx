@@ -27,6 +27,33 @@ const PRODUCTS: ProductCard[] = [
   },
 ];
 
+type RoadmapCard = {
+  name: string;
+  tagline: string;
+  description: string;
+};
+
+const ROADMAP: RoadmapCard[] = [
+  {
+    name: "Outbound Research",
+    tagline: "Account research that updates itself.",
+    description:
+      "Continuously refreshes target-account briefings — funding, headcount, hiring signals, public commentary — and pushes the diff to your CRM the day something changes.",
+  },
+  {
+    name: "Knowledge Ops",
+    tagline: "Internal answers, grounded in your docs.",
+    description:
+      "An assistant scoped to your runbooks, contracts, and SOPs. Answers route through cited source paragraphs only — no answers without provenance.",
+  },
+  {
+    name: "Regulated Writer",
+    tagline: "Drafts that pass compliance review.",
+    description:
+      "Long-form drafting for legal, financial, and clinical content. Every claim is cite-or-decline, and outputs land in a reviewer queue before they leave the system.",
+  },
+];
+
 const ProductsHero = () => (
   <section className="pt-32 md:pt-40 pb-12 border-b border-foreground/10">
     <div className="max-w-7xl mx-auto px-6">
@@ -89,32 +116,33 @@ const ProductGrid = () => (
           </FadeIn>
         ))}
 
-        <FadeIn delay={PRODUCTS.length * 0.1}>
-          <div className="h-full border border-dashed border-foreground/20 bg-transparent p-8 flex flex-col">
-            <div className="flex items-center justify-between mb-8">
-              <span className="font-sans text-xs font-medium tracking-[0.15em] text-muted-foreground uppercase">
-                In development
-              </span>
-              <div className="p-3 border border-dashed border-foreground/20 bg-transparent">
-                <Sparkles className="w-5 h-5 text-foreground/30" />
+        {ROADMAP.map((agent, i) => (
+          <FadeIn key={agent.name} delay={(PRODUCTS.length + i) * 0.1}>
+            <div className="h-full border border-dashed border-foreground/20 bg-transparent p-8 flex flex-col">
+              <div className="flex items-center justify-between mb-8">
+                <span className="font-sans text-xs font-medium tracking-[0.15em] text-muted-foreground uppercase">
+                  In development
+                </span>
+                <div className="p-3 border border-dashed border-foreground/20 bg-transparent">
+                  <Sparkles className="w-5 h-5 text-foreground/30" />
+                </div>
+              </div>
+              <h3 className="text-3xl font-serif mb-3 text-foreground/70">{agent.name}</h3>
+              <p className="text-base text-foreground/70 font-light mb-4">{agent.tagline}</p>
+              <p className="text-sm text-muted-foreground font-light leading-relaxed mb-8">
+                {agent.description}
+              </p>
+              <div className="mt-auto">
+                <a
+                  href="/#assessment"
+                  className="inline-flex items-center text-xs uppercase tracking-widest text-foreground/80 hover:text-foreground"
+                >
+                  Request early access <ArrowRight className="ml-2 w-3.5 h-3.5" />
+                </a>
               </div>
             </div>
-            <h3 className="text-3xl font-serif mb-3 text-foreground/60">More agents soon.</h3>
-            <p className="text-sm text-muted-foreground font-light leading-relaxed mb-8">
-              We're shipping additional agents this quarter — outbound research, internal
-              knowledge ops, and a writer for regulated content. If you have a workflow you'd
-              like turned into an agent, we'd rather build yours next than guess.
-            </p>
-            <div className="mt-auto">
-              <a
-                href="/#assessment"
-                className="inline-flex items-center text-xs uppercase tracking-widest text-foreground/80 hover:text-foreground"
-              >
-                Tell us your workflow <ArrowRight className="ml-2 w-3.5 h-3.5" />
-              </a>
-            </div>
-          </div>
-        </FadeIn>
+          </FadeIn>
+        ))}
       </div>
 
       <FadeIn delay={0.3}>
