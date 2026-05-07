@@ -27,33 +27,6 @@ const PRODUCTS: ProductCard[] = [
   },
 ];
 
-type RoadmapCard = {
-  name: string;
-  tagline: string;
-  description: string;
-};
-
-const ROADMAP: RoadmapCard[] = [
-  {
-    name: "Outbound Research",
-    tagline: "Account research that updates itself.",
-    description:
-      "Continuously refreshes target-account briefings — funding, headcount, hiring signals, public commentary — and pushes the diff to your CRM the day something changes.",
-  },
-  {
-    name: "Knowledge Ops",
-    tagline: "Internal answers, grounded in your docs.",
-    description:
-      "An assistant scoped to your runbooks, contracts, and SOPs. Answers route through cited source paragraphs only — no answers without provenance.",
-  },
-  {
-    name: "Regulated Writer",
-    tagline: "Drafts that pass compliance review.",
-    description:
-      "Long-form drafting for legal, financial, and clinical content. Every claim is cite-or-decline, and outputs land in a reviewer queue before they leave the system.",
-  },
-];
-
 const ProductsHero = () => (
   <section className="pt-32 md:pt-40 pb-12 border-b border-foreground/10">
     <div className="max-w-7xl mx-auto px-6">
@@ -66,9 +39,9 @@ const ProductsHero = () => (
           Agents we build, host, and keep running.
         </h1>
         <p className="text-lg text-muted-foreground font-light max-w-2xl">
-          Production AI agents from our practice. Each one solves a specific operator workflow,
-          runs on our infrastructure, and improves as we tune it. Pick one off the shelf — or
-          have us build the one you actually need.
+          Production AI agents from our practice — each solves a specific operator workflow,
+          runs on our infrastructure, and improves as we tune it. Use what's live, or have us
+          build the one you actually need.
         </p>
       </FadeIn>
     </div>
@@ -78,7 +51,7 @@ const ProductsHero = () => (
 const ProductGrid = () => (
   <section className="py-24 md:py-32">
     <div className="max-w-7xl mx-auto px-6">
-      <div className="grid md:grid-cols-2 gap-8">
+      <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto md:max-w-none md:mx-0">
         {PRODUCTS.map((product, i) => (
           <FadeIn key={product.href} delay={i * 0.1}>
             <Link
@@ -113,34 +86,6 @@ const ProductGrid = () => (
                 Open {product.name} <ArrowRight className="ml-2 w-3.5 h-3.5" />
               </span>
             </Link>
-          </FadeIn>
-        ))}
-
-        {ROADMAP.map((agent, i) => (
-          <FadeIn key={agent.name} delay={(PRODUCTS.length + i) * 0.1}>
-            <div className="h-full border border-dashed border-foreground/20 bg-transparent p-8 flex flex-col">
-              <div className="flex items-center justify-between mb-8">
-                <span className="font-sans text-xs font-medium tracking-[0.15em] text-muted-foreground uppercase">
-                  In development
-                </span>
-                <div className="p-3 border border-dashed border-foreground/20 bg-transparent">
-                  <Sparkles className="w-5 h-5 text-foreground/30" />
-                </div>
-              </div>
-              <h3 className="text-3xl font-serif mb-3 text-foreground/70">{agent.name}</h3>
-              <p className="text-base text-foreground/70 font-light mb-4">{agent.tagline}</p>
-              <p className="text-sm text-muted-foreground font-light leading-relaxed mb-8">
-                {agent.description}
-              </p>
-              <div className="mt-auto">
-                <a
-                  href="/#assessment"
-                  className="inline-flex items-center text-xs uppercase tracking-widest text-foreground/80 hover:text-foreground"
-                >
-                  Request early access <ArrowRight className="ml-2 w-3.5 h-3.5" />
-                </a>
-              </div>
-            </div>
           </FadeIn>
         ))}
       </div>
