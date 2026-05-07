@@ -37,15 +37,22 @@ app.listen(port, (err) => {
     logger.error({ err }, "Data migrations: failed");
   });
 
-  ensureJudgeSchema().catch((err) => {
-    logger.error({ err }, "Headline judge: ensureSchema failed");
-  });
-
-  if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
-    const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
-    startHeadlineScheduler(intervalMinutes * 60 * 1000);
-    logger.info({ intervalMinutes }, "Headline scheduler started");
-  }
+  // Await judge schema before starting the headline scheduler — the immediate
+  // ingest-tick fires scoreUnscoredHeadlines, which queries relevance_score.
+  // If the column doesn't exist yet, the first scoring pass throws and those
+  // rows stay NULL until the next tick. ALTER TABLE IF NOT EXISTS is a few
+  // ms; not worth racing.
+  ensureJudgeSchema()
+    .catch((schemaErr) => {
+      logger.error({ err: schemaErr }, "Headline judge: ensureSchema failed");
+    })
+    .finally(() => {
+      if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
+        const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
+        startHeadlineScheduler(intervalMinutes * 60 * 1000);
+        logger.info({ intervalMinutes }, "Headline scheduler started");
+      }
+    });
 
   if (process.env["DISABLE_WRITER_SCHEDULER"] !== "1") {
     if (process.env["LLM_API_KEY"]) {
