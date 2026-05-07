@@ -23,6 +23,7 @@ type HeadlineRow = {
   title: string;
   url: string;
   publishedAt: Date;
+  relevanceScore: number | null;
 };
 
 type CoveredBy = {
@@ -72,6 +73,10 @@ const mapSqlRowToHeadline = (
   title: String(row["title"]),
   url: String(row["url"]),
   publishedAt: new Date(row["published_at"] as string | Date),
+  relevanceScore:
+    row["relevance_score"] === null || row["relevance_score"] === undefined
+      ? null
+      : Number(row["relevance_score"]),
 });
 
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
@@ -129,24 +134,19 @@ router.get("/headlines", async (req, res) => {
       const result = await db.execute(sql`
         WITH ranked AS (
           SELECT
-            id, source, category, title, url, published_at,
+            id, source, category, title, url, published_at, relevance_score,
             ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
           FROM headlines
           WHERE published_at >= NOW() - (${days} || ' days')::interval
             AND (relevance_score IS NULL OR relevance_score >= ${MIN_TOP_RELEVANCE_SCORE})
         )
-        SELECT id, source, category, title, url, published_at
+        SELECT id, source, category, title, url, published_at, relevance_score
         FROM ranked
         WHERE rn <= 2
       `);
-      const candidates: HeadlineRow[] = result.rows.map((r) => ({
-        id: Number(r["id"]),
-        source: String(r["source"]),
-        category: String(r["category"]),
-        title: String(r["title"]),
-        url: String(r["url"]),
-        publishedAt: new Date(r["published_at"] as string | Date),
-      }));
+      const candidates: HeadlineRow[] = result.rows.map((r) =>
+        mapSqlRowToHeadline(r as Record<string, unknown>),
+      );
       const now = Date.now();
       const earningsDay = isEarningsDay(candidates);
       candidates.sort(
@@ -167,11 +167,11 @@ router.get("/headlines", async (req, res) => {
     const result = await db.execute(sql`
       WITH ranked AS (
         SELECT
-          id, source, category, title, url, published_at,
+          id, source, category, title, url, published_at, relevance_score,
           ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
         FROM headlines
       )
-      SELECT id, source, category, title, url, published_at
+      SELECT id, source, category, title, url, published_at, relevance_score
       FROM ranked
       WHERE rn <= ${perSource}
       ORDER BY published_at DESC

@@ -5,6 +5,11 @@ import { adminAuth } from "../middlewares/admin-auth";
 import { SOURCES } from "../lib/headline-sources";
 import { ingestAllSources, ingestSourceById } from "../lib/ingest-headlines";
 import {
+  scoreUnscoredHeadlines,
+  clearScoresInLookback,
+  getJudgeStats,
+} from "../lib/headline-judge";
+import {
   getModelInfo,
   getSystemPrompt,
   setSystemPrompt,
@@ -117,6 +122,33 @@ router.post("/admin/agents/ingest", async (req, res) => {
     return res.json({ results });
   } catch (err) {
     req.log.error({ err }, "Manual ingest-all failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Judge diagnostics: counts of scored/unscored in the lookback window plus
+// the lowest/highest 10 — quickest way to see whether the prompt is doing
+// what we expect.
+router.get("/admin/judge/stats", async (req, res) => {
+  try {
+    const stats = await getJudgeStats();
+    return res.json(stats);
+  } catch (err) {
+    req.log.error({ err }, "Judge stats failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Force-rescore the lookback window: clears existing scores then re-runs the
+// judge. Use after tuning the prompt or threshold. Synchronous so the caller
+// gets the run summary back; ~6 LLM calls for a typical 14-day window.
+router.post("/admin/judge/rescore", async (req, res) => {
+  try {
+    const cleared = await clearScoresInLookback();
+    const summary = await scoreUnscoredHeadlines();
+    return res.json({ cleared, summary });
+  } catch (err) {
+    req.log.error({ err }, "Judge rescore failed");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -183,6 +183,70 @@ export type JudgeRunSummary = {
 };
 
 /**
+ * Wipe relevance_score for rows in the lookback window so the next call to
+ * `scoreUnscoredHeadlines()` re-judges them with the current prompt. Useful
+ * after tuning the system prompt or threshold; the LLM call cost is small
+ * (~6 calls for the typical window) so this is cheap to run.
+ */
+export async function clearScoresInLookback(): Promise<{ cleared: number }> {
+  const since = new Date(Date.now() - JUDGE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const res = await db.execute(sql`
+    UPDATE headlines
+    SET relevance_score = NULL
+    WHERE published_at >= ${since}
+  `);
+  // pg drivers return rowCount on the result envelope; fall back to 0 if
+  // the driver shape changes.
+  const rowCount = (res as { rowCount?: number | null }).rowCount ?? 0;
+  return { cleared: rowCount };
+}
+
+/** Histogram + counts for diagnosing what the judge is doing. */
+export async function getJudgeStats(): Promise<{
+  total: number;
+  scored: number;
+  unscored: number;
+  lowest: Array<{ id: number; source: string; title: string; relevanceScore: number }>;
+  highest: Array<{ id: number; source: string; title: string; relevanceScore: number }>;
+}> {
+  const since = new Date(Date.now() - JUDGE_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const counts = await db.execute(sql`
+    SELECT
+      COUNT(*)::int AS total,
+      COUNT(relevance_score)::int AS scored
+    FROM headlines
+    WHERE published_at >= ${since}
+  `);
+  const row = counts.rows[0] ?? { total: 0, scored: 0 };
+  const total = Number((row as Record<string, unknown>)["total"] ?? 0);
+  const scored = Number((row as Record<string, unknown>)["scored"] ?? 0);
+
+  const sample = (order: "ASC" | "DESC") =>
+    db.execute(sql`
+      SELECT id, source, title, relevance_score
+      FROM headlines
+      WHERE published_at >= ${since} AND relevance_score IS NOT NULL
+      ORDER BY relevance_score ${sql.raw(order)}, published_at DESC
+      LIMIT 10
+    `);
+
+  const [lowest, highest] = await Promise.all([sample("ASC"), sample("DESC")]);
+  const mapRow = (r: Record<string, unknown>) => ({
+    id: Number(r["id"]),
+    source: String(r["source"]),
+    title: String(r["title"]),
+    relevanceScore: Number(r["relevance_score"]),
+  });
+  return {
+    total,
+    scored,
+    unscored: total - scored,
+    lowest: lowest.rows.map((r) => mapRow(r as Record<string, unknown>)),
+    highest: highest.rows.map((r) => mapRow(r as Record<string, unknown>)),
+  };
+}
+
+/**
  * Score every headline that hasn't been judged yet (and is recent enough to
  * matter). Called fire-and-forget after each ingest tick.
  */
