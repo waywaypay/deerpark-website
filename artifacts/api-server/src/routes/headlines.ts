@@ -4,6 +4,7 @@ import { inArray, sql } from "drizzle-orm";
 import { ingestAllSources } from "../lib/ingest-headlines";
 import {
   SOURCES,
+  BROAD_PRESS_SOURCES,
   EARNINGS_TRANSCRIPTS_DISPLAY_NAME,
   EARNINGS_PROMOTED_TIER,
   isEarningsDay,
@@ -11,6 +12,7 @@ import {
 import {
   dedupeNearDuplicates,
   ensurePapersInSelection,
+  extractOrgs,
 } from "../lib/headline-rank";
 import {
   MIN_TOP_RELEVANCE_SCORE,
@@ -116,9 +118,24 @@ router.get("/headlines", async (req, res) => {
         FROM ranked
         WHERE rn <= 2
       `);
-      const candidates: HeadlineRow[] = result.rows.map((r) =>
+      const rawCandidates: HeadlineRow[] = result.rows.map((r) =>
         mapSqlRowToHeadline(r as Record<string, unknown>),
       );
+      // Structural guard for broad-press feeds (Bloomberg Tech, The
+      // Information, Axios Tech, CIO Dive, SAP Newsroom). When the LLM
+      // judge has already scored an item, trust the score — the SQL gate
+      // already enforces relevance_score >= MIN_TOP_RELEVANCE_SCORE for
+      // non-NULL rows. When the judge hasn't reached the row yet
+      // (relevance_score IS NULL — common during ingest backlogs or rate-
+      // limit storms), require the title/URL to anchor on a named entity
+      // from extractOrgs(); otherwise drop. This keeps macro-trend
+      // clickbait like "AI Boom Drives Earnings Growth" out of the top-10
+      // until the judge catches up to score it explicitly.
+      const candidates = rawCandidates.filter((c) => {
+        if (c.relevanceScore !== null) return true;
+        if (!BROAD_PRESS_SOURCES.has(c.source)) return true;
+        return extractOrgs(c).size > 0;
+      });
       const now = Date.now();
       const earningsDay = isEarningsDay(candidates);
       candidates.sort(

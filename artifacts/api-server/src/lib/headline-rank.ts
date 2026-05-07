@@ -97,11 +97,44 @@ const ENTITY_TO_ORG: ReadonlyArray<{ regex: RegExp; org: string }> = [
   { regex: /\btesla\b/i, org: "tesla" },
   { regex: /\bspacex(?:ai)?\b/i, org: "spacex" },
   { regex: /\bmusk\b/i, org: "musk" },
+  // Chip / hardware peers that frequently lead AI earnings + supply-chain
+  // coverage. Not tied to ENTITY_TO_ORG's "tier-1 lab" semantics elsewhere,
+  // but useful as anchors for the broad-press structural filter so e.g.
+  // Bloomberg's "AMD Rallies After AI Demand Fuels Blockbuster Forecast"
+  // qualifies as a real story while "AI Boom Drives Earnings Growth"
+  // (zero entities) does not.
+  { regex: /\bamd\b/i, org: "amd" },
+  { regex: /\bintel\b/i, org: "intel" },
+  { regex: /\btsmc\b/i, org: "tsmc" },
+  { regex: /\barm\b/i, org: "arm" },
+  { regex: /\bsamsung\b/i, org: "samsung" },
+  { regex: /\bbroadcom\b/i, org: "broadcom" },
+  { regex: /\boracle\b/i, org: "oracle" },
+  { regex: /\bsalesforce\b/i, org: "salesforce" },
+  { regex: /\bservicenow\b/i, org: "servicenow" },
+  { regex: /\bsap\b/i, org: "sap" },
+  { regex: /\bibm\b/i, org: "ibm" },
+  { regex: /\bsnowflake\b/i, org: "snowflake" },
+  { regex: /\bpalantir\b/i, org: "palantir" },
+  { regex: /\bdatabricks\b/i, org: "databricks" },
+  { regex: /\bperplexity\b/i, org: "perplexity" },
+  { regex: /\bcohere\b/i, org: "cohere" },
+  { regex: /\bcerebras\b/i, org: "cerebras" },
+  { regex: /\bgroq\b/i, org: "groq" },
+  { regex: /\bhugging\s*face\b/i, org: "huggingface" },
+  { regex: /\buber\b/i, org: "uber" },
 ];
 
 const ORG_COMENTION_MIN = 2;
 
-function extractOrgs(item: {
+/**
+ * Extract the set of named-entity "orgs" present in an item's title + URL
+ * + source. Exported because the broad-press structural filter in the
+ * headlines route reuses the same vocabulary that backs the dedupe co-
+ * mention rule — keeping them in sync prevents drift between "what counts
+ * as a story anchor" and "what merges as a near-duplicate cluster."
+ */
+export function extractOrgs(item: {
   title: string;
   url?: string;
   source?: string;
