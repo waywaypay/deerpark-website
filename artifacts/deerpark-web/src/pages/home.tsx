@@ -112,7 +112,8 @@ const Hero = () => {
                 {[
                   "Week 1-2: AI readiness review and priority workflows.",
                   "Week 3-8: the custom application, integrations, and automations.",
-                  "Week 9-13: live rollout with hands-on training for your team.",
+                  "Week 9-13: live rollout — your team running the system in production.",
+                  "Throughout: executive briefings, role-based workshops, and hands-on training alongside the build.",
                 ].map((item) => (
                   <div key={item} className="flex items-start gap-3">
                     <Check className="w-4 h-4 mt-0.5 text-primary shrink-0" />
