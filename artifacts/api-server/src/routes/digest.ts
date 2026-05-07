@@ -1,34 +1,33 @@
 import { Router, type IRouter } from "express";
-import { db, postsTable, subscribersTable } from "@workspace/db";
-import { desc, isNotNull, isNull, sql } from "drizzle-orm";
-import { digestConfigStatus, loadCandidates, pickBestPost } from "../lib/daily-digest";
+import { db, subscribersTable } from "@workspace/db";
+import { isNull, sql } from "drizzle-orm";
+import { getDailyDigestState } from "../lib/daily-digest";
+import { loadTopHeadlinesForEmail } from "../lib/top10-email";
 
 const router: IRouter = Router();
 
 /**
- * Public diagnostics for the daily digest. Exposes only non-sensitive state:
- * config booleans, schema check, candidate previews (post titles are already
- * public), subscriber counts (no addresses), and the last-sent record.
+ * Public diagnostics for the daily top-10 dispatch email. Exposes only
+ * non-sensitive state: config booleans, schema check, top-10 candidate
+ * count + preview titles (already public), subscriber counts (no
+ * addresses), and the last-sent PT date.
  */
 router.get("/digest/status", async (req, res) => {
-  const config = digestConfigStatus();
-
   let schemaOk = false;
   let schemaError: string | null = null;
   try {
-    await db.execute(sql`SELECT sent_to_substack_at FROM posts LIMIT 1`);
     await db.execute(sql`SELECT unsubscribe_token, unsubscribed_at FROM subscribers LIMIT 1`);
     schemaOk = true;
   } catch (err) {
     schemaError = err instanceof Error ? err.message : String(err);
   }
 
-  let candidates: Awaited<ReturnType<typeof loadCandidates>> = [];
-  let candidateError: string | null = null;
+  let state: Awaited<ReturnType<typeof getDailyDigestState>> | null = null;
+  let stateError: string | null = null;
   try {
-    candidates = await loadCandidates();
+    state = await getDailyDigestState();
   } catch (err) {
-    candidateError = err instanceof Error ? err.message : String(err);
+    stateError = err instanceof Error ? err.message : String(err);
   }
 
   let subscribers: { active: number; unsubscribed: number; total: number } = {
@@ -52,45 +51,32 @@ router.get("/digest/status", async (req, res) => {
     subscriberError = err instanceof Error ? err.message : String(err);
   }
 
-  let lastSent: { id: number; title: string; sentToSubstackAt: Date | null } | null = null;
+  let topPreview: Array<{ id: number; source: string; title: string }> = [];
+  let topError: string | null = null;
   try {
-    const rows = await db
-      .select({
-        id: postsTable.id,
-        title: postsTable.title,
-        sentToSubstackAt: postsTable.sentToSubstackAt,
-      })
-      .from(postsTable)
-      .where(isNotNull(postsTable.sentToSubstackAt))
-      .orderBy(desc(postsTable.sentToSubstackAt))
-      .limit(1);
-    lastSent = rows[0] ?? null;
+    const headlines = await loadTopHeadlinesForEmail();
+    topPreview = headlines.slice(0, 5).map((h) => ({
+      id: h.id,
+      source: h.source,
+      title: h.title,
+    }));
   } catch (err) {
-    req.log.warn({ err }, "Failed to load lastSent");
+    topError = err instanceof Error ? err.message : String(err);
   }
 
-  const best = candidates.length ? pickBestPost(candidates) : null;
-
   return res.json({
-    config,
+    config: state?.config ?? null,
+    stateError,
     schema: { ok: schemaOk, error: schemaError },
     subscribers: { ...subscribers, error: subscriberError },
-    candidates: {
-      count: candidates.length,
-      error: candidateError,
-      preview: candidates.slice(0, 5).map((c) => ({
-        id: c.id,
-        mode: c.mode,
-        publishedAt: c.publishedAt,
-        title: c.title,
-        citationsCount: c.citations.length,
-        bodyLength: c.bodyMarkdown.length,
-      })),
+    top: {
+      count: state?.topCandidateCount ?? topPreview.length,
+      error: topError,
+      preview: topPreview,
     },
-    bestCandidate: best
-      ? { id: best.id, mode: best.mode, title: best.title, publishedAt: best.publishedAt }
-      : null,
-    lastSent,
+    lastSentPtDate: state?.lastSentPtDate ?? null,
+    todayPtDate: state?.todayPtDate ?? null,
+    alreadySentToday: state?.alreadySentToday ?? false,
     nowUtc: new Date().toISOString(),
   });
 });

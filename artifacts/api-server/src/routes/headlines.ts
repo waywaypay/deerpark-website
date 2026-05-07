@@ -2,23 +2,8 @@ import { Router, type IRouter } from "express";
 import { db, headlinesTable } from "@workspace/db";
 import { inArray, sql } from "drizzle-orm";
 import { ingestAllSources } from "../lib/ingest-headlines";
-import {
-  SOURCES,
-  BROAD_PRESS_SOURCES,
-  EARNINGS_TRANSCRIPTS_DISPLAY_NAME,
-  EARNINGS_PROMOTED_TIER,
-  isEarningsDay,
-} from "../lib/headline-sources";
-import {
-  dedupeNearDuplicates,
-  ensurePapersInSelection,
-  extractOrgs,
-} from "../lib/headline-rank";
-import {
-  MIN_TOP_RELEVANCE_SCORE,
-  getJudgeStats,
-  getLastRun,
-} from "../lib/headline-judge";
+import { selectTopHeadlines } from "../lib/top-headlines";
+import { getJudgeStats, getLastRun } from "../lib/headline-judge";
 
 const router: IRouter = Router();
 
@@ -53,28 +38,6 @@ const mapSqlRowToHeadline = (
       : String(row["commentary"]),
 });
 
-const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
-// Tier 1 → weight 4, Tier 4 → weight 1. Linear by design — easy to read,
-// easy to override per-row if we ever add per-headline overrides.
-const TIER_WEIGHTS: Record<number, number> = { 1: 4, 2: 3, 3: 2, 4: 1 };
-const HALF_LIFE_DAYS = 3;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
-const scoreItem = (
-  row: HeadlineRow,
-  now: number,
-  earningsDay: boolean,
-): number => {
-  let tier = SOURCE_TIER.get(row.source) ?? 4;
-  if (earningsDay && row.source === EARNINGS_TRANSCRIPTS_DISPLAY_NAME) {
-    tier = EARNINGS_PROMOTED_TIER;
-  }
-  const tierWeight = TIER_WEIGHTS[tier] ?? 1;
-  const ageDays = Math.max(0, (now - row.publishedAt.getTime()) / MS_PER_DAY);
-  const decay = Math.exp(-Math.LN2 * ageDays / HALF_LIFE_DAYS);
-  return tierWeight * decay;
-};
-
 router.get("/headlines", async (req, res) => {
   const mode = req.query["mode"] === "top" ? "top" : "latest";
   const rawLimit = Number(req.query["limit"]);
@@ -89,63 +52,9 @@ router.get("/headlines", async (req, res) => {
 
   try {
     if (mode === "top") {
-      // Weighted view: score recent items by tier × recency decay, then take
-      // the top N. Pulls a tight candidate set from the last `days` days —
-      // 2 per source so high-volume feeds (arXiv, HN) can't crowd out
-      // weekly-cadence labs even when they're freshly published — then ranks
-      // in JS so the formula stays legible and easy to tune. After ranking
-      // we (1) drop near-duplicate stories so e.g. an Anthropic release plus
-      // Bloomberg's coverage of it don't both land in the top, and
-      // (2) reserve at least 2 slots for academic papers (arXiv, HF Papers)
-      // so an active lab-publishing week doesn't crowd research out entirely.
-      //
-      // Quality gate: drop rows whose LLM-judged relevance_score is below
-      // MIN_TOP_RELEVANCE_SCORE. The keyword filter at ingest is too coarse
-      // (it lets through e.g. a gardening post from blog.google because the
-      // title says "model"); the per-item LLM score is the second pass.
-      // NULL scores pass through so unjudged items still appear if the
-      // judge is unconfigured or behind on a fresh ingest.
-      const result = await db.execute(sql`
-        WITH ranked AS (
-          SELECT
-            id, source, category, title, url, published_at, relevance_score, commentary,
-            ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
-          FROM headlines
-          WHERE published_at >= NOW() - (${days} || ' days')::interval
-            AND (relevance_score IS NULL OR relevance_score >= ${MIN_TOP_RELEVANCE_SCORE})
-        )
-        SELECT id, source, category, title, url, published_at, relevance_score, commentary
-        FROM ranked
-        WHERE rn <= 2
-      `);
-      const rawCandidates: HeadlineRow[] = result.rows.map((r) =>
-        mapSqlRowToHeadline(r as Record<string, unknown>),
-      );
-      // Structural guard for broad-press feeds (Bloomberg Tech, The
-      // Information, Axios Tech, CIO Dive, SAP Newsroom). When the LLM
-      // judge has already scored an item, trust the score — the SQL gate
-      // already enforces relevance_score >= MIN_TOP_RELEVANCE_SCORE for
-      // non-NULL rows. When the judge hasn't reached the row yet
-      // (relevance_score IS NULL — common during ingest backlogs or rate-
-      // limit storms), require the title/URL to anchor on a named entity
-      // from extractOrgs(); otherwise drop. This keeps macro-trend
-      // clickbait like "AI Boom Drives Earnings Growth" out of the top-10
-      // until the judge catches up to score it explicitly.
-      const candidates = rawCandidates.filter((c) => {
-        if (c.relevanceScore !== null) return true;
-        if (!BROAD_PRESS_SOURCES.has(c.source)) return true;
-        return extractOrgs(c).size > 0;
-      });
-      const now = Date.now();
-      const earningsDay = isEarningsDay(candidates);
-      candidates.sort(
-        (a, b) =>
-          scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay),
-      );
-      const deduped = dedupeNearDuplicates(candidates);
-      const initialTop = deduped.slice(0, limit);
-      const items = ensurePapersInSelection(initialTop, deduped, 2)
-        .sort((a, b) => scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay));
+      // Single source of truth lives in lib/top-headlines.ts so the website
+      // and the daily top-10 email always agree on what "top dispatch" is.
+      const items = await selectTopHeadlines({ days, limit });
       res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
       return res.json({ items, mode, days });
     }

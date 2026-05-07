@@ -27,12 +27,12 @@ export const MIN_TOP_RELEVANCE_SCORE = 40;
 
 // We only consider rows newer than this for judging — older rows aren't
 // worth a model call since the top-view only looks at the last 7 days.
-const JUDGE_LOOKBACK_DAYS = 14;
+export const JUDGE_LOOKBACK_DAYS = 14;
 
 // Batch size for one LLM call. Smaller is better when the model is a
 // reasoning Claude on Venice — reasoning_content burns the same max_tokens
 // budget as the visible output, so a smaller batch leaves headroom.
-const BATCH_SIZE = 10;
+export const BATCH_SIZE = 10;
 
 // Stop after this many back-to-back batch failures of any kind. Venice's
 // "20 failed requests in 30 seconds" abuse guard cascades — once tripped,
@@ -41,7 +41,7 @@ const BATCH_SIZE = 10;
 // fast and let the next ingest tick retry after the cooldown clears.
 // Counts ANY error (429, timeout, parse, network) — they all signal
 // "Venice/this batch is unhappy right now."
-const ERROR_STREAK_BREAK = 3;
+export const ERROR_STREAK_BREAK = 3;
 
 // Default base URL mirrors writer-agent so a single LLM_API_KEY works for
 // both. The judge is a classifier, not a writer — it benefits from a
@@ -53,7 +53,7 @@ const ERROR_STREAK_BREAK = 3;
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
-const SYSTEM_PROMPT = `You score AI/tech news headlines for an enterprise-AI briefing.
+export const DEFAULT_JUDGE_SYSTEM_PROMPT = `You score AI/tech news headlines for an enterprise-AI briefing.
 
 Each headline is one of:
   RELEVANT — a model release, paper, eval, infra, M&A, exec move, earnings, or product announcement that matters to enterprise AI buyers/operators.
@@ -72,6 +72,32 @@ Return ONLY this JSON, no prose:
 
 One entry per input id. No omissions. No extra ids.`;
 
+const PROMPT_SETTINGS_KEY = "judge.headline.system_prompt";
+
+export async function getJudgePrompt(): Promise<{ prompt: string; isCustom: boolean }> {
+  const [row] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.key, PROMPT_SETTINGS_KEY))
+    .limit(1);
+  if (row?.value) return { prompt: row.value, isCustom: true };
+  return { prompt: DEFAULT_JUDGE_SYSTEM_PROMPT, isCustom: false };
+}
+
+export async function setJudgePrompt(value: string): Promise<void> {
+  await db
+    .insert(settingsTable)
+    .values({ key: PROMPT_SETTINGS_KEY, value })
+    .onConflictDoUpdate({
+      target: settingsTable.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+export async function resetJudgePrompt(): Promise<void> {
+  await db.delete(settingsTable).where(eq(settingsTable.key, PROMPT_SETTINGS_KEY));
+}
+
 type JudgeInput = {
   id: number;
   source: string;
@@ -80,6 +106,17 @@ type JudgeInput = {
 
 type RawScore = { id: unknown; score: unknown };
 type ParsedScores = Map<number, number>;
+
+export function getJudgeRuntimeInfo(): {
+  model: string;
+  baseUrl: string;
+  configured: boolean;
+} {
+  const apiKey = process.env["LLM_API_KEY"];
+  const baseUrl = process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL;
+  const model = process.env["JUDGE_MODEL"] ?? DEFAULT_MODEL;
+  return { model, baseUrl, configured: Boolean(apiKey) };
+}
 
 function getClient(): { client: OpenAI; model: string } | null {
   const apiKey = process.env["LLM_API_KEY"];
@@ -156,6 +193,7 @@ function parseScores(text: string, expectedIds: Set<number>): ParsedScores {
 async function scoreBatch(
   client: OpenAI,
   model: string,
+  systemPrompt: string,
   items: JudgeInput[],
 ): Promise<ParsedScores> {
   const expectedIds = new Set(items.map((it) => it.id));
@@ -172,7 +210,7 @@ async function scoreBatch(
     model,
     max_tokens: 32768,
     messages: [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },
     ],
     response_format: { type: "json_object" },
@@ -363,13 +401,17 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
     return summary;
   }
 
+  // Snapshot the prompt at run start so a save mid-run doesn't shift the
+  // scoring rubric across batches.
+  const { prompt: systemPrompt } = await getJudgePrompt();
+
   let lastError: string | undefined;
   let errorStreak = 0;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
     summary.batches++;
     try {
-      const scores = await scoreBatch(setup.client, setup.model, batch);
+      const scores = await scoreBatch(setup.client, setup.model, systemPrompt, batch);
       await persistScores(scores);
       summary.scored += scores.size;
       // Items the model omitted from the response stay NULL — they'll be
