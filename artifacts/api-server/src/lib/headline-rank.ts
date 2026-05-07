@@ -48,41 +48,157 @@ export function titleJaccard(a: string, b: string): number {
 // names. Tune via the `threshold` arg if a feed surfaces a counter-example.
 export const DEFAULT_DEDUP_THRESHOLD = 0.45;
 
+// Entity → org map used by the co-mention fallback. Title-token Jaccard
+// underfits cross-source coverage where the press outlet uses different
+// framing words than the original announcement — e.g. Anthropic's "Higher
+// usage limits for Claude and a compute deal with SpaceX" vs Latent Space's
+// "Anthropic-SpaceXai's 300MW/$5B/yr deal for Colossus I" share almost no
+// title tokens but are obviously the same news. The fallback flags items
+// that mention 2+ proper-noun-ish brand tokens spanning DIFFERENT orgs.
+//
+// Two same-org tokens (e.g. openai + chatgpt + gpt) appear across too many
+// distinct stories to discriminate, so we group tokens by org and dedupe by
+// distinct-org count. Two cross-org tokens (anthropic + spacex, openai +
+// musk, deepmind + nvidia, etc.) are very rarely incidental in a headline.
+//
+// Searches title + URL + source. URL inclusion catches cases like Axios's
+// "How Elon grew to love Anthropic" where the slug
+// (musk-anthropic-compute-spacex-ai) is more entity-rich than the title.
+const ENTITY_TO_ORG: ReadonlyArray<{ regex: RegExp; org: string }> = [
+  { regex: /\banthropic\b/i, org: "anthropic" },
+  { regex: /\bclaude\b/i, org: "anthropic" },
+  { regex: /\bamodei\b/i, org: "anthropic" },
+  { regex: /\bopenai\b/i, org: "openai" },
+  { regex: /\bchatgpt\b/i, org: "openai" },
+  { regex: /\bgpt\b/i, org: "openai" },
+  { regex: /\bcodex\b/i, org: "openai" },
+  { regex: /\baltman\b/i, org: "openai" },
+  { regex: /\bgoogle\b/i, org: "google" },
+  { regex: /\bdeepmind\b/i, org: "google" },
+  { regex: /\bgemini\b/i, org: "google" },
+  { regex: /\bpichai\b/i, org: "google" },
+  { regex: /\bdeepseek\b/i, org: "deepseek" },
+  { regex: /\bmistral\b/i, org: "mistral" },
+  { regex: /\bmoonshot\b/i, org: "moonshot" },
+  { regex: /\bkimi\b/i, org: "moonshot" },
+  { regex: /\bxai\b/i, org: "xai" },
+  { regex: /\bgrok\b/i, org: "xai" },
+  { regex: /\bllama\b/i, org: "meta" },
+  { regex: /\bmicrosoft\b/i, org: "microsoft" },
+  { regex: /\bcopilot\b/i, org: "microsoft" },
+  { regex: /\bnadella\b/i, org: "microsoft" },
+  { regex: /\bamazon\b/i, org: "amazon" },
+  { regex: /\baws\b/i, org: "amazon" },
+  { regex: /\bbedrock\b/i, org: "amazon" },
+  { regex: /\bapple\b/i, org: "apple" },
+  { regex: /\bnvidia\b/i, org: "nvidia" },
+  { regex: /\bblackwell\b/i, org: "nvidia" },
+  { regex: /\bhuang\b/i, org: "nvidia" },
+  { regex: /\btesla\b/i, org: "tesla" },
+  { regex: /\bspacex(?:ai)?\b/i, org: "spacex" },
+  { regex: /\bmusk\b/i, org: "musk" },
+];
+
+const ORG_COMENTION_MIN = 2;
+
+function extractOrgs(item: {
+  title: string;
+  url?: string;
+  source?: string;
+}): Set<string> {
+  const haystack = [item.title, item.url ?? "", item.source ?? ""].join(" ");
+  const orgs = new Set<string>();
+  for (const { regex, org } of ENTITY_TO_ORG) {
+    if (regex.test(haystack)) orgs.add(org);
+  }
+  return orgs;
+}
+
+// Sources whose announcements are the canonical/originating record for AI
+// news. When a near-duplicate cluster spans a tier-1 lab and lower-tier
+// press coverage, the lab's own post wins cluster representation — even if
+// the press item scored higher on recency. Mirrors the tier=1 entries in
+// headline-sources.ts; kept hard-coded here so the dedupe lib doesn't take
+// a runtime dep on the full SOURCES table.
+const TIER1_LAB_SOURCES: ReadonlySet<string> = new Set([
+  "Anthropic",
+  "OpenAI",
+  "Google DeepMind",
+  "DeepSeek",
+  "METR",
+]);
+
 /**
  * Walks the candidates in input order (caller passes them already sorted by
- * score, descending), keeping the first item from each near-duplicate
- * cluster. Items whose title Jaccard against any already-kept item exceeds
- * `threshold` are dropped.
+ * score, descending), keeping one representative per near-duplicate cluster.
+ *
+ * Cluster membership: title-token Jaccard ≥ `threshold` (primary), OR ≥ 2
+ * shared distinct-org entity tokens (fallback for cross-source coverage
+ * with low title overlap — see ENTITY_TO_ORG).
+ *
+ * Cluster representative: first item kept by default (highest-scored due to
+ * caller's sort), but a tier-1 lab item that joins the cluster afterward
+ * swaps in as representative — so e.g. Anthropic's own announcement wins
+ * over Bloomberg's coverage of it even when Bloomberg posted later and
+ * scored higher on recency.
  *
  * Returns a new array; does not mutate the input.
  */
-export function dedupeNearDuplicates<T extends { title: string }>(
-  items: T[],
-  threshold: number = DEFAULT_DEDUP_THRESHOLD,
-): T[] {
+export function dedupeNearDuplicates<
+  T extends { title: string; url?: string; source?: string },
+>(items: T[], threshold: number = DEFAULT_DEDUP_THRESHOLD): T[] {
   const kept: T[] = [];
   const keptTokens: Set<string>[] = [];
+  const keptOrgs: Set<string>[] = [];
+
   for (const item of items) {
     const tokens = tokenizeTitle(item.title);
-    let dup = false;
-    if (tokens.size > 0) {
-      for (const prev of keptTokens) {
-        if (prev.size === 0) continue;
+    const orgs = extractOrgs(item);
+
+    let dupIdx = -1;
+    for (let i = 0; i < kept.length; i++) {
+      const prevTokens = keptTokens[i]!;
+      const prevOrgs = keptOrgs[i]!;
+
+      if (tokens.size > 0 && prevTokens.size > 0) {
         let inter = 0;
-        for (const t of tokens) if (prev.has(t)) inter++;
-        const union = tokens.size + prev.size - inter;
+        for (const t of tokens) if (prevTokens.has(t)) inter++;
+        const union = tokens.size + prevTokens.size - inter;
         const j = union === 0 ? 0 : inter / union;
         if (j >= threshold) {
-          dup = true;
+          dupIdx = i;
+          break;
+        }
+      }
+
+      if (orgs.size >= ORG_COMENTION_MIN && prevOrgs.size >= ORG_COMENTION_MIN) {
+        let inter = 0;
+        for (const o of orgs) if (prevOrgs.has(o)) inter++;
+        if (inter >= ORG_COMENTION_MIN) {
+          dupIdx = i;
           break;
         }
       }
     }
-    if (!dup) {
+
+    if (dupIdx === -1) {
       kept.push(item);
       keptTokens.push(tokens);
+      keptOrgs.push(orgs);
+      continue;
+    }
+
+    const isTier1 = item.source !== undefined && TIER1_LAB_SOURCES.has(item.source);
+    const prevIsTier1 =
+      kept[dupIdx]!.source !== undefined &&
+      TIER1_LAB_SOURCES.has(kept[dupIdx]!.source!);
+    if (isTier1 && !prevIsTier1) {
+      kept[dupIdx] = item;
+      keptTokens[dupIdx] = tokens;
+      keptOrgs[dupIdx] = orgs;
     }
   }
+
   return kept;
 }
 
