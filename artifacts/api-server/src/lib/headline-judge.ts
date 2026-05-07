@@ -34,6 +34,16 @@ const JUDGE_LOOKBACK_DAYS = 14;
 // budget as the visible output, so a smaller batch leaves headroom.
 const BATCH_SIZE = 10;
 
+// Stop after this many back-to-back 429s. Venice's "too many failed
+// attempts (>20)" guard cascades — once we trip it, every subsequent
+// batch in this run also returns 429, burning quota for nothing. Bail
+// and let the next ingest tick retry after the cooldown clears.
+const RATE_LIMIT_STREAK_BREAK = 3;
+const isRateLimitErr = (err: unknown): boolean => {
+  const msg = err instanceof Error ? err.message : String(err);
+  return /\b429\b|rate.?limit|too many/i.test(msg);
+};
+
 // Default base URL + model mirror writer-agent so a single LLM_API_KEY works
 // for both. JUDGE_MODEL can override LLM_MODEL — the judge benefits from a
 // cheap/fast model (Haiku-class) since it's a classifier, not a writer.
@@ -344,6 +354,7 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
   }
 
   let lastError: string | undefined;
+  let rateLimitStreak = 0;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
     summary.batches++;
@@ -354,13 +365,27 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
       // Items the model omitted from the response stay NULL — they'll be
       // retried on the next ingest tick. Don't backfill with a default
       // score; "unjudged" and "judged as 0" need to remain distinguishable.
+      rateLimitStreak = 0;
     } catch (err) {
       summary.errors++;
       lastError = err instanceof Error ? err.message : String(err);
+      const rateLimited = isRateLimitErr(err);
       logger.warn(
-        { err: lastError, batchSize: batch.length },
+        { err: lastError, batchSize: batch.length, rateLimited },
         "Headline judge: batch failed",
       );
+      if (rateLimited) {
+        rateLimitStreak++;
+        if (rateLimitStreak >= RATE_LIMIT_STREAK_BREAK) {
+          logger.warn(
+            { streak: rateLimitStreak, remainingBatches: Math.ceil((candidates.length - i - BATCH_SIZE) / BATCH_SIZE) },
+            "Headline judge: bailing on rate-limit streak — next ingest tick will retry",
+          );
+          break;
+        }
+      } else {
+        rateLimitStreak = 0;
+      }
     }
   }
 
