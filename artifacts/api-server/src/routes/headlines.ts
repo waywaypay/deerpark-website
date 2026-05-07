@@ -12,6 +12,7 @@ import {
   dedupeNearDuplicates,
   ensurePapersInSelection,
 } from "../lib/headline-rank";
+import { MIN_TOP_RELEVANCE_SCORE } from "../lib/headline-judge";
 
 const router: IRouter = Router();
 
@@ -118,6 +119,13 @@ router.get("/headlines", async (req, res) => {
       // Bloomberg's coverage of it don't both land in the top, and
       // (2) reserve at least 2 slots for academic papers (arXiv, HF Papers)
       // so an active lab-publishing week doesn't crowd research out entirely.
+      //
+      // Quality gate: drop rows whose LLM-judged relevance_score is below
+      // MIN_TOP_RELEVANCE_SCORE. The keyword filter at ingest is too coarse
+      // (it lets through e.g. a gardening post from blog.google because the
+      // title says "model"); the per-item LLM score is the second pass.
+      // NULL scores pass through so unjudged items still appear if the
+      // judge is unconfigured or behind on a fresh ingest.
       const result = await db.execute(sql`
         WITH ranked AS (
           SELECT
@@ -125,6 +133,7 @@ router.get("/headlines", async (req, res) => {
             ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
           FROM headlines
           WHERE published_at >= NOW() - (${days} || ' days')::interval
+            AND (relevance_score IS NULL OR relevance_score >= ${MIN_TOP_RELEVANCE_SCORE})
         )
         SELECT id, source, category, title, url, published_at
         FROM ranked
