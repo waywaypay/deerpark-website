@@ -34,15 +34,14 @@ const JUDGE_LOOKBACK_DAYS = 14;
 // budget as the visible output, so a smaller batch leaves headroom.
 const BATCH_SIZE = 10;
 
-// Stop after this many back-to-back 429s. Venice's "too many failed
-// attempts (>20)" guard cascades — once we trip it, every subsequent
-// batch in this run also returns 429, burning quota for nothing. Bail
-// and let the next ingest tick retry after the cooldown clears.
-const RATE_LIMIT_STREAK_BREAK = 3;
-const isRateLimitErr = (err: unknown): boolean => {
-  const msg = err instanceof Error ? err.message : String(err);
-  return /\b429\b|rate.?limit|too many/i.test(msg);
-};
+// Stop after this many back-to-back batch failures of any kind. Venice's
+// "20 failed requests in 30 seconds" abuse guard cascades — once tripped,
+// every subsequent call returns 429, and the OpenAI SDK's default 2x retry
+// (which we disable below) used to multiply wasted attempts further. Bail
+// fast and let the next ingest tick retry after the cooldown clears.
+// Counts ANY error (429, timeout, parse, network) — they all signal
+// "Venice/this batch is unhappy right now."
+const ERROR_STREAK_BREAK = 3;
 
 // Default base URL mirrors writer-agent so a single LLM_API_KEY works for
 // both. The judge is a classifier, not a writer — it benefits from a
@@ -94,7 +93,13 @@ function getClient(): { client: OpenAI; model: string } | null {
   // writer-agent uses 8 min for a much larger prompt — half that is plenty
   // here. If a provider hangs past this, we abandon the batch and the next
   // ingest tick re-tries the still-NULL rows.
-  const client = new OpenAI({ apiKey, baseURL, timeout: 4 * 60_000 });
+  //
+  // maxRetries: 0 disables the OpenAI SDK's default 2x retry. With retries
+  // on, a single failing batch is actually 3 HTTP calls — so 3 batches
+  // become 9 calls and pile straight into Venice's "20 failed in 30s"
+  // abuse threshold. The streak break below handles backoff at the run
+  // level; per-call retries only multiply the damage.
+  const client = new OpenAI({ apiKey, baseURL, timeout: 4 * 60_000, maxRetries: 0 });
   return { client, model };
 }
 
@@ -359,7 +364,7 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
   }
 
   let lastError: string | undefined;
-  let rateLimitStreak = 0;
+  let errorStreak = 0;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
     summary.batches++;
@@ -370,26 +375,21 @@ export async function scoreUnscoredHeadlines(): Promise<JudgeRunSummary> {
       // Items the model omitted from the response stay NULL — they'll be
       // retried on the next ingest tick. Don't backfill with a default
       // score; "unjudged" and "judged as 0" need to remain distinguishable.
-      rateLimitStreak = 0;
+      errorStreak = 0;
     } catch (err) {
       summary.errors++;
       lastError = err instanceof Error ? err.message : String(err);
-      const rateLimited = isRateLimitErr(err);
       logger.warn(
-        { err: lastError, batchSize: batch.length, rateLimited },
+        { err: lastError, batchSize: batch.length },
         "Headline judge: batch failed",
       );
-      if (rateLimited) {
-        rateLimitStreak++;
-        if (rateLimitStreak >= RATE_LIMIT_STREAK_BREAK) {
-          logger.warn(
-            { streak: rateLimitStreak, remainingBatches: Math.ceil((candidates.length - i - BATCH_SIZE) / BATCH_SIZE) },
-            "Headline judge: bailing on rate-limit streak — next ingest tick will retry",
-          );
-          break;
-        }
-      } else {
-        rateLimitStreak = 0;
+      errorStreak++;
+      if (errorStreak >= ERROR_STREAK_BREAK) {
+        logger.warn(
+          { streak: errorStreak, remainingBatches: Math.ceil((candidates.length - i - BATCH_SIZE) / BATCH_SIZE) },
+          "Headline judge: bailing on error streak — next ingest tick will retry",
+        );
+        break;
       }
     }
   }

@@ -28,16 +28,12 @@ const COMMENTATOR_LOOKBACK_DAYS = 7;
 // Claude class model, this comfortably fits a single call.
 const BATCH_SIZE = 10;
 
-// Stop the run after this many back-to-back 429s. Venice's "too many
-// failed attempts (>20)" guard cascades — once we trip it, every
-// subsequent batch in this run also returns 429, burning quota for
-// nothing. Bail and let the next ingest tick (15 min later) try again
-// after the cooldown clears.
-const RATE_LIMIT_STREAK_BREAK = 3;
-const isRateLimitErr = (err: unknown): boolean => {
-  const msg = err instanceof Error ? err.message : String(err);
-  return /\b429\b|rate.?limit|too many/i.test(msg);
-};
+// Stop after this many back-to-back batch failures of any kind. Venice's
+// "20 failed in 30s" abuse guard cascades, and any failure mode here
+// (429, timeout, parse error, network) signals "the LLM call path isn't
+// healthy right now." Bail and let the next ingest tick try again after
+// the cooldown clears.
+const ERROR_STREAK_BREAK = 3;
 
 const SYSTEM_PROMPT = `You write 2-4 sentence commentary for AI/tech headlines aimed at enterprise AI buyers and operators (CIOs, IT directors, AI program owners). Skeptical, concrete, naming actual companies.
 
@@ -83,7 +79,10 @@ function getClient(): { client: OpenAI; model: string } | null {
   // 4 min mirrors headline-judge — Claude reasoning eats most of that
   // before the JSON output lands. If a provider hangs past this we abandon
   // the batch and the next ingest tick re-tries the still-NULL rows.
-  const client = new OpenAI({ apiKey, baseURL, timeout: 4 * 60_000 });
+  // maxRetries: 0 disables the OpenAI SDK's default 2x retry — see
+  // headline-judge for the same rationale (multiplies abuse-threshold
+  // damage when Venice is throttling).
+  const client = new OpenAI({ apiKey, baseURL, timeout: 4 * 60_000, maxRetries: 0 });
   return { client, model };
 }
 
@@ -256,7 +255,7 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
   summary.candidates = candidates.length;
   if (candidates.length === 0) return summary;
 
-  let rateLimitStreak = 0;
+  let errorStreak = 0;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
     const batch = candidates.slice(i, i + BATCH_SIZE);
     summary.batches++;
@@ -264,29 +263,23 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
       const out = await commentBatch(setup.client, setup.model, batch);
       await persistCommentary(out);
       summary.commented += out.size;
-      rateLimitStreak = 0;
+      errorStreak = 0;
     } catch (err) {
       summary.errors++;
-      const rateLimited = isRateLimitErr(err);
       logger.warn(
         {
           err: err instanceof Error ? err.message : String(err),
           batchSize: batch.length,
-          rateLimited,
         },
         "Headline commentator: batch failed",
       );
-      if (rateLimited) {
-        rateLimitStreak++;
-        if (rateLimitStreak >= RATE_LIMIT_STREAK_BREAK) {
-          logger.warn(
-            { streak: rateLimitStreak, remainingBatches: Math.ceil((candidates.length - i - BATCH_SIZE) / BATCH_SIZE) },
-            "Headline commentator: bailing on rate-limit streak — next ingest tick will retry",
-          );
-          break;
-        }
-      } else {
-        rateLimitStreak = 0;
+      errorStreak++;
+      if (errorStreak >= ERROR_STREAK_BREAK) {
+        logger.warn(
+          { streak: errorStreak, remainingBatches: Math.ceil((candidates.length - i - BATCH_SIZE) / BATCH_SIZE) },
+          "Headline commentator: bailing on error streak — next ingest tick will retry",
+        );
+        break;
       }
     }
   }
