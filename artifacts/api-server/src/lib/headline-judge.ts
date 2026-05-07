@@ -44,9 +44,13 @@ const isRateLimitErr = (err: unknown): boolean => {
   return /\b429\b|rate.?limit|too many/i.test(msg);
 };
 
-// Default base URL + model mirror writer-agent so a single LLM_API_KEY works
-// for both. JUDGE_MODEL can override LLM_MODEL — the judge benefits from a
-// cheap/fast model (Haiku-class) since it's a classifier, not a writer.
+// Default base URL mirrors writer-agent so a single LLM_API_KEY works for
+// both. The judge is a classifier, not a writer — it benefits from a
+// cheap/fast Haiku-class model and from running on a different rate-limit
+// bucket than the writer. We deliberately do NOT fall through to LLM_MODEL
+// (which is typically a heavier Sonnet-class model for the writer);
+// inheriting it puts the judge in the same per-minute bucket as the
+// writer and amplifies cascading 429s.
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 
@@ -82,8 +86,9 @@ function getClient(): { client: OpenAI; model: string } | null {
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) return null;
   const baseURL = process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL;
-  const model =
-    process.env["JUDGE_MODEL"] ?? process.env["LLM_MODEL"] ?? DEFAULT_MODEL;
+  // Don't cascade through LLM_MODEL — see DEFAULT_MODEL comment above.
+  // JUDGE_MODEL is the explicit override; default to haiku otherwise.
+  const model = process.env["JUDGE_MODEL"] ?? DEFAULT_MODEL;
   // 4 min per call. Reasoning-Claude burns most of the budget thinking
   // before emitting JSON; 60s wasn't enough to ride out a cold model. The
   // writer-agent uses 8 min for a much larger prompt — half that is plenty

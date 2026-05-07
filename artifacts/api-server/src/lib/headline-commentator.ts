@@ -75,8 +75,11 @@ function getClient(): { client: OpenAI; model: string } | null {
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) return null;
   const baseURL = process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL;
-  const model =
-    process.env["COMMENTATOR_MODEL"] ?? process.env["LLM_MODEL"] ?? DEFAULT_MODEL;
+  // Don't cascade through LLM_MODEL — that's the writer's heavier
+  // Sonnet-class model with its own rate-limit bucket. Default to haiku
+  // so the commentator runs on a separate bucket and doesn't compound
+  // 429s when the writer/judge are also under pressure.
+  const model = process.env["COMMENTATOR_MODEL"] ?? DEFAULT_MODEL;
   // 4 min mirrors headline-judge — Claude reasoning eats most of that
   // before the JSON output lands. If a provider hangs past this we abandon
   // the batch and the next ingest tick re-tries the still-NULL rows.
