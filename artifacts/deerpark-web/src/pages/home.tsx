@@ -149,12 +149,12 @@ const Problem = () => (
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
-            <h2 className="text-4xl md:text-5xl font-serif mb-8">Most organizations buy AI seats but keep the same manual work.</h2>
+            <h2 className="text-4xl md:text-5xl font-serif mb-8">AI rollouts don't fail because the models can't do the work. They fail because nobody changed the work.</h2>
             <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
-              Teams copy data between systems, managers approve routine tasks, and reporting depends on one person stitching documents every Friday. Meanwhile, staff are unsure what the tools can actually do for their role.
+              Licenses don't replace workflows. A year in, the Friday report still gets stitched by hand. Data still lives in five tabs. Staff aren't sure what the tools are for, and managers still approve tasks that could run themselves.
             </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
-              We map where AI fits, ship the applications your team needs, and train the people who use them every day — so the tools get adopted instead of shelved.
+              Deer Park does the part that's actually hard: find where AI changes throughput, build the applications around it, and train the team until the new way is the way.
             </p>
           </FadeIn>
         </div>
