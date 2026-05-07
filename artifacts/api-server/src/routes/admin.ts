@@ -8,7 +8,18 @@ import {
   scoreUnscoredHeadlines,
   clearScoresInLookback,
   getJudgeStats,
+  getJudgePrompt,
+  setJudgePrompt,
+  resetJudgePrompt,
+  getJudgeRuntimeInfo,
+  getLastRun as getJudgeLastRun,
+  DEFAULT_JUDGE_SYSTEM_PROMPT,
+  MIN_TOP_RELEVANCE_SCORE,
+  JUDGE_LOOKBACK_DAYS,
+  BATCH_SIZE as JUDGE_BATCH_SIZE,
+  ERROR_STREAK_BREAK as JUDGE_ERROR_STREAK_BREAK,
 } from "../lib/headline-judge";
+import { getTopSelectionSpec } from "../lib/top-headlines";
 import {
   getModelInfo,
   getSystemPrompt,
@@ -20,7 +31,11 @@ import {
   clearRunState,
   type WriterMode,
 } from "../lib/writer-agent";
-import { runDailyDigest } from "../lib/daily-digest";
+import {
+  runDailyDigest,
+  previewDailyDigest,
+  getDailyDigestState,
+} from "../lib/daily-digest";
 
 const router: IRouter = Router();
 
@@ -149,6 +164,73 @@ router.post("/admin/judge/rescore", async (req, res) => {
     return res.json({ cleared, summary });
   } catch (err) {
     req.log.error({ err }, "Judge rescore failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Judge prompt CRUD — same shape as the writer prompt editor.
+router.get("/admin/judge/prompt", async (req, res) => {
+  try {
+    const { prompt, isCustom } = await getJudgePrompt();
+    return res.json({
+      prompt,
+      isCustom,
+      defaultPrompt: DEFAULT_JUDGE_SYSTEM_PROMPT,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load judge prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/judge/prompt", async (req, res) => {
+  const body = req.body as { prompt?: unknown };
+  const value = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+  if (!value) return res.status(400).json({ error: "Missing or empty prompt" });
+  if (value.length < 200) return res.status(400).json({ error: "Prompt too short (< 200 chars)" });
+  if (value.length > 20_000) return res.status(400).json({ error: "Prompt too long (> 20k chars)" });
+  try {
+    await setJudgePrompt(value);
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to save judge prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/judge/prompt", async (req, res) => {
+  try {
+    await resetJudgePrompt();
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to reset judge prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Full top-10 specification: judge config + selection algorithm + last run
+// + sample bands. Lets the operator see, in one place, every knob that
+// affects what lands in the dispatch top-10.
+router.get("/admin/judge/spec", async (req, res) => {
+  try {
+    const runtime = getJudgeRuntimeInfo();
+    const [stats, lastRun] = await Promise.all([getJudgeStats(), getJudgeLastRun()]);
+    return res.json({
+      judge: {
+        model: runtime.model,
+        baseUrl: runtime.baseUrl,
+        configured: runtime.configured,
+        minTopRelevanceScore: MIN_TOP_RELEVANCE_SCORE,
+        judgeLookbackDays: JUDGE_LOOKBACK_DAYS,
+        batchSize: JUDGE_BATCH_SIZE,
+        errorStreakBreak: JUDGE_ERROR_STREAK_BREAK,
+      },
+      topSelection: getTopSelectionSpec(),
+      lastRun,
+      stats,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Judge spec failed");
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -398,17 +480,19 @@ router.post("/admin/digest/run", async (req, res) => {
         ok: true,
         sent: null,
         reason:
-          "no-op (already sent today, no candidates, no active subscribers, or config incomplete) — see /api/digest/status",
+          "no-op (already sent today, no top-10 candidates, no active subscribers, or config incomplete) — see /api/digest/status",
       });
     }
     return res.json({
       ok: true,
-      post: { id: result.post.id, title: result.post.title },
+      subject: result.subject,
+      headlineCount: result.headlineCount,
       sent: result.sent,
       failed: result.failed,
+      bannerGenerated: result.bannerGenerated,
+      polishApplied: result.polishApplied,
       // Don't echo full results — could leak emails. Sample first failure if any.
-      firstFailure:
-        result.results.find((r) => !r.ok)?.error ?? null,
+      firstFailure: result.results.find((r) => !r.ok)?.error ?? null,
     });
   } catch (err) {
     req.log.error({ err }, "Manual digest run failed");
@@ -417,6 +501,36 @@ router.post("/admin/digest/run", async (req, res) => {
       error: err instanceof Error ? err.message : String(err),
       stack: err instanceof Error ? err.stack : undefined,
     });
+  }
+});
+
+// Preview the composed top-10 email without sending. Returns subject + HTML
+// so the admin UI can drop it in an iframe before bulk send.
+router.get("/admin/digest/preview", async (req, res) => {
+  try {
+    const preview = await previewDailyDigest();
+    if (!preview) {
+      return res.status(409).json({
+        error:
+          "Cannot preview: configuration incomplete or no top-10 candidates. Check /api/digest/status.",
+      });
+    }
+    return res.json(preview);
+  } catch (err) {
+    req.log.error({ err }, "Digest preview failed");
+    return res.status(500).json({
+      error: err instanceof Error ? err.message : "Internal server error",
+    });
+  }
+});
+
+router.get("/admin/digest/state", async (req, res) => {
+  try {
+    const state = await getDailyDigestState();
+    return res.json(state);
+  } catch (err) {
+    req.log.error({ err }, "Digest state failed");
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

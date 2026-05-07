@@ -1,9 +1,27 @@
-import { db, postsTable, subscribersTable, type Post } from "@workspace/db";
-import { and, desc, gte, isNull, sql } from "drizzle-orm";
-import { marked } from "marked";
+// Daily top-10 dispatch email. Replaces the previous writer-post digest:
+// each send is the top-10 headlines + commentary that the website serves,
+// with the Deerpark logo + a freshly-generated banner image at the top,
+// run through an LLM editor pass for subject line + intro + light copy
+// edits.
+//
+// Idempotency: at most one send per Pacific-time calendar day. Tracked
+// via a settings-table key so the writer-post pipeline isn't entangled.
+
+import { db, settingsTable, subscribersTable } from "@workspace/db";
+import { eq, isNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import {
+  composeDailyEmail,
+  loadTopHeadlinesForEmail,
+  type ComposedEmail,
+} from "./top10-email";
 
 const RESEND_API = "https://api.resend.com/emails";
+
+// One settings-table row per day-of-send. Stored as the PT YYYY-MM-DD
+// string we last successfully sent for. Lets `alreadySentToday()` answer
+// without scraping mail-provider logs.
+const LAST_SENT_KEY = "daily_top10_email.last_sent_pt_date";
 
 type DigestConfig = {
   fromEmail: string;
@@ -43,6 +61,7 @@ function sanitizeEnv(raw: string | undefined): string | undefined {
 export function digestConfigStatus(): {
   hasFromEmail: boolean;
   hasResendKey: boolean;
+  hasLlmKey: boolean;
   hourPt: number;
   minutePt: number;
   timezone: string;
@@ -50,12 +69,16 @@ export function digestConfigStatus(): {
 } {
   const hasFromEmail = Boolean(sanitizeEnv(process.env["DAILY_DIGEST_FROM_EMAIL"]));
   const hasResendKey = Boolean(sanitizeEnv(process.env["RESEND_API_KEY"]));
+  const hasLlmKey = Boolean(sanitizeEnv(process.env["LLM_API_KEY"]));
   return {
     hasFromEmail,
     hasResendKey,
+    hasLlmKey,
     hourPt: Number(process.env["DAILY_DIGEST_HOUR_PT"] ?? String(DEFAULT_HOUR_PT)),
     minutePt: Number(process.env["DAILY_DIGEST_MINUTE_PT"] ?? String(DEFAULT_MINUTE_PT)),
     timezone: DIGEST_TIMEZONE,
+    // Resend + from-email are required to send. LLM_API_KEY is optional —
+    // missing it just disables image gen + polish (fallback subject/intro).
     ready: hasFromEmail && hasResendKey,
   };
 }
@@ -85,6 +108,16 @@ function readConfig(): DigestConfig | { error: string } {
   };
 }
 
+function ptDateString(now: Date = new Date()): string {
+  // YYYY-MM-DD in PT for the idempotency key. en-CA gives ISO-like format.
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: DIGEST_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+}
+
 /**
  * Current Pacific-time minute-of-day (0–1439). Uses Intl.DateTimeFormat with
  * `hourCycle: "h23"` so 12am reads as 0, not 24, regardless of host locale.
@@ -101,57 +134,28 @@ function ptMinutesOfDay(now: Date = new Date()): number {
   return hour * 60 + minute;
 }
 
-/**
- * Pick the single best post from a candidate set.
- *
- * Heuristic, in priority order:
- *   1. mode = "deep_dive" beats mode = "free_pick"
- *   2. more citations
- *   3. longer body (proxy for substance)
- *   4. most recently published (tiebreak)
- */
-export function pickBestPost(candidates: Post[]): Post | null {
-  if (candidates.length === 0) return null;
-  const ranked = [...candidates].sort((a, b) => {
-    const modeRank = (p: Post) => (p.mode === "deep_dive" ? 1 : 0);
-    const dm = modeRank(b) - modeRank(a);
-    if (dm !== 0) return dm;
-    const dc = b.citations.length - a.citations.length;
-    if (dc !== 0) return dc;
-    const dl = b.bodyMarkdown.length - a.bodyMarkdown.length;
-    if (dl !== 0) return dl;
-    return b.publishedAt.getTime() - a.publishedAt.getTime();
-  });
-  return ranked[0] ?? null;
+async function getLastSentPtDate(): Promise<string | null> {
+  const [row] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.key, LAST_SENT_KEY))
+    .limit(1);
+  return row?.value ?? null;
 }
 
-/**
- * Posts created in the last 24h that haven't been sent yet. The 24h window
- * matches our daily cadence — a missed day picks up the freshest unsent post,
- * not yesterday's leftover.
- */
-export async function loadCandidates(): Promise<Post[]> {
-  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  return db
-    .select()
-    .from(postsTable)
-    .where(and(gte(postsTable.publishedAt, since), isNull(postsTable.sentToSubstackAt)))
-    .orderBy(desc(postsTable.publishedAt));
+async function setLastSentPtDate(date: string): Promise<void> {
+  await db
+    .insert(settingsTable)
+    .values({ key: LAST_SENT_KEY, value: date })
+    .onConflictDoUpdate({
+      target: settingsTable.key,
+      set: { value: date, updatedAt: new Date() },
+    });
 }
 
 async function alreadySentToday(): Promise<boolean> {
-  // Dedup is per Pacific-time day so the once-daily semantic matches the
-  // schedule (15:30 PT). Using UTC date would race the day-rollover for
-  // sends near 5 PM PT (= midnight UTC).
-  const rows = await db.execute<{ count: string }>(sql`
-    SELECT COUNT(*)::text AS count
-    FROM posts
-    WHERE sent_to_substack_at IS NOT NULL
-      AND (sent_to_substack_at AT TIME ZONE ${DIGEST_TIMEZONE})::date
-        = (NOW() AT TIME ZONE ${DIGEST_TIMEZONE})::date
-  `);
-  const first = rows.rows[0];
-  return first ? Number(first.count) > 0 : false;
+  const last = await getLastSentPtDate();
+  return last !== null && last === ptDateString();
 }
 
 /** Active subscribers (not unsubscribed), with a guaranteed unsubscribe token. */
@@ -175,52 +179,16 @@ export async function loadActiveSubscribers(): Promise<
     .filter((r): r is { email: string; unsubscribeToken: string } => r.unsubscribeToken !== null);
 }
 
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-/**
- * Render the email body for a single recipient. Includes the personalized
- * unsubscribe link in the footer.
- */
-export function renderEmailHtml(
-  post: Post,
-  unsubscribeUrl: string,
-  archiveUrl: string,
-): string {
-  const body = marked.parse(post.bodyMarkdown, { async: false }) as string;
-  const citations = post.citations.length
-    ? `<hr><h4>Sources</h4><ol>${post.citations
-        .map((c) => `<li><a href="${escapeHtml(c)}">${escapeHtml(c)}</a></li>`)
-        .join("")}</ol>`
-    : "";
-  const footer = `<hr><p style="color:#666;font-size:12px;line-height:1.5;">From the Deer Park writer agent. <a href="${escapeHtml(archiveUrl)}">Archive</a> &middot; <a href="${escapeHtml(unsubscribeUrl)}">Unsubscribe</a></p>`;
-  return `<h1>${escapeHtml(post.title)}</h1><p style="font-size:18px;color:#444;"><em>${escapeHtml(post.dek)}</em></p>${body}${citations}${footer}`;
-}
-
-function renderEmailText(post: Post, unsubscribeUrl: string): string {
-  const sources = post.citations.length
-    ? `\n\nSources:\n${post.citations.map((c) => `- ${c}`).join("\n")}`
-    : "";
-  return `${post.title}\n\n${post.dek}\n\n${post.bodyMarkdown}${sources}\n\n---\nUnsubscribe: ${unsubscribeUrl}`;
-}
-
 type SendResult = { recipient: string; ok: boolean; error?: string };
 
 async function sendOne(
-  post: Post,
+  email: ComposedEmail,
   recipient: { email: string; unsubscribeToken: string },
   cfg: DigestConfig,
 ): Promise<SendResult> {
   const unsubscribeUrl = `${cfg.publicBaseUrl}/api/unsubscribe?token=${encodeURIComponent(recipient.unsubscribeToken)}`;
-  const html = renderEmailHtml(post, unsubscribeUrl, cfg.archiveUrl);
-  const text = renderEmailText(post, unsubscribeUrl);
-
+  // The composed HTML/text already contain the per-recipient unsubscribe URL
+  // because we re-compose per recipient (see composeAndSendDailyTop10 below).
   const res = await fetch(RESEND_API, {
     method: "POST",
     headers: {
@@ -230,9 +198,9 @@ async function sendOne(
     body: JSON.stringify({
       from: cfg.fromEmail,
       to: [recipient.email],
-      subject: post.title,
-      html,
-      text,
+      subject: email.subject,
+      html: email.html,
+      text: email.text,
       // RFC 8058 one-click unsubscribe header. Gmail/Yahoo prefer this.
       headers: {
         "List-Unsubscribe": `<${unsubscribeUrl}>`,
@@ -248,20 +216,22 @@ async function sendOne(
   return { recipient: recipient.email, ok: true };
 }
 
-async function markSent(postId: number): Promise<void> {
-  await db.execute(sql`
-    UPDATE posts SET sent_to_substack_at = NOW() WHERE id = ${postId}
-  `);
-}
+export type DigestRunResult = {
+  subject: string;
+  headlineCount: number;
+  sent: number;
+  failed: number;
+  bannerGenerated: boolean;
+  polishApplied: boolean;
+  results: SendResult[];
+};
 
 /**
- * Run one digest send. Idempotent: at most one send per UTC day. Returns the
- * post sent and per-recipient results, or null if nothing was sent.
+ * Run one digest send. Idempotent: at most one send per Pacific-time day.
+ * Returns a summary, or null if nothing was sent (config incomplete, no
+ * candidates, no subscribers, or already sent today).
  */
-export async function runDailyDigest(): Promise<
-  | { post: Post; sent: number; failed: number; results: SendResult[] }
-  | null
-> {
+export async function runDailyDigest(): Promise<DigestRunResult | null> {
   const cfg = readConfig();
   if ("error" in cfg) {
     logger.warn({ reason: cfg.error }, "Daily digest skipped — config incomplete");
@@ -269,13 +239,7 @@ export async function runDailyDigest(): Promise<
   }
 
   if (await alreadySentToday()) {
-    logger.info("Daily digest skipped — already sent today");
-    return null;
-  }
-
-  const candidates = await loadCandidates();
-  if (candidates.length === 0) {
-    logger.info("Daily digest skipped — no unsent posts in last 24h");
+    logger.info("Daily digest skipped — already sent today (PT)");
     return null;
   }
 
@@ -285,26 +249,43 @@ export async function runDailyDigest(): Promise<
     return null;
   }
 
-  const best = pickBestPost(candidates);
-  if (!best) return null;
+  // Compose once with a placeholder URL so we get a single image-gen +
+  // polish round-trip; per-recipient we patch in the actual unsubscribe
+  // URL via string replacement below. Cheaper than composing N times for
+  // the small per-recipient delta.
+  const placeholder = "__UNSUBSCRIBE_URL__";
+  const composed = await composeDailyEmail({
+    unsubscribeUrl: placeholder,
+    archiveUrl: cfg.archiveUrl,
+  });
+  if (!composed) {
+    logger.info("Daily digest skipped — no top-10 candidates");
+    return null;
+  }
 
   logger.info(
     {
-      postId: best.id,
-      title: best.title,
-      mode: best.mode,
-      candidates: candidates.length,
+      subject: composed.subject,
+      headlineCount: composed.headlineCount,
+      bannerGenerated: composed.bannerGenerated,
+      polishApplied: composed.polishApplied,
       subscribers: subscribers.length,
     },
-    "Daily digest: sending best-of-day to subscribers",
+    "Daily digest: sending top-10 to subscribers",
   );
 
   // Per-recipient send. Sequential with a small gap to stay under Resend's
   // rate limit (2 req/s on the free tier). Small lists; fine for now.
   const results: SendResult[] = [];
   for (const sub of subscribers) {
+    const unsubscribeUrl = `${cfg.publicBaseUrl}/api/unsubscribe?token=${encodeURIComponent(sub.unsubscribeToken)}`;
+    const personalized: ComposedEmail = {
+      ...composed,
+      html: composed.html.split(placeholder).join(unsubscribeUrl),
+      text: composed.text.split(placeholder).join(unsubscribeUrl),
+    };
     try {
-      const r = await sendOne(best, sub, cfg);
+      const r = await sendOne(personalized, sub, cfg);
       results.push(r);
       if (!r.ok) {
         logger.warn({ recipient: r.recipient, error: r.error }, "Daily digest: per-recipient send failed");
@@ -323,31 +304,97 @@ export async function runDailyDigest(): Promise<
   const sent = results.filter((r) => r.ok).length;
   const failed = results.length - sent;
 
-  // Mark the post sent if AT LEAST ONE recipient got it. That preserves
-  // idempotency (no duplicate sends tomorrow) without losing the send to
-  // a single bad address.
+  // Mark the day sent if AT LEAST ONE recipient got it. Preserves
+  // idempotency without losing the send to a single bad address.
   if (sent > 0) {
-    await markSent(best.id);
+    await setLastSentPtDate(ptDateString());
   }
 
-  logger.info({ postId: best.id, sent, failed }, "Daily digest: complete");
-  return { post: best, sent, failed, results };
+  logger.info(
+    { subject: composed.subject, sent, failed },
+    "Daily digest: complete",
+  );
+
+  return {
+    subject: composed.subject,
+    headlineCount: composed.headlineCount,
+    sent,
+    failed,
+    bannerGenerated: composed.bannerGenerated,
+    polishApplied: composed.polishApplied,
+    results,
+  };
 }
 
 /**
- * Self-healing schema migration. Adds the `sent_to_substack_at` column to
- * posts and the `unsubscribe_token` / `unsubscribed_at` columns to subscribers
- * if they're missing, and backfills tokens for legacy subscriber rows.
- * Idempotent; safe to run on every boot.
+ * Compose the email without sending. Returns subject + HTML so the admin
+ * UI can preview it in an iframe before bulk send.
+ */
+export async function previewDailyDigest(): Promise<
+  | {
+      subject: string;
+      html: string;
+      text: string;
+      headlineCount: number;
+      bannerGenerated: boolean;
+      polishApplied: boolean;
+    }
+  | null
+> {
+  const cfg = readConfig();
+  if ("error" in cfg) return null;
+
+  const composed = await composeDailyEmail({
+    unsubscribeUrl: `${cfg.publicBaseUrl}/api/unsubscribe?token=preview`,
+    archiveUrl: cfg.archiveUrl,
+  });
+  if (!composed) return null;
+
+  return {
+    subject: composed.subject,
+    html: composed.html,
+    text: composed.text,
+    headlineCount: composed.headlineCount,
+    bannerGenerated: composed.bannerGenerated,
+    polishApplied: composed.polishApplied,
+  };
+}
+
+/** Status snapshot for the admin "Email agents" tab. */
+export async function getDailyDigestState(): Promise<{
+  config: ReturnType<typeof digestConfigStatus>;
+  lastSentPtDate: string | null;
+  todayPtDate: string;
+  alreadySentToday: boolean;
+  topCandidateCount: number;
+  activeSubscribers: number;
+}> {
+  const config = digestConfigStatus();
+  const [lastSentPtDate, headlines] = await Promise.all([
+    getLastSentPtDate(),
+    loadTopHeadlinesForEmail().catch(() => []),
+  ]);
+  const today = ptDateString();
+  const subRows = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(subscribersTable)
+    .where(isNull(subscribersTable.unsubscribedAt));
+  return {
+    config,
+    lastSentPtDate,
+    todayPtDate: today,
+    alreadySentToday: lastSentPtDate === today,
+    topCandidateCount: headlines.length,
+    activeSubscribers: subRows[0]?.count ?? 0,
+  };
+}
+
+/**
+ * Self-healing schema migration. Adds the `unsubscribe_token` /
+ * `unsubscribed_at` columns to subscribers if missing, and backfills
+ * tokens for legacy subscriber rows. Idempotent; safe to run on every boot.
  */
 export async function ensureSchema(): Promise<void> {
-  await db.execute(sql`
-    ALTER TABLE posts ADD COLUMN IF NOT EXISTS sent_to_substack_at TIMESTAMPTZ
-  `);
-  await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS posts_sent_to_substack_at_idx
-    ON posts (sent_to_substack_at)
-  `);
   await db.execute(sql`
     ALTER TABLE subscribers ADD COLUMN IF NOT EXISTS unsubscribe_token TEXT UNIQUE
   `);

@@ -13,6 +13,8 @@ import {
   PenLine,
   Send,
   ChevronRight,
+  Gavel,
+  Eye,
 } from "lucide-react";
 
 const TOKEN_KEY = "deerpark.admin.token";
@@ -618,14 +620,79 @@ const formatUsd = (s: string | number | null | undefined) => {
   return `$${n.toFixed(2)}`;
 };
 
-type EmailAgent = {
-  id: string;
-  displayName: string;
-  description: string;
-  enabled: boolean;
+type DigestState = {
+  config: {
+    hasFromEmail: boolean;
+    hasResendKey: boolean;
+    hasLlmKey: boolean;
+    hourPt: number;
+    minutePt: number;
+    timezone: string;
+    ready: boolean;
+  } | null;
+  lastSentPtDate: string | null;
+  todayPtDate: string;
+  alreadySentToday: boolean;
+  topCandidateCount: number;
+  activeSubscribers: number;
 };
 
-const PLACEHOLDER_EMAIL_AGENTS: EmailAgent[] = [];
+type DigestPreview = {
+  subject: string;
+  html: string;
+  text: string;
+  headlineCount: number;
+  bannerGenerated: boolean;
+  polishApplied: boolean;
+};
+
+type DigestRunResult = {
+  ok: boolean;
+  sent: number | null;
+  failed?: number;
+  subject?: string;
+  headlineCount?: number;
+  bannerGenerated?: boolean;
+  polishApplied?: boolean;
+  reason?: string;
+  firstFailure?: string | null;
+};
+
+type JudgeSpec = {
+  judge: {
+    model: string;
+    baseUrl: string;
+    configured: boolean;
+    minTopRelevanceScore: number;
+    judgeLookbackDays: number;
+    batchSize: number;
+    errorStreakBreak: number;
+  };
+  topSelection: {
+    tierWeights: Record<string, number>;
+    halfLifeDays: number;
+    perSourceCap: number;
+    defaultDays: number;
+    defaultLimit: number;
+    dedupeThreshold: number;
+    minPapers: number;
+    broadPressSources: string[];
+    broadPressRequiresOrgWhenUnjudged: boolean;
+  };
+  lastRun: {
+    finishedAt: string;
+    summary: { candidates: number; scored: number; batches: number; errors: number };
+    model: string;
+    lastError?: string;
+  } | null;
+  stats: {
+    total: number;
+    scored: number;
+    unscored: number;
+    lowest: Array<{ id: number; source: string; title: string; relevanceScore: number }>;
+    highest: Array<{ id: number; source: string; title: string; relevanceScore: number }>;
+  };
+};
 
 const WRITER_MODES = [
   { id: "auto", label: "Auto (agent picks)" },
@@ -1181,8 +1248,453 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
   );
 };
 
-const EmailAgentsTab = () => {
-  const [agents] = useState<EmailAgent[]>(PLACEHOLDER_EMAIL_AGENTS);
+const JudgeTab = ({ token }: { token: string }) => {
+  const [spec, setSpec] = useState<JudgeSpec | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [rescoring, setRescoring] = useState(false);
+  const [rescoreStatus, setRescoreStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptDraft, setPromptDraft] = useState<string>("");
+  const [promptIsCustom, setPromptIsCustom] = useState(false);
+  const [promptDefault, setPromptDefault] = useState<string>("");
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptSaving, setPromptSaving] = useState(false);
+  const [promptStatus, setPromptStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(token, "/admin/judge/spec");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setSpec((await res.json()) as JudgeSpec);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load judge spec");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const openPromptEditor = async () => {
+    setPromptOpen(true);
+    setPromptStatus(null);
+    setPromptLoading(true);
+    try {
+      const res = await apiFetch(token, "/admin/judge/prompt");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { prompt: string; isCustom: boolean; defaultPrompt: string };
+      setPromptDraft(json.prompt);
+      setPromptIsCustom(json.isCustom);
+      setPromptDefault(json.defaultPrompt);
+    } catch (err) {
+      setPromptStatus({ ok: false, message: err instanceof Error ? err.message : "Failed to load prompt" });
+    } finally {
+      setPromptLoading(false);
+    }
+  };
+
+  const savePrompt = async () => {
+    setPromptSaving(true);
+    setPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/judge/prompt", {
+        method: "PUT",
+        body: JSON.stringify({ prompt: promptDraft }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (res.ok) {
+        setPromptIsCustom(true);
+        setPromptStatus({ ok: true, message: "Prompt saved. Next rescore will use it." });
+      } else {
+        setPromptStatus({ ok: false, message: json.error ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      setPromptStatus({ ok: false, message: err instanceof Error ? err.message : "Save failed" });
+    } finally {
+      setPromptSaving(false);
+    }
+  };
+
+  const resetPromptToDefault = async () => {
+    if (!confirm("Reset to the built-in default judge prompt?")) return;
+    setPromptSaving(true);
+    setPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/judge/prompt", { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setPromptDraft(promptDefault);
+      setPromptIsCustom(false);
+      setPromptStatus({ ok: true, message: "Reset to default." });
+    } catch (err) {
+      setPromptStatus({ ok: false, message: err instanceof Error ? err.message : "Reset failed" });
+    } finally {
+      setPromptSaving(false);
+    }
+  };
+
+  const rescore = async () => {
+    if (!confirm("Clear scores in the lookback window and re-judge with the current prompt? This makes ~6 LLM calls.")) return;
+    setRescoring(true);
+    setRescoreStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/judge/rescore", { method: "POST" });
+      const json = (await res.json()) as { cleared?: { cleared: number }; summary?: { scored: number; batches: number; errors: number } };
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const cleared = json.cleared?.cleared ?? 0;
+      const scored = json.summary?.scored ?? 0;
+      const errors = json.summary?.errors ?? 0;
+      setRescoreStatus({
+        ok: errors === 0,
+        message: `Cleared ${cleared}, scored ${scored}${errors > 0 ? `, ${errors} batch errors` : ""}.`,
+      });
+      await load();
+    } catch (err) {
+      setRescoreStatus({ ok: false, message: err instanceof Error ? err.message : "Rescore failed" });
+    } finally {
+      setRescoring(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-serif">Headline judge</h2>
+          <p className="text-sm text-muted-foreground font-light mt-1">
+            The LLM that scores each headline 0–100 plus the deterministic algorithm that turns
+            scored items into the top-10 dispatch. Edit the prompt to change what the judge calls
+            "relevant"; tune the scoring constants in code.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void openPromptEditor()}
+            className="rounded-none text-xs uppercase tracking-widest"
+          >
+            <PenLine className="w-3.5 h-3.5" /> Edit prompt
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => void load()}
+            disabled={loading}
+            className="rounded-none text-xs uppercase tracking-widest"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+          <Button
+            onClick={() => void rescore()}
+            disabled={rescoring || !spec?.judge.configured}
+            className="rounded-none text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+          >
+            <Play className="w-3.5 h-3.5" />
+            {rescoring ? "Rescoring…" : "Rescore lookback"}
+          </Button>
+        </div>
+      </div>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+      {rescoreStatus && (
+        <div className={`border p-3 text-xs ${rescoreStatus.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}>
+          {rescoreStatus.message}
+        </div>
+      )}
+
+      {promptOpen && (
+        <div className="border border-foreground/30 bg-card">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
+            <div>
+              <div className="section-label">Judge system prompt</div>
+              <div className="text-xs text-muted-foreground font-light mt-1">
+                Controls how the judge classifies and scores each headline.{" "}
+                <span className={promptIsCustom ? "text-primary" : ""}>
+                  {promptIsCustom ? "Using custom prompt." : "Using built-in default."}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPromptOpen(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+          {promptLoading ? (
+            <div className="p-6 text-xs text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="p-4 space-y-3">
+              <textarea
+                value={promptDraft}
+                onChange={(e) => setPromptDraft(e.target.value)}
+                spellCheck={false}
+                rows={20}
+                className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
+              />
+              <div className="flex items-center justify-between text-xs">
+                <div className="text-muted-foreground">
+                  {promptDraft.length.toLocaleString()} chars
+                  {promptDraft.length < 200 && (
+                    <span className="text-red-400 ml-2">— too short (min 200)</span>
+                  )}
+                  {promptDraft.length > 20_000 && (
+                    <span className="text-red-400 ml-2">— too long (max 20,000)</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => void resetPromptToDefault()}
+                    disabled={promptSaving || !promptIsCustom}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Reset to default
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setPromptDraft(promptDefault)}
+                    disabled={promptSaving}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Load default into editor
+                  </Button>
+                  <Button
+                    onClick={() => void savePrompt()}
+                    disabled={promptSaving || promptDraft.length < 200 || promptDraft.length > 20_000}
+                    className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+                  >
+                    {promptSaving ? "Saving…" : "Save prompt"}
+                  </Button>
+                </div>
+              </div>
+              {promptStatus && (
+                <div className={`text-xs ${promptStatus.ok ? "text-primary" : "text-red-400"}`}>
+                  {promptStatus.message}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {spec && (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border border-foreground/15 bg-card p-4 space-y-3">
+              <div className="section-label">How items are scored</div>
+              <dl className="text-sm grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
+                <dt className="text-muted-foreground">Model</dt>
+                <dd className="font-mono text-xs break-all">{spec.judge.model}</dd>
+                <dt className="text-muted-foreground">Base URL</dt>
+                <dd className="font-mono text-xs break-all">{spec.judge.baseUrl}</dd>
+                <dt className="text-muted-foreground">API key</dt>
+                <dd>{spec.judge.configured ? "Configured" : <span className="text-red-400">Missing</span>}</dd>
+                <dt className="text-muted-foreground">Lookback</dt>
+                <dd>{spec.judge.judgeLookbackDays} days</dd>
+                <dt className="text-muted-foreground">Batch size</dt>
+                <dd>{spec.judge.batchSize}</dd>
+                <dt className="text-muted-foreground">Streak break</dt>
+                <dd>{spec.judge.errorStreakBreak} consecutive errors</dd>
+                <dt className="text-muted-foreground">Top gate</dt>
+                <dd>relevance ≥ {spec.judge.minTopRelevanceScore}</dd>
+              </dl>
+            </div>
+
+            <div className="border border-foreground/15 bg-card p-4 space-y-3">
+              <div className="section-label">How top-10 is picked</div>
+              <dl className="text-sm grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5">
+                <dt className="text-muted-foreground">Window</dt>
+                <dd>last {spec.topSelection.defaultDays} days, {spec.topSelection.defaultLimit} items</dd>
+                <dt className="text-muted-foreground">Per-source cap</dt>
+                <dd>{spec.topSelection.perSourceCap}</dd>
+                <dt className="text-muted-foreground">Tier weights</dt>
+                <dd className="font-mono text-xs">
+                  {Object.entries(spec.topSelection.tierWeights).map(([tier, w]) => `T${tier}=${w}`).join(" · ")}
+                </dd>
+                <dt className="text-muted-foreground">Recency half-life</dt>
+                <dd>{spec.topSelection.halfLifeDays} days</dd>
+                <dt className="text-muted-foreground">Dedupe threshold</dt>
+                <dd>Jaccard ≥ {spec.topSelection.dedupeThreshold}</dd>
+                <dt className="text-muted-foreground">Reserved papers</dt>
+                <dd>min {spec.topSelection.minPapers} slots</dd>
+                <dt className="text-muted-foreground">Broad-press filter</dt>
+                <dd>
+                  {spec.topSelection.broadPressRequiresOrgWhenUnjudged
+                    ? "Unjudged broad-press items dropped unless they anchor on an org entity"
+                    : "Disabled"}
+                </dd>
+              </dl>
+            </div>
+          </div>
+
+          <div className="border border-foreground/15 bg-card p-4 space-y-3">
+            <div className="section-label">Last run</div>
+            {spec.lastRun ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <div>
+                  <div className="text-[10px] section-label">Finished</div>
+                  <div className="text-xs font-mono mt-1">{formatDate(spec.lastRun.finishedAt)}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] section-label">Candidates</div>
+                  <div className="text-xs font-mono mt-1">{spec.lastRun.summary.candidates}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] section-label">Scored</div>
+                  <div className="text-xs font-mono mt-1">{spec.lastRun.summary.scored}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] section-label">Errors</div>
+                  <div className="text-xs font-mono mt-1">
+                    {spec.lastRun.summary.errors > 0 ? (
+                      <span className="text-red-400">{spec.lastRun.summary.errors}</span>
+                    ) : (
+                      "0"
+                    )}
+                  </div>
+                </div>
+                {spec.lastRun.lastError && (
+                  <div className="col-span-2 sm:col-span-4">
+                    <div className="text-[10px] section-label">Last error</div>
+                    <div className="text-xs font-mono mt-1 text-red-400 break-all">{spec.lastRun.lastError}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">No runs yet.</p>
+            )}
+            <div className="text-xs text-muted-foreground pt-3 border-t border-foreground/10">
+              Lookback corpus: {spec.stats.scored.toLocaleString()} scored, {spec.stats.unscored.toLocaleString()} unscored ({spec.stats.total.toLocaleString()} total in window).
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="border border-foreground/15 bg-card">
+              <div className="px-4 py-3 border-b border-foreground/10">
+                <div className="section-label">Highest scored ({spec.stats.highest.length})</div>
+              </div>
+              <ul className="divide-y divide-foreground/10">
+                {spec.stats.highest.map((h) => (
+                  <li key={h.id} className="px-4 py-3 flex gap-3 items-start">
+                    <span className="font-mono text-xs text-primary w-9 shrink-0">{h.relevanceScore}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm">{h.title}</div>
+                      <div className="text-[11px] text-muted-foreground font-mono">{h.source}</div>
+                    </div>
+                  </li>
+                ))}
+                {spec.stats.highest.length === 0 && (
+                  <li className="px-4 py-6 text-center text-xs text-muted-foreground">No scored items yet.</li>
+                )}
+              </ul>
+            </div>
+
+            <div className="border border-foreground/15 bg-card">
+              <div className="px-4 py-3 border-b border-foreground/10">
+                <div className="section-label">Lowest scored ({spec.stats.lowest.length})</div>
+              </div>
+              <ul className="divide-y divide-foreground/10">
+                {spec.stats.lowest.map((h) => (
+                  <li key={h.id} className="px-4 py-3 flex gap-3 items-start">
+                    <span className="font-mono text-xs text-muted-foreground w-9 shrink-0">{h.relevanceScore}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm">{h.title}</div>
+                      <div className="text-[11px] text-muted-foreground font-mono">{h.source}</div>
+                    </div>
+                  </li>
+                ))}
+                {spec.stats.lowest.length === 0 && (
+                  <li className="px-4 py-6 text-center text-xs text-muted-foreground">No scored items yet.</li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const EmailAgentsTab = ({ token }: { token: string }) => {
+  const [state, setState] = useState<DigestState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<DigestPreview | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(token, "/admin/digest/state");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setState((await res.json()) as DigestState);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load digest state");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const sendNow = async () => {
+    if (!confirm(`Send the daily top-10 email to ${state?.activeSubscribers ?? "?"} subscribers right now?`)) return;
+    setSending(true);
+    setSendResult(null);
+    try {
+      const res = await apiFetch(token, "/admin/digest/run", { method: "POST" });
+      const json = (await res.json()) as DigestRunResult;
+      if (json.sent === null) {
+        setSendResult({ ok: true, message: json.reason ?? "No-op." });
+      } else {
+        setSendResult({
+          ok: (json.failed ?? 0) === 0,
+          message: `Sent "${json.subject}" to ${json.sent} (failed ${json.failed ?? 0}). Banner ${json.bannerGenerated ? "generated" : "skipped"}, polish ${json.polishApplied ? "applied" : "skipped"}.`,
+        });
+      }
+      await load();
+    } catch (err) {
+      setSendResult({ ok: false, message: err instanceof Error ? err.message : "Send failed" });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const openPreview = async () => {
+    setPreviewing(true);
+    setPreviewError(null);
+    setPreview(null);
+    try {
+      const res = await apiFetch(token, "/admin/digest/preview");
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      setPreview((await res.json()) as DigestPreview);
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "Preview failed");
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const cfg = state?.config;
+  const ready = Boolean(cfg?.ready);
+  const statusLabel = !cfg
+    ? "Loading…"
+    : ready
+      ? state?.alreadySentToday
+        ? "Sent today"
+        : "Ready"
+      : "Needs config";
 
   return (
     <div className="space-y-6">
@@ -1190,72 +1702,159 @@ const EmailAgentsTab = () => {
         <div>
           <h2 className="text-2xl font-serif">Email agents</h2>
           <p className="text-sm text-muted-foreground font-light mt-1">
-            Agents that draft and send outbound emails based on ingested signals.
+            One agent: the daily top-10 dispatch. Pulls the same top-10 the website serves,
+            generates a banner image, and runs an LLM polish pass over the subject and intro
+            before sending via Resend.
           </p>
         </div>
-        <Button
-          disabled
-          className="rounded-none text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
-        >
-          <Send className="w-3.5 h-3.5" /> New email agent
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={() => void load()}
+            disabled={loading}
+            className="rounded-none text-xs uppercase tracking-widest"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      {state && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="border border-foreground/15 bg-card px-4 py-3">
+            <div className="section-label text-[10px]">Subscribers</div>
+            <div className="text-xl font-serif mt-1">{state.activeSubscribers}</div>
+            <div className="text-[10px] text-muted-foreground mt-1">active</div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-4 py-3">
+            <div className="section-label text-[10px]">Top candidates</div>
+            <div className="text-xl font-serif mt-1">{state.topCandidateCount}</div>
+            <div className="text-[10px] text-muted-foreground mt-1">in last 24h</div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-4 py-3">
+            <div className="section-label text-[10px]">Schedule</div>
+            <div className="text-xl font-serif mt-1">
+              {cfg ? `${String(cfg.hourPt).padStart(2, "0")}:${String(cfg.minutePt).padStart(2, "0")}` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-1">{cfg?.timezone ?? ""}</div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-4 py-3">
+            <div className="section-label text-[10px]">Last sent</div>
+            <div className="text-xl font-serif mt-1">{state.lastSentPtDate ?? "—"}</div>
+            <div className="text-[10px] text-muted-foreground mt-1">PT date</div>
+          </div>
+        </div>
+      )}
+
+      {sendResult && (
+        <div className={`border p-3 text-xs ${sendResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}>
+          {sendResult.message}
+        </div>
+      )}
 
       <div className="border border-foreground/15 bg-card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-left bg-background/40">
             <tr className="border-b border-foreground/10">
               <th className="px-4 py-3 section-label">Agent</th>
-              <th className="px-4 py-3 section-label">Description</th>
+              <th className="px-4 py-3 section-label">Pipeline</th>
               <th className="px-4 py-3 section-label">Status</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
-            {agents.map((a) => (
-              <tr key={a.id} className="border-b border-foreground/10 hover:bg-background/40">
-                <td className="px-4 py-3">{a.displayName}</td>
-                <td className="px-4 py-3 text-muted-foreground">{a.description}</td>
-                <td className="px-4 py-3">
-                  <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${a.enabled ? "border-primary/40 text-primary" : "border-foreground/20 text-muted-foreground"}`}>
-                    {a.enabled ? "Enabled" : "Disabled"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right">
+            <tr className="border-b border-foreground/10 hover:bg-background/40">
+              <td className="px-4 py-3">
+                <div>Daily top-10 dispatch</div>
+                <div className="text-[11px] text-muted-foreground font-light max-w-md">
+                  Top-10 select → image gen → LLM polish (subject + intro + commentary edits) → Resend send
+                </div>
+              </td>
+              <td className="px-4 py-3 text-muted-foreground text-xs space-y-0.5">
+                <div>Resend: {cfg?.hasResendKey ? "✓" : <span className="text-red-400">missing key</span>}</div>
+                <div>From: {cfg?.hasFromEmail ? "✓" : <span className="text-red-400">missing</span>}</div>
+                <div>LLM: {cfg?.hasLlmKey ? "✓ (image + polish)" : <span className="text-amber-400">disabled — fallback subject/intro, no banner</span>}</div>
+              </td>
+              <td className="px-4 py-3">
+                <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${ready ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}>
+                  {statusLabel}
+                </span>
+              </td>
+              <td className="px-4 py-3 text-right">
+                <div className="inline-flex gap-2">
                   <Button
                     size="sm"
                     variant="outline"
-                    disabled
+                    disabled={!ready || previewing}
+                    onClick={() => void openPreview()}
                     className="rounded-none text-[10px] uppercase tracking-widest"
                   >
-                    <Play className="w-3 h-3" /> Run
+                    <Eye className="w-3 h-3" /> {previewing ? "…" : "Preview"}
                   </Button>
-                </td>
-              </tr>
-            ))}
-            {agents.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                  No email agents configured yet.
-                </td>
-              </tr>
-            )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={!ready || sending}
+                    onClick={() => void sendNow()}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    <Send className="w-3 h-3" /> {sending ? "Sending…" : "Send now"}
+                  </Button>
+                </div>
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
+
+      {(preview || previewError) && (
+        <div className="border border-foreground/30 bg-card">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
+            <div>
+              <div className="section-label">Email preview</div>
+              {preview && (
+                <div className="text-xs text-muted-foreground font-light mt-1">
+                  Subject: <span className="text-foreground">{preview.subject}</span> &middot;{" "}
+                  {preview.headlineCount} items &middot; banner {preview.bannerGenerated ? "generated" : "skipped"} &middot;{" "}
+                  polish {preview.polishApplied ? "applied" : "skipped"}
+                </div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => { setPreview(null); setPreviewError(null); }}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+          {previewError && <div className="p-4 text-xs text-red-400">{previewError}</div>}
+          {preview && (
+            <iframe
+              title="Email preview"
+              srcDoc={preview.html}
+              className="w-full bg-white"
+              style={{ height: "720px", border: "0" }}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 };
 
-type DispatchSection = "headlines" | "writers" | "emails";
+type DispatchSection = "headlines" | "judge" | "writers" | "emails";
 
 const DispatchView = ({ token }: { token: string }) => {
   const [section, setSection] = useState<DispatchSection>("headlines");
 
   const sections: { id: DispatchSection; label: string; Icon: typeof Bot; description: string }[] = [
     { id: "headlines", label: "Headline ingestion", Icon: Radio, description: "Sources that fetch AI news on a schedule" },
+    { id: "judge", label: "Headline judge", Icon: Gavel, description: "Scores headlines + picks the top-10" },
     { id: "writers", label: "Writer agents", Icon: PenLine, description: "Turn headlines into blog posts" },
-    { id: "emails", label: "Email agents", Icon: Send, description: "Draft and send outbound emails" },
+    { id: "emails", label: "Email agents", Icon: Send, description: "Daily top-10 dispatch email" },
   ];
 
   return (
@@ -1287,8 +1886,9 @@ const DispatchView = ({ token }: { token: string }) => {
       </div>
 
       {section === "headlines" && <AgentsTab token={token} />}
+      {section === "judge" && <JudgeTab token={token} />}
       {section === "writers" && <WriterAgentsTab token={token} />}
-      {section === "emails" && <EmailAgentsTab />}
+      {section === "emails" && <EmailAgentsTab token={token} />}
     </div>
   );
 };

@@ -102,6 +102,12 @@ async function buildAll() {
       "electron",
     ],
     sourcemap: "linked",
+    loader: {
+      // Embed image assets as base64 strings (default-imported). Used by
+      // src/lib/brand-assets.ts to inline the email logo without a runtime
+      // fs read.
+      ".png": "base64",
+    },
     plugins: [
       // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
       esbuildPluginPino({ transports: ["pino-pretty"] })

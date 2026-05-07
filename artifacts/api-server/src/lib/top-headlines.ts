@@ -1,0 +1,168 @@
+// Top-of-feed selection. Single source of truth for "what is the top-N
+// dispatch right now": the public /api/headlines?mode=top route AND the
+// daily top-10 email both call into here so the website and the email
+// always show the same items.
+//
+// Pipeline:
+//   1. SQL pulls candidates from the last `days` days, ≤2 per source,
+//      gated by relevance_score (NULL or ≥ MIN_TOP_RELEVANCE_SCORE).
+//   2. Structural filter for broad-press feeds: when the judge hasn't
+//      reached an item yet (NULL score), require an entity anchor.
+//   3. JS-side ranking by tier × recency decay.
+//   4. Dedupe near-duplicates (cross-source coverage of the same story).
+//   5. Reserve at least N slots for academic-paper sources.
+
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
+import {
+  SOURCES,
+  BROAD_PRESS_SOURCES,
+  EARNINGS_TRANSCRIPTS_DISPLAY_NAME,
+  EARNINGS_PROMOTED_TIER,
+  isEarningsDay,
+} from "./headline-sources";
+import {
+  dedupeNearDuplicates,
+  ensurePapersInSelection,
+  extractOrgs,
+  DEFAULT_DEDUP_THRESHOLD,
+} from "./headline-rank";
+import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
+
+export type HeadlineRow = {
+  id: number;
+  source: string;
+  category: string;
+  title: string;
+  url: string;
+  publishedAt: Date;
+  relevanceScore: number | null;
+  commentary: string | null;
+};
+
+const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
+// Tier 1 → weight 4, Tier 4 → weight 1. Linear by design.
+export const TIER_WEIGHTS: Record<number, number> = { 1: 4, 2: 3, 3: 2, 4: 1 };
+export const HALF_LIFE_DAYS = 3;
+export const PER_SOURCE_CAP_TOP = 2;
+export const MIN_PAPERS_IN_SELECTION = 2;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+const mapSqlRowToHeadline = (row: Record<string, unknown>): HeadlineRow => ({
+  id: Number(row["id"]),
+  source: String(row["source"]),
+  category: String(row["category"]),
+  title: String(row["title"]),
+  url: String(row["url"]),
+  publishedAt: new Date(row["published_at"] as string | Date),
+  relevanceScore:
+    row["relevance_score"] === null || row["relevance_score"] === undefined
+      ? null
+      : Number(row["relevance_score"]),
+  commentary:
+    row["commentary"] === null || row["commentary"] === undefined
+      ? null
+      : String(row["commentary"]),
+});
+
+const scoreItem = (
+  row: HeadlineRow,
+  now: number,
+  earningsDay: boolean,
+): number => {
+  let tier = SOURCE_TIER.get(row.source) ?? 4;
+  if (earningsDay && row.source === EARNINGS_TRANSCRIPTS_DISPLAY_NAME) {
+    tier = EARNINGS_PROMOTED_TIER;
+  }
+  const tierWeight = TIER_WEIGHTS[tier] ?? 1;
+  const ageDays = Math.max(0, (now - row.publishedAt.getTime()) / MS_PER_DAY);
+  const decay = Math.exp((-Math.LN2 * ageDays) / HALF_LIFE_DAYS);
+  return tierWeight * decay;
+};
+
+export type SelectTopOptions = {
+  /** Lookback window in days. Public route default 7; email default 1. */
+  days?: number;
+  /** Final result size cap. */
+  limit?: number;
+};
+
+/**
+ * Run the full top-mode selection. Called by `/api/headlines?mode=top` and
+ * by the daily top-10 email composer so the website and the inbox always
+ * agree on what "top dispatch" is.
+ */
+export async function selectTopHeadlines(
+  opts: SelectTopOptions = {},
+): Promise<HeadlineRow[]> {
+  const days = opts.days ?? 7;
+  const limit = opts.limit ?? 10;
+
+  const result = await db.execute(sql`
+    WITH ranked AS (
+      SELECT
+        id, source, category, title, url, published_at, relevance_score, commentary,
+        ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
+      FROM headlines
+      WHERE published_at >= NOW() - (${days} || ' days')::interval
+        AND (relevance_score IS NULL OR relevance_score >= ${MIN_TOP_RELEVANCE_SCORE})
+    )
+    SELECT id, source, category, title, url, published_at, relevance_score, commentary
+    FROM ranked
+    WHERE rn <= ${PER_SOURCE_CAP_TOP}
+  `);
+
+  const rawCandidates: HeadlineRow[] = result.rows.map((r) =>
+    mapSqlRowToHeadline(r as Record<string, unknown>),
+  );
+
+  // Structural guard: drop unjudged broad-press items with no named-entity
+  // anchor (keeps macro-trend clickbait out of the top until the judge
+  // catches up to score it).
+  const candidates = rawCandidates.filter((c) => {
+    if (c.relevanceScore !== null) return true;
+    if (!BROAD_PRESS_SOURCES.has(c.source)) return true;
+    return extractOrgs(c).size > 0;
+  });
+
+  const now = Date.now();
+  const earningsDay = isEarningsDay(candidates);
+  candidates.sort(
+    (a, b) => scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay),
+  );
+
+  const deduped = dedupeNearDuplicates(candidates);
+  const initialTop = deduped.slice(0, limit);
+  const items = ensurePapersInSelection(
+    initialTop,
+    deduped,
+    MIN_PAPERS_IN_SELECTION,
+  ).sort((a, b) => scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay));
+
+  return items;
+}
+
+/** Constants surfaced to the admin "Headline judge" spec view. */
+export function getTopSelectionSpec(): {
+  tierWeights: Record<number, number>;
+  halfLifeDays: number;
+  perSourceCap: number;
+  defaultDays: number;
+  defaultLimit: number;
+  dedupeThreshold: number;
+  minPapers: number;
+  broadPressSources: string[];
+  broadPressRequiresOrgWhenUnjudged: boolean;
+} {
+  return {
+    tierWeights: { ...TIER_WEIGHTS },
+    halfLifeDays: HALF_LIFE_DAYS,
+    perSourceCap: PER_SOURCE_CAP_TOP,
+    defaultDays: 7,
+    defaultLimit: 10,
+    dedupeThreshold: DEFAULT_DEDUP_THRESHOLD,
+    minPapers: MIN_PAPERS_IN_SELECTION,
+    broadPressSources: Array.from(BROAD_PRESS_SOURCES),
+    broadPressRequiresOrgWhenUnjudged: true,
+  };
+}
