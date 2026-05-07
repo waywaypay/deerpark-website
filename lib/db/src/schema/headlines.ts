@@ -11,6 +11,8 @@ export const headlinesTable = pgTable(
     urlHash: text("url_hash").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }).notNull(),
     relevanceScore: integer("relevance_score"),
+    commentary: text("commentary"),
+    commentedAt: timestamp("commented_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [

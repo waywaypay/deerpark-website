@@ -1,15 +1,9 @@
 import { useState } from "react";
-import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
 import { ArrowRight, Check, ExternalLink, Rss } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
-
-type CoveredBy = {
-  postId: number;
-  postTitle: string;
-  publishedAt: string;
-};
 
 type Headline = {
   source: string;
@@ -17,7 +11,7 @@ type Headline = {
   title: string;
   publishedAt: string;
   url?: string;
-  coveredBy?: CoveredBy | null;
+  commentary?: string | null;
 };
 
 const HEADLINE_FALLBACK: Headline[] = [
@@ -57,7 +51,7 @@ type HeadlineApiItem = {
   title: string;
   url: string;
   publishedAt: string;
-  coveredBy?: CoveredBy | null;
+  commentary?: string | null;
 };
 
 type HeadlineMode = "top" | "latest";
@@ -75,7 +69,7 @@ function useHeadlines(mode: HeadlineMode) {
         title: h.title,
         publishedAt: h.publishedAt,
         url: h.url,
-        coveredBy: h.coveredBy ?? null,
+        commentary: h.commentary ?? null,
       }));
     },
     refetchInterval: 5 * 60 * 1000,
@@ -178,7 +172,7 @@ const SubscribeHero = () => (
         <div className="lg:grid lg:grid-cols-12">
           <div className="lg:col-span-6 min-w-0">
             <p className="text-muted-foreground font-light leading-relaxed mb-6">
-              Daily relevant AI news in your inbox at 3:30 PM PT — the day's top 10, with 2–4 sentences of context on each. Email only; nothing on the site.
+              Daily relevant AI news in your inbox at 3:30 PM PT — the day's top 10, with 2–4 sentences of context on each. The same top 10 lives below; email is just the convenience.
             </p>
             <DispatchSubscribe />
           </div>
@@ -276,19 +270,10 @@ const HeadlineFeed = () => {
                       {item.title}
                     </span>
                   )}
-                  {item.coveredBy && (
-                    <Link
-                      href={`/dispatch/${item.coveredBy.postId}`}
-                      className="mt-3 flex items-baseline gap-2 border-l-2 border-foreground/30 pl-3 text-xs text-foreground/70 hover:text-foreground hover:border-foreground/70 transition-colors overflow-hidden"
-                    >
-                      <span className="text-[10px] uppercase tracking-[0.18em] font-sans font-medium shrink-0">
-                        Covered in Dispatch
-                      </span>
-                      <span className="font-serif italic truncate min-w-0 flex-1">
-                        "{item.coveredBy.postTitle}"
-                      </span>
-                      <ArrowRight className="w-3 h-3 shrink-0" />
-                    </Link>
+                  {item.commentary && (
+                    <div className="mt-3 text-sm md:text-[15px] leading-relaxed text-foreground/80 font-light max-w-3xl [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-medium [&_strong]:text-foreground">
+                      <ReactMarkdown>{item.commentary}</ReactMarkdown>
+                    </div>
                   )}
                 </article>
               );

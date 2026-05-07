@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { SOURCES, type SourceConfig } from "./headline-sources";
 import { logger } from "./logger";
 import { scoreUnscoredHeadlines } from "./headline-judge";
+import { generateMissingCommentary } from "./headline-commentator";
 
 type NormalizedItem = Omit<InsertHeadline, "id" | "createdAt" | "relevanceScore">;
 
@@ -469,12 +470,20 @@ export async function ingestAllSources(): Promise<IngestResult[]> {
     WHERE h.id = old.id
   `);
 
-  // Score newly-ingested rows for AI relevance. Don't await — judging is the
-  // top-view's quality gate, not part of the ingest contract; if the LLM is
-  // slow or unconfigured we still want ingest to return cleanly.
-  scoreUnscoredHeadlines().catch((err) => {
-    logger.warn({ err }, "Headline judge: post-ingest scoring failed");
-  });
+  // Score newly-ingested rows for AI relevance, then write commentary for
+  // any newly-top-eligible rows. Both are fire-and-forget — they're quality
+  // layers, not part of the ingest contract; if the LLM is slow or
+  // unconfigured we still want ingest to return cleanly. Commentary chains
+  // off the judge so it sees the freshly-set relevance_score values.
+  scoreUnscoredHeadlines()
+    .catch((err) => {
+      logger.warn({ err }, "Headline judge: post-ingest scoring failed");
+    })
+    .then(() =>
+      generateMissingCommentary().catch((err) => {
+        logger.warn({ err }, "Headline commentator: post-judge run failed");
+      }),
+    );
 
   return results;
 }
