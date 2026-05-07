@@ -475,15 +475,28 @@ export async function ingestAllSources(): Promise<IngestResult[]> {
   // layers, not part of the ingest contract; if the LLM is slow or
   // unconfigured we still want ingest to return cleanly. Commentary chains
   // off the judge so it sees the freshly-set relevance_score values.
+  //
+  // If the judge made zero progress and only produced errors, skip the
+  // commentator for this tick — Venice is throttling, and firing more
+  // calls into the same wall just deepens the abuse-threshold cooldown.
+  // Next ingest tick (15 min later) gets a fresh shot at both.
   scoreUnscoredHeadlines()
+    .then((judgeSummary) => {
+      const judgeStuck = judgeSummary.scored === 0 && judgeSummary.errors > 0;
+      if (judgeStuck) {
+        logger.info(
+          { judgeSummary },
+          "Headline commentator: skipped — judge made no progress this tick",
+        );
+        return;
+      }
+      return generateMissingCommentary().catch((err) => {
+        logger.warn({ err }, "Headline commentator: post-judge run failed");
+      });
+    })
     .catch((err) => {
       logger.warn({ err }, "Headline judge: post-ingest scoring failed");
-    })
-    .then(() =>
-      generateMissingCommentary().catch((err) => {
-        logger.warn({ err }, "Headline commentator: post-judge run failed");
-      }),
-    );
+    });
 
   return results;
 }
