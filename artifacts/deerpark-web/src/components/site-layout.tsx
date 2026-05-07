@@ -6,8 +6,8 @@ import { ChevronDown, Menu, MessageSquare, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
 import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
 
-/** Site-wide: AI agent destinations shown under “Agents” in the header. */
-export const AGENT_LINKS = [
+/** Site-wide: product destinations shown under “Products” in the header. */
+export const PRODUCT_LINKS = [
   { href: "/dispatch", label: "Dispatch" },
 ] as const;
 
@@ -33,8 +33,11 @@ export const FadeIn = ({
 
 type HashLink = { href: string; label: string };
 
-const NAV_HASH_LINKS_BEFORE_AGENTS: HashLink[] = [
+const NAV_HASH_LINKS_BEFORE_PRODUCTS: HashLink[] = [
   { href: "/#services", label: "Services" },
+];
+
+const NAV_HASH_LINKS_AFTER_PRODUCTS: HashLink[] = [
   { href: "/#case-study", label: "Case Studies" },
 ];
 
@@ -50,7 +53,7 @@ const NavHashLink = ({
   </a>
 );
 
-const AgentsNavDesktop = () => {
+const ProductsNavDesktop = () => {
   const [open, setOpen] = useState(false);
   return (
     <div
@@ -65,7 +68,7 @@ const AgentsNavDesktop = () => {
         aria-haspopup="menu"
         onClick={() => setOpen((v) => !v)}
       >
-        Agents
+        Products
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -74,7 +77,7 @@ const AgentsNavDesktop = () => {
           className="absolute left-0 top-full z-50 min-w-[13rem] pt-2"
         >
           <div className="border border-foreground/15 bg-background py-2 shadow-lg">
-            {AGENT_LINKS.map(({ href, label }) => (
+            {PRODUCT_LINKS.map(({ href, label }) => (
               <Link
                 key={href}
                 href={href}
@@ -92,7 +95,7 @@ const AgentsNavDesktop = () => {
   );
 };
 
-const AgentsNavMobile = ({ onNavigate }: { onNavigate: () => void }) => {
+const ProductsNavMobile = ({ onNavigate }: { onNavigate: () => void }) => {
   const [expanded, setExpanded] = useState(false);
   return (
     <div className="flex flex-col gap-1">
@@ -102,12 +105,12 @@ const AgentsNavMobile = ({ onNavigate }: { onNavigate: () => void }) => {
         aria-expanded={expanded}
         onClick={() => setExpanded((v) => !v)}
       >
-        <span>Agents</span>
+        <span>Products</span>
         <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
       </button>
       {expanded && (
         <div className="ml-3 flex flex-col gap-3 border-l border-foreground/15 pl-4">
-          {AGENT_LINKS.map(({ href, label }) => (
+          {PRODUCT_LINKS.map(({ href, label }) => (
             <Link
               key={href}
               href={href}
@@ -139,10 +142,13 @@ export const Navbar = () => {
           </span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
-          {NAV_HASH_LINKS_BEFORE_AGENTS.map((l) => (
+          {NAV_HASH_LINKS_BEFORE_PRODUCTS.map((l) => (
             <NavHashLink key={l.href} link={l} />
           ))}
-          <AgentsNavDesktop />
+          <ProductsNavDesktop />
+          {NAV_HASH_LINKS_AFTER_PRODUCTS.map((l) => (
+            <NavHashLink key={l.href} link={l} />
+          ))}
           <a href="/#faq" className="hover:text-foreground transition-colors">
             FAQ
           </a>
@@ -165,10 +171,13 @@ export const Navbar = () => {
       {open && (
         <div className="md:hidden border-t border-foreground/10 bg-background">
           <nav className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-5 text-sm font-medium text-muted-foreground">
-            {NAV_HASH_LINKS_BEFORE_AGENTS.map((l) => (
+            {NAV_HASH_LINKS_BEFORE_PRODUCTS.map((l) => (
               <NavHashLink key={l.href} link={l} onClick={() => setOpen(false)} />
             ))}
-            <AgentsNavMobile onNavigate={() => setOpen(false)} />
+            <ProductsNavMobile onNavigate={() => setOpen(false)} />
+            {NAV_HASH_LINKS_AFTER_PRODUCTS.map((l) => (
+              <NavHashLink key={l.href} link={l} onClick={() => setOpen(false)} />
+            ))}
             <a href="/#faq" onClick={() => setOpen(false)} className="hover:text-foreground transition-colors">
               FAQ
             </a>
@@ -216,8 +225,8 @@ export const Footer = () => (
           <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Company</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
             <li><a href="/#case-study" className="hover:text-foreground transition-colors">Case Studies</a></li>
-            <li className="pt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground">Agents</li>
-            {AGENT_LINKS.map(({ href, label }) => (
+            <li className="pt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground">Products</li>
+            {PRODUCT_LINKS.map(({ href, label }) => (
               <li key={href} className="pl-2">
                 <Link href={href} className="hover:text-foreground transition-colors">
                   {label}
