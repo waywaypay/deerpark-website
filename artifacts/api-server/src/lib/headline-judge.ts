@@ -51,7 +51,11 @@ export const ERROR_STREAK_BREAK = 3;
 // inheriting it puts the judge in the same per-minute bucket as the
 // writer and amplifies cascading 429s.
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+// Venice removed Anthropic models from its catalog, so `claude-haiku-*`
+// no longer resolves on /chat/completions and the judge silently stopped
+// scoring (relevance_score stays NULL on every row, which then cascades
+// into the commentator + email path). gpt-4o-mini is the closest swap.
+const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
 
 export const DEFAULT_JUDGE_SYSTEM_PROMPT = `You score AI/tech news headlines for an enterprise-AI briefing.
 

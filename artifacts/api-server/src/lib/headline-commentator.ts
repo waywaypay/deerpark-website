@@ -17,7 +17,13 @@ import { logger } from "./logger";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+// Venice dropped Anthropic models from its catalog — `claude-haiku-*` now
+// returns "model not found" on /chat/completions, which silently broke
+// commentary, judging, and the email polish step (the website's /dispatch
+// view + the newsletter both ship with empty commentary blocks). Swap to
+// gpt-4o-mini, which is on Venice with reliable JSON-mode support and a
+// similar cost/speed profile to Haiku ($0.19/$0.75 per M).
+const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
 
 // 7d matches the top-view window — older rows won't appear in the top-10
 // so commenting them is wasted spend.
