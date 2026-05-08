@@ -20,6 +20,7 @@ import {
   generateBannerImage,
   type GeneratedImage,
 } from "./image-gen";
+import { generateMissingCommentary } from "./headline-commentator";
 import { logger } from "./logger";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
@@ -31,7 +32,11 @@ const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
 const PUBLIC_SITE_URL = (
   process.env["PUBLIC_SITE_URL"] ?? "https://www.deerpark.io"
 ).replace(/\/$/, "");
-const LOGO_URL = `${PUBLIC_SITE_URL}/favicon-192.png`;
+// Use the brand logo with a transparent background — favicon-192.png has a
+// solid color square baked in (it's designed to look right as a browser-tab
+// favicon), which made the email header look like the logo was sitting on
+// a colored chip.
+const LOGO_URL = `${PUBLIC_SITE_URL}/logo-icon.png`;
 
 // Stable CID for the banner so the same constant is referenced both in the
 // HTML <img src="cid:..."> and the Resend attachments[].content_id.
@@ -179,7 +184,7 @@ function renderHtml({
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 24px 0;">
       <tr>
         <td style="vertical-align:middle;width:120px;">
-          <img src="${LOGO_URL}" alt="DeerPark" width="40" height="40" style="display:block;border:0;outline:none;" />
+          <img src="${LOGO_URL}" alt="DeerPark" width="26" height="40" style="display:block;border:0;outline:none;background:transparent;" />
         </td>
         <td style="vertical-align:middle;text-align:right;font-family:ui-sans-serif,system-ui,sans-serif;font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:#888;">
           Daily dispatch &middot; ${escapeHtml(dateLabel)}
@@ -375,6 +380,30 @@ function fallbackIntroHtml(headlines: HeadlineRow[]): string {
 export async function composeDailyEmail(
   opts: ComposeOptions,
 ): Promise<ComposedEmail | null> {
+  // Back-fill commentary for any top-eligible item that doesn't have it yet.
+  // The commentator normally runs after each ingest tick (every 15 min) but
+  // gets skipped when the judge stalls on rate-limit streaks — and then
+  // top headlines land in the email with NULL commentary. Idempotent: a
+  // no-op when every top-eligible row already has commentary, so the cost
+  // is bounded by the actual gap to fill.
+  try {
+    const summary = await generateMissingCommentary();
+    if (summary.commented > 0 || summary.errors > 0) {
+      logger.info(
+        { summary },
+        "Email compose: pre-load commentary back-fill",
+      );
+    }
+  } catch (err) {
+    // Defensive — generateMissingCommentary swallows per-batch errors but
+    // not setup errors (e.g. DB unavailable mid-call). We never want this
+    // to abort the email composition.
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "Email compose: commentary back-fill threw — continuing without it",
+    );
+  }
+
   const headlines = await loadTopHeadlinesForEmail(opts.days ?? 1, opts.limit ?? 10);
   if (headlines.length === 0) return null;
 
