@@ -8,6 +8,7 @@ import { db, settingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import type { HeadlineRow } from "./top-headlines";
+import { logUsage } from "./llm-usage";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "venice-sd35";
@@ -239,6 +240,7 @@ export async function generateBannerImage(
       return null;
     }
     const cropped = cropWatermark(b64);
+    await logUsage({ caller: "image_gen", callKind: "image", model });
     return { base64: cropped, mimeType: "image/png" };
   } catch (err) {
     logger.warn(

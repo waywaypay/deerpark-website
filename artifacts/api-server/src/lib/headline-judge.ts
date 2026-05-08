@@ -15,6 +15,7 @@ import OpenAI from "openai";
 import { db, headlinesTable, settingsTable } from "@workspace/db";
 import { and, isNull, gte, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
+import { logUsage } from "./llm-usage";
 
 // settings-table key for the most recent judge run summary. Persisted so
 // `/api/headlines/judge-status` can surface what happened on the last run
@@ -218,6 +219,14 @@ async function scoreBatch(
       { role: "user", content: userMessage },
     ],
     response_format: { type: "json_object" },
+  });
+
+  await logUsage({
+    caller: "judge",
+    callKind: "chat",
+    model,
+    promptTokens: response.usage?.prompt_tokens ?? 0,
+    completionTokens: response.usage?.completion_tokens ?? 0,
   });
 
   const text = response.choices[0]?.message?.content ?? "";

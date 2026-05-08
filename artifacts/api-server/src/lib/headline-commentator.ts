@@ -15,6 +15,7 @@ import { db, headlinesTable } from "@workspace/db";
 import { and, gte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
+import { logUsage } from "./llm-usage";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 // Venice dropped Anthropic models from its catalog — `claude-haiku-*` now
@@ -175,6 +176,14 @@ async function commentBatch(
       { role: "user", content: userMessage },
     ],
     response_format: { type: "json_object" },
+  });
+
+  await logUsage({
+    caller: "commentator",
+    callKind: "chat",
+    model,
+    promptTokens: response.usage?.prompt_tokens ?? 0,
+    completionTokens: response.usage?.completion_tokens ?? 0,
   });
 
   const text = response.choices[0]?.message?.content ?? "";

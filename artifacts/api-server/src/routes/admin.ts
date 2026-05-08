@@ -3,6 +3,7 @@ import {
   db,
   leadsTable,
   headlinesTable,
+  llmUsageTable,
   postsTable,
   smsMessagesTable,
   subscribersTable,
@@ -59,79 +60,63 @@ router.get("/admin/whoami", (_req, res) => {
   return res.json({ ok: true });
 });
 
-// Aggregate Venice (LLM) spend across every place we log token usage.
-// Two sources today:
-//   - posts.{prompt,completion,total}_tokens / cost_usd  (writer agent)
-//   - sms_messages.{prompt,completion}_tokens / cost_usd (SMS bot)
-// Other Venice callers (judge, commentator, image-gen, top-10 polish) don't
-// persist usage yet — the totals here are an under-count, not a full bill.
+// Aggregate Venice (LLM) spend from the unified `llm_usage` table. Every
+// caller — writer-agent, judge, commentator, email polish/fallback,
+// image-gen banner, sms-bot — appends a row per call, so this is the
+// complete bill (including admin-UI banner previews and digest previews,
+// which previously didn't show up because they don't write to posts /
+// sms_messages).
 router.get("/admin/usage/venice", async (req, res) => {
   try {
-    const [postUsage] = await db
+    const rows = await db
       .select({
-        promptTokens: sql<number>`coalesce(sum(${postsTable.promptTokens}), 0)::bigint`,
-        completionTokens: sql<number>`coalesce(sum(${postsTable.completionTokens}), 0)::bigint`,
-        totalTokens: sql<number>`coalesce(sum(${postsTable.totalTokens}), 0)::bigint`,
-        costUsd: sql<string>`coalesce(sum(${postsTable.costUsd}::numeric), 0)::text`,
+        caller: llmUsageTable.caller,
+        promptTokens: sql<string>`coalesce(sum(${llmUsageTable.promptTokens}), 0)::text`,
+        completionTokens: sql<string>`coalesce(sum(${llmUsageTable.completionTokens}), 0)::text`,
+        totalTokens: sql<string>`coalesce(sum(${llmUsageTable.totalTokens}), 0)::text`,
+        costUsd: sql<string>`coalesce(sum(${llmUsageTable.costUsd}), 0)::text`,
         callCount: sql<number>`count(*)::int`,
       })
-      .from(postsTable);
+      .from(llmUsageTable)
+      .groupBy(llmUsageTable.caller);
 
-    const [smsUsage] = await db
-      .select({
-        promptTokens: sql<number>`coalesce(sum(${smsMessagesTable.promptTokens}), 0)::bigint`,
-        completionTokens: sql<number>`coalesce(sum(${smsMessagesTable.completionTokens}), 0)::bigint`,
-        costUsd: sql<string>`coalesce(sum(${smsMessagesTable.costUsd}), 0)::text`,
-        callCount: sql<number>`count(*) filter (where ${smsMessagesTable.direction} = 'outbound' and ${smsMessagesTable.model} is not null)::int`,
-      })
-      .from(smsMessagesTable);
+    type Bucket = {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+      costUsd: number;
+      callCount: number;
+    };
+    const empty = (): Bucket => ({
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      costUsd: 0,
+      callCount: 0,
+    });
 
-    const writerPromptTokens = Number(postUsage?.promptTokens ?? 0);
-    const writerCompletionTokens = Number(postUsage?.completionTokens ?? 0);
-    const writerTotalTokens =
-      Number(postUsage?.totalTokens ?? 0) ||
-      writerPromptTokens + writerCompletionTokens;
-    const writerCostUsd = Number(postUsage?.costUsd ?? "0");
-    const writerCallCount = Number(postUsage?.callCount ?? 0);
-
-    const smsPromptTokens = Number(smsUsage?.promptTokens ?? 0);
-    const smsCompletionTokens = Number(smsUsage?.completionTokens ?? 0);
-    const smsTotalTokens = smsPromptTokens + smsCompletionTokens;
-    const smsCostUsd = Number(smsUsage?.costUsd ?? "0");
-    const smsCallCount = Number(smsUsage?.callCount ?? 0);
-
-    const totalPromptTokens = writerPromptTokens + smsPromptTokens;
-    const totalCompletionTokens = writerCompletionTokens + smsCompletionTokens;
-    const totalTokens = writerTotalTokens + smsTotalTokens;
-    const totalCostUsd = writerCostUsd + smsCostUsd;
-    const totalCallCount = writerCallCount + smsCallCount;
+    const breakdown: Record<string, Bucket> = {};
+    const total = empty();
+    for (const r of rows) {
+      const bucket: Bucket = {
+        promptTokens: Number(r.promptTokens ?? 0),
+        completionTokens: Number(r.completionTokens ?? 0),
+        totalTokens: Number(r.totalTokens ?? 0),
+        costUsd: Number(r.costUsd ?? 0),
+        callCount: Number(r.callCount ?? 0),
+      };
+      breakdown[r.caller] = bucket;
+      total.promptTokens += bucket.promptTokens;
+      total.completionTokens += bucket.completionTokens;
+      total.totalTokens += bucket.totalTokens;
+      total.costUsd += bucket.costUsd;
+      total.callCount += bucket.callCount;
+    }
 
     return res.json({
-      total: {
-        promptTokens: totalPromptTokens,
-        completionTokens: totalCompletionTokens,
-        totalTokens,
-        costUsd: totalCostUsd,
-        callCount: totalCallCount,
-      },
-      breakdown: {
-        writer: {
-          promptTokens: writerPromptTokens,
-          completionTokens: writerCompletionTokens,
-          totalTokens: writerTotalTokens,
-          costUsd: writerCostUsd,
-          callCount: writerCallCount,
-        },
-        sms: {
-          promptTokens: smsPromptTokens,
-          completionTokens: smsCompletionTokens,
-          totalTokens: smsTotalTokens,
-          costUsd: smsCostUsd,
-          callCount: smsCallCount,
-        },
-      },
-      note:
-        "Aggregated from posts + sms_messages. Judge, commentator, image-gen, and email-polish calls don't persist token usage yet — total is a lower bound.",
+      total,
+      breakdown,
+      note: "Aggregated from llm_usage. Every Venice caller logs one row per call (chat or image).",
     });
   } catch (err) {
     req.log.error({ err }, "Venice usage aggregation failed");

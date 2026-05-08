@@ -19,6 +19,7 @@ import {
   ensurePapersInSelection,
 } from "./headline-rank";
 import { selectTopHeadlines } from "./top-headlines";
+import { computeCostUsd, logUsage } from "./llm-usage";
 
 // Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
 // override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
@@ -26,54 +27,9 @@ import { selectTopHeadlines } from "./top-headlines";
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "claude-sonnet-4-5";
 
-// USD per 1M tokens. Approximate published rates — Venice's actual VCU/Diem
-// charge differs but this gives a comparable cost estimate. Update as model
-// pricing changes; historical posts keep the cost computed at write time.
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  // Anthropic Claude (passthrough rates)
-  "claude-opus-4-7": { input: 15, output: 75 },
-  "claude-opus-4-6": { input: 15, output: 75 },
-  "claude-opus-4-6-fast": { input: 15, output: 75 },
-  "claude-opus-4-5": { input: 15, output: 75 },
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "claude-sonnet-4-5": { input: 3, output: 15 },
-  // OpenAI
-  "openai-gpt-55": { input: 5, output: 20 },
-  "openai-gpt-55-pro": { input: 15, output: 60 },
-  "openai-gpt-54": { input: 2.5, output: 10 },
-  "openai-gpt-54-mini": { input: 0.15, output: 0.6 },
-  // Google
-  "gemini-3-1-pro-preview": { input: 2.5, output: 10 },
-  "gemini-3-flash-preview": { input: 0.3, output: 1.2 },
-  // Open / smaller models — Venice rates approximate
-  "deepseek-v4-pro": { input: 0.6, output: 2.4 },
-  "deepseek-v4-flash": { input: 0.15, output: 0.6 },
-  "kimi-k2-6": { input: 0.5, output: 2 },
-  "qwen3-235b-a22b-instruct-2507": { input: 0.4, output: 1.5 },
-  "qwen3-coder-480b-a35b-instruct": { input: 0.8, output: 3 },
-  "qwen3-5-9b": { input: 0.05, output: 0.15 },
-  "llama-3.3-70b": { input: 0.4, output: 1.2 },
-  "llama-3.2-3b": { input: 0.04, output: 0.06 },
-  "mistral-small-2603": { input: 0.2, output: 0.6 },
-  "zai-org-glm-4.7": { input: 0.5, output: 1.5 },
-  "zai-org-glm-5": { input: 0.6, output: 2 },
-};
-
-const FALLBACK_PRICING = { input: 1, output: 3 };
-
-function priceForModel(model: string): { input: number; output: number } {
-  return MODEL_PRICING[model] ?? FALLBACK_PRICING;
-}
-
-function computeCost(
-  model: string,
-  promptTokens: number,
-  completionTokens: number,
-): string {
-  const { input, output } = priceForModel(model);
-  const cost = (promptTokens * input + completionTokens * output) / 1_000_000;
-  return cost.toFixed(8);
-}
+// Per-model pricing + cost computation lives in `./llm-usage` so every
+// Venice caller (writer, judge, commentator, polish, sms-bot, image-gen)
+// shares one table.
 
 // Corpus capping. The 7-day window can hold hundreds of items (arXiv alone
 // fires ~50/day); shipping all of them as input bloats per-call cost. Cap
@@ -1127,7 +1083,15 @@ export async function generateAndSavePost(opts: {
     totalTokens = promptTokens + completionTokens;
   }
 
-  const costUsd = computeCost(model, promptTokens, completionTokens);
+  const costUsd = computeCostUsd(model, promptTokens, completionTokens);
+  await logUsage({
+    caller: "writer",
+    callKind: "chat",
+    model,
+    promptTokens,
+    completionTokens,
+    costUsd,
+  });
   const insert: InsertPost = {
     agentId,
     mode: validated.mode,
