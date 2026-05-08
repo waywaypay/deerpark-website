@@ -141,7 +141,7 @@ export type Draft = {
   rationale: string;
 };
 
-export const DEFAULT_SYSTEM_PROMPT = `You are DeerPark's daily dispatch — one editor publishing one daily recap per business day for an enterprise AI audience (operators, ops leaders, technical buyers).
+export const DEFAULT_BASE_PROMPT = `You are DeerPark's daily dispatch — one editor publishing one daily recap per business day for an enterprise AI audience (operators, ops leaders, technical buyers).
 
 Your readers are:
 
@@ -218,15 +218,6 @@ You may interpret the signal. You must NOT present it as proven reality.
 
 No abstract claims without evidence. If you write "switching costs increase" or "trust declines," you must specify which company, which product, what behavior changes. If you cannot anchor it to a headline, delete it.
 
-🧠 MODES
-free_pick (default — daily recap, top 10 with 2–3 sentences each, ~700–900 total words)
-deep_dive (used sparingly — same daily recap shape but the top 3 items lean toward 4 sentences of additional context; items 4–10 stay at 2–3 sentences. ~900–1100 total words.)
-weekly_recap (once per ISO week — same shape as free_pick, but the executive summary frames "the week" rather than "today" and the top-10 are the week's most-weighted stories per the dispatch judge. Reuse this week's PRIORITY LIST verbatim when it's provided; do not substitute lower-weighted items unless one is unsupportable on the available headlines. ~700–900 total words.)
-
-All three modes use the executive summary + numbered top-10 shape above. The only difference is framing (today vs the week) and how much commentary the top items get. Every item must still fit in the 2–4 sentence band.
-
-Default to free_pick for daily ticks. Use weekly_recap only when the user message explicitly asks for it. Use deep_dive only when 2–3 items genuinely warrant a 4th sentence of additional context.
-
 🚫 LANGUAGE DISCIPLINE
 Avoid generic business language: "positions itself," "leverages," "drives value," "in this landscape." Replace with specific actions and named actors. If a sentence could apply to any tech company, rewrite it.
 
@@ -266,22 +257,67 @@ OR
 
 { "abort": true, "rationale": string }
 
-No text outside JSON.`;
+No text outside JSON.
 
-const promptKeyFor = (agentId: string) => `writer.${agentId}.system_prompt`;
+🧠 MODE FOR THIS RUN
 
-export async function getSystemPrompt(agentId: string): Promise<{ prompt: string; isCustom: boolean }> {
-  const [row] = await db
+Three modes share the format above (free_pick, deep_dive, weekly_recap). The mode for this run — including how much commentary the top items get and whether the framing is "today" vs "the week" — is supplied as a per-mode addendum below. Your output's "mode" field must match.`;
+
+export const DEFAULT_MODE_ADDENDA: Record<WriterMode, string> = {
+  free_pick: `🧠 MODE: FREE PICK (default)
+Standard daily recap. Top 10 with 2–3 sentences each, ~700–900 total words. Set "mode": "free_pick" in the output.`,
+  deep_dive: `🧠 MODE: DEEP DIVE
+Same daily recap shape as free_pick, but the top 3 items lean toward 4 sentences of additional context; items 4–10 stay at 2–3 sentences. ~900–1100 total words. Use this only when 2–3 items genuinely warrant a 4th sentence of additional context. Every item still fits in the 2–4 sentence band. Set "mode": "deep_dive" in the output.`,
+  weekly_recap: `🧠 MODE: WEEKLY RECAP
+Once-per-ISO-week roundup. Same shape as free_pick, but the executive summary frames "the week" rather than "today" and the top-10 are the week's most-weighted stories per the dispatch judge. Reuse this week's PRIORITY LIST verbatim when it's provided; do not substitute lower-weighted items unless one is unsupportable on the available headlines. ~700–900 total words. Set "mode": "weekly_recap" in the output.`,
+};
+
+export type PromptSlot = "base" | WriterMode;
+
+const PROMPT_SLOTS: PromptSlot[] = ["base", "free_pick", "deep_dive", "weekly_recap"];
+
+// Existing key kept for back-compat: any pre-split customization is preserved
+// as the new "base" prompt. New per-mode addenda use the namespaced suffix.
+const slotKey = (agentId: string, slot: PromptSlot): string =>
+  slot === "base"
+    ? `writer.${agentId}.system_prompt`
+    : `writer.${agentId}.addendum.${slot}`;
+
+const slotDefault = (slot: PromptSlot): string =>
+  slot === "base" ? DEFAULT_BASE_PROMPT : DEFAULT_MODE_ADDENDA[slot];
+
+export type PromptSlotState = { value: string; isCustom: boolean; default: string };
+
+export async function getPromptSlots(agentId: string): Promise<{
+  base: PromptSlotState;
+  addenda: Record<WriterMode, PromptSlotState>;
+}> {
+  const keys = PROMPT_SLOTS.map((s) => slotKey(agentId, s));
+  const rows = await db
     .select()
     .from(settingsTable)
-    .where(eq(settingsTable.key, promptKeyFor(agentId)))
-    .limit(1);
-  if (row?.value) return { prompt: row.value, isCustom: true };
-  return { prompt: DEFAULT_SYSTEM_PROMPT, isCustom: false };
+    .where(sql`${settingsTable.key} IN (${sql.join(keys.map((k) => sql`${k}`), sql`, `)})`);
+  const byKey = new Map(rows.map((r) => [r.key, r.value]));
+  const stateFor = (slot: PromptSlot): PromptSlotState => {
+    const v = byKey.get(slotKey(agentId, slot));
+    return {
+      value: typeof v === "string" && v.length > 0 ? v : slotDefault(slot),
+      isCustom: typeof v === "string" && v.length > 0,
+      default: slotDefault(slot),
+    };
+  };
+  return {
+    base: stateFor("base"),
+    addenda: {
+      free_pick: stateFor("free_pick"),
+      deep_dive: stateFor("deep_dive"),
+      weekly_recap: stateFor("weekly_recap"),
+    },
+  };
 }
 
-export async function setSystemPrompt(agentId: string, value: string): Promise<void> {
-  const key = promptKeyFor(agentId);
+export async function setPromptSlot(agentId: string, slot: PromptSlot, value: string): Promise<void> {
+  const key = slotKey(agentId, slot);
   await db
     .insert(settingsTable)
     .values({ key, value })
@@ -291,8 +327,26 @@ export async function setSystemPrompt(agentId: string, value: string): Promise<v
     });
 }
 
-export async function resetSystemPrompt(agentId: string): Promise<void> {
-  await db.delete(settingsTable).where(eq(settingsTable.key, promptKeyFor(agentId)));
+export async function resetPromptSlot(agentId: string, slot: PromptSlot): Promise<void> {
+  await db.delete(settingsTable).where(eq(settingsTable.key, slotKey(agentId, slot)));
+}
+
+export function isValidPromptSlot(s: string): s is PromptSlot {
+  return (PROMPT_SLOTS as string[]).includes(s);
+}
+
+// Assemble the runtime system prompt: base + the addendum(s) for the requested
+// mode. For "auto", concatenate every addendum so the model can pick.
+async function buildSystemPrompt(agentId: string, mode: WriterMode | "auto"): Promise<string> {
+  const slots = await getPromptSlots(agentId);
+  const base = slots.base.value;
+  const addenda =
+    mode === "auto"
+      ? (Object.keys(slots.addenda) as WriterMode[])
+          .map((m) => slots.addenda[m].value.trim())
+          .filter((v) => v.length > 0)
+      : [slots.addenda[mode].value.trim()].filter((v) => v.length > 0);
+  return addenda.length > 0 ? `${base}\n\n${addenda.join("\n\n")}` : base;
 }
 
 const formatCorpus = (corpus: CorpusItem[]): string => {
@@ -838,7 +892,7 @@ export async function generateAndSavePost(opts: {
   // gives ~30% headroom before forcing a clear error.
   const client = new OpenAI({ apiKey, baseURL, timeout: 8 * 60 * 1000 });
 
-  const { prompt: systemPrompt } = await getSystemPrompt(agentId);
+  const systemPrompt = await buildSystemPrompt(agentId, modeHint);
 
   // For weekly_recap we relax the "don't retread recent posts" guidance —
   // the user explicitly wants a weekly roundup, so overlap with the daily
