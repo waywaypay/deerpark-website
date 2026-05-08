@@ -1,10 +1,13 @@
 # SMS scorecard concierge
 
 Inbound-SMS lead-capture path. Visitor texts the DeerPark concierge number, an
-LLM-powered concierge runs a 2-3 turn discovery, and qualified conversations
-get pushed into the existing `leads` table. Every inbound and outbound
-message is stored with model + token + cost metadata so we can run evals
-offline.
+LLM-powered concierge runs a PM-style discovery interview — listening for the
+real pain underneath the stated problem, mirroring back, probing specifics —
+before sketching anything. Conversations qualify only when the user has
+described a specific recent painful event AND signaled readiness for a next
+step; on that turn the lead gets pushed into the existing `leads` table.
+Every inbound and outbound message is stored with model + token + cost
+metadata so we can run evals offline.
 
 ## Architecture
 
