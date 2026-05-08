@@ -167,7 +167,7 @@ export const Navbar = () => {
           <a href="/#faq" className="hover:text-foreground transition-colors">
             FAQ
           </a>
-          <a href="/#assessment">
+          <a href="/?ref=nav#assessment">
             <Button className="font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
               Free Assessment
             </Button>
@@ -196,7 +196,7 @@ export const Navbar = () => {
             <a href="/#faq" onClick={() => setOpen(false)} className="hover:text-foreground transition-colors">
               FAQ
             </a>
-            <a href="/#assessment" onClick={() => setOpen(false)}>
+            <a href="/?ref=nav_mobile#assessment" onClick={() => setOpen(false)}>
               <Button className="w-full font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
                 Free Assessment
               </Button>
@@ -253,7 +253,7 @@ export const Footer = () => (
               </li>
             ))}
             <li><a href="/#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
-            <li><a href="/#assessment" className="hover:text-foreground transition-colors">Free Assessment</a></li>
+            <li><a href="/?ref=footer#assessment" className="hover:text-foreground transition-colors">Free Assessment</a></li>
             <li><a href="mailto:contact@deerpark.io" className="hover:text-foreground transition-colors">Contact</a></li>
           </ul>
         </div>
@@ -289,7 +289,7 @@ export const AssessmentFAB = () => {
   }
   return (
     <a
-      href="/#assessment"
+      href="/?ref=fab#assessment"
       className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
     >
       Get Free Assessment

@@ -35,6 +35,7 @@ function renderHtml(lead: Lead): string {
     ["Name", escapeHtml(lead.name)],
     ["Company", escapeHtml(lead.company)],
     [lead.contactType === "sms" ? "Mobile" : "Email", contactLink(lead)],
+    ["Source", escapeHtml(lead.source ?? "unknown")],
     ["Submitted", escapeHtml(lead.createdAt.toISOString())],
   ];
   const table = rows
@@ -58,6 +59,7 @@ function renderText(lead: Lead): string {
     `Name: ${lead.name}`,
     `Company: ${lead.company}`,
     `${contactLabel}: ${lead.contact}`,
+    `Source: ${lead.source ?? "unknown"}`,
     `Submitted: ${lead.createdAt.toISOString()}`,
     "",
     "Challenge:",

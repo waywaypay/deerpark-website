@@ -53,6 +53,7 @@ type Lead = {
   contactType: "email" | "sms";
   company: string;
   challenge: string;
+  source: string | null;
   createdAt: string;
 };
 
@@ -438,16 +439,16 @@ const LeadsTab = ({ token }: { token: string }) => {
     const q = filter.trim().toLowerCase();
     if (!q) return leads;
     return leads.filter((l) =>
-      [l.name, l.contact, l.company, l.challenge].some((v) => v.toLowerCase().includes(q)),
+      [l.name, l.contact, l.company, l.challenge, l.source ?? ""].some((v) => v.toLowerCase().includes(q)),
     );
   }, [leads, filter]);
 
   const exportCsv = () => {
     if (!leads || leads.length === 0) return;
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const header = ["id", "createdAt", "name", "contactType", "contact", "company", "challenge"];
+    const header = ["id", "createdAt", "name", "contactType", "contact", "company", "source", "challenge"];
     const rows = leads.map((l) =>
-      [l.id, l.createdAt, l.name, l.contactType, l.contact, l.company, l.challenge].map((v) => escape(String(v))).join(","),
+      [l.id, l.createdAt, l.name, l.contactType, l.contact, l.company, l.source ?? "", l.challenge].map((v) => escape(String(v))).join(","),
     );
     const csv = [header.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -522,6 +523,7 @@ const LeadsTab = ({ token }: { token: string }) => {
               <th className="px-4 py-3 section-label">Name</th>
               <th className="px-4 py-3 section-label">Contact</th>
               <th className="px-4 py-3 section-label">Company</th>
+              <th className="px-4 py-3 section-label">Source</th>
               <th className="px-4 py-3 section-label">Challenge</th>
             </tr>
           </thead>
@@ -549,6 +551,11 @@ const LeadsTab = ({ token }: { token: string }) => {
                   </span>
                 </td>
                 <td className="px-4 py-3 text-muted-foreground">{l.company}</td>
+                <td className="px-4 py-3">
+                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                    {l.source ?? "—"}
+                  </span>
+                </td>
                 <td className="px-4 py-3 text-muted-foreground max-w-md">
                   <div className={expanded === l.id ? "whitespace-pre-wrap" : "truncate"}>
                     {l.challenge}
@@ -558,7 +565,7 @@ const LeadsTab = ({ token }: { token: string }) => {
             ))}
             {leads && filtered.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground text-sm">
+                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
                   {leads.length === 0 ? "No leads yet." : "No leads match that filter."}
                 </td>
               </tr>
