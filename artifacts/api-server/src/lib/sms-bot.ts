@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { logger } from "./logger";
+import { logUsage } from "./llm-usage";
 
 /**
  * SMS assessment concierge for DeerPark. Voice and scope are deliberately
@@ -187,6 +188,15 @@ export async function generateSmsReply(
   const promptTokens = completion.usage?.prompt_tokens ?? 0;
   const completionTokens = completion.usage?.completion_tokens ?? 0;
   const costUsd = computeCost(model, promptTokens, completionTokens);
+
+  await logUsage({
+    caller: "sms_bot",
+    callKind: "chat",
+    model,
+    promptTokens,
+    completionTokens,
+    costUsd: costUsd.toFixed(8),
+  });
 
   let parsed: Partial<SmsBotOutput> = {};
   try {

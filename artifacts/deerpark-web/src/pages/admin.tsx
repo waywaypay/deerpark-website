@@ -2491,9 +2491,31 @@ type VeniceUsageBucket = {
 
 type VeniceUsage = {
   total: VeniceUsageBucket;
-  breakdown: { writer: VeniceUsageBucket; sms: VeniceUsageBucket };
+  breakdown: Record<string, VeniceUsageBucket>;
   note?: string;
 };
+
+// Friendly label + per-call unit name for each known caller. Unknown callers
+// fall through to a humanized version of the raw key — keeps the card from
+// breaking when a new Venice caller starts logging before this UI is updated.
+const VENICE_CALLER_META: Record<
+  string,
+  { label: string; unit: string }
+> = {
+  writer: { label: "Writer agent", unit: "posts" },
+  judge: { label: "Headline judge", unit: "batches" },
+  commentator: { label: "Commentator", unit: "batches" },
+  email_polish: { label: "Email polish", unit: "sends" },
+  email_fallback: { label: "Email fallback", unit: "calls" },
+  image_gen: { label: "Banner image gen", unit: "images" },
+  sms_bot: { label: "SMS bot", unit: "replies" },
+};
+
+const humanizeCaller = (key: string): string =>
+  key
+    .split("_")
+    .map((s) => (s.length ? s[0]!.toUpperCase() + s.slice(1) : s))
+    .join(" ");
 
 const VeniceUsageCard = ({ token }: { token: string }) => {
   const [usage, setUsage] = useState<VeniceUsage | null>(null);
@@ -2517,8 +2539,11 @@ const VeniceUsageCard = ({ token }: { token: string }) => {
   useEffect(() => { void load(); }, [load]);
 
   const total = usage?.total;
-  const writer = usage?.breakdown.writer;
-  const sms = usage?.breakdown.sms;
+  const breakdownEntries = usage
+    ? Object.entries(usage.breakdown).sort(
+        (a, b) => b[1].costUsd - a[1].costUsd,
+      )
+    : [];
 
   return (
     <div className="border border-foreground/15 bg-card">
@@ -2526,7 +2551,7 @@ const VeniceUsageCard = ({ token }: { token: string }) => {
         <div>
           <div className="section-label">Venice API spend</div>
           <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-            Cumulative tokens and estimated USD across writer + SMS bot.
+            Cumulative tokens and estimated USD across every Venice caller.
           </div>
         </div>
         <Button
@@ -2540,7 +2565,7 @@ const VeniceUsageCard = ({ token }: { token: string }) => {
         </Button>
       </div>
       {error && <div className="px-4 py-3 text-xs text-red-400">{error}</div>}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-foreground/10">
+      <div className="grid grid-cols-2 gap-px bg-foreground/10">
         <div className="bg-card px-4 py-3">
           <div className="section-label text-[10px]">Total tokens</div>
           <div className="text-2xl font-serif mt-1">
@@ -2561,25 +2586,29 @@ const VeniceUsageCard = ({ token }: { token: string }) => {
             {total ? `${total.callCount.toLocaleString()} calls` : ""}
           </div>
         </div>
-        <div className="bg-card px-4 py-3">
-          <div className="section-label text-[10px]">Writer agent</div>
-          <div className="text-xl font-serif mt-1">
-            {writer ? formatUsd(writer.costUsd) : "—"}
-          </div>
-          <div className="text-[10px] text-muted-foreground mt-1">
-            {writer ? `${formatTokens(writer.totalTokens)} tok · ${writer.callCount.toLocaleString()} posts` : ""}
-          </div>
-        </div>
-        <div className="bg-card px-4 py-3">
-          <div className="section-label text-[10px]">SMS bot</div>
-          <div className="text-xl font-serif mt-1">
-            {sms ? formatUsd(sms.costUsd) : "—"}
-          </div>
-          <div className="text-[10px] text-muted-foreground mt-1">
-            {sms ? `${formatTokens(sms.totalTokens)} tok · ${sms.callCount.toLocaleString()} replies` : ""}
-          </div>
-        </div>
       </div>
+      {breakdownEntries.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-px bg-foreground/10 border-t border-foreground/10">
+          {breakdownEntries.map(([key, bucket]) => {
+            const meta = VENICE_CALLER_META[key];
+            const label = meta?.label ?? humanizeCaller(key);
+            const unit = meta?.unit ?? "calls";
+            return (
+              <div key={key} className="bg-card px-4 py-3">
+                <div className="section-label text-[10px]">{label}</div>
+                <div className="text-xl font-serif mt-1">
+                  {formatUsd(bucket.costUsd)}
+                </div>
+                <div className="text-[10px] text-muted-foreground mt-1">
+                  {bucket.totalTokens > 0
+                    ? `${formatTokens(bucket.totalTokens)} tok · ${bucket.callCount.toLocaleString()} ${unit}`
+                    : `${bucket.callCount.toLocaleString()} ${unit}`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
       {usage?.note && (
         <div className="px-4 py-2 text-[10px] text-muted-foreground font-light border-t border-foreground/10">
           {usage.note}

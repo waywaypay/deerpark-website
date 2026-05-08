@@ -21,6 +21,7 @@ import {
   type GeneratedImage,
 } from "./image-gen";
 import { logger } from "./logger";
+import { logUsage } from "./llm-usage";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 // See headline-commentator.ts for the rationale — Venice no longer carries
@@ -390,6 +391,13 @@ async function polishWithLlm(
       ],
       response_format: { type: "json_object" },
     });
+    await logUsage({
+      caller: "email_polish",
+      callKind: "chat",
+      model: setup.model,
+      promptTokens: response.usage?.prompt_tokens ?? 0,
+      completionTokens: response.usage?.completion_tokens ?? 0,
+    });
     text = response.choices[0]?.message?.content ?? "";
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -480,6 +488,13 @@ async function backfillCommentaryViaLlm(
         },
       ],
       response_format: { type: "json_object" },
+    });
+    await logUsage({
+      caller: "email_fallback",
+      callKind: "chat",
+      model: setup.model,
+      promptTokens: response.usage?.prompt_tokens ?? 0,
+      completionTokens: response.usage?.completion_tokens ?? 0,
     });
     const text = response.choices[0]?.message?.content ?? "";
     const parsed = parsePolishJson(text);

@@ -10,6 +10,7 @@ import { ensureLeadsSchema } from "./routes/leads";
 import { runDataMigrations } from "./lib/migrate";
 import { ensureJudgeSchema } from "./lib/headline-judge";
 import { ensureCommentatorSchema } from "./lib/headline-commentator";
+import { ensureLlmUsageSchema } from "./lib/llm-usage";
 
 const rawPort = process.env["PORT"];
 
@@ -52,6 +53,9 @@ app.listen(port, (err) => {
     }),
     ensureCommentatorSchema().catch((err) => {
       logger.error({ err }, "Headline commentator: ensureSchema failed");
+    }),
+    ensureLlmUsageSchema().catch((err) => {
+      logger.error({ err }, "LLM usage: ensureSchema failed");
     }),
   ]).finally(() => {
     if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
