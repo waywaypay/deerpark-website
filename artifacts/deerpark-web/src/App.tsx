@@ -8,6 +8,8 @@ import Dispatch from "@/pages/dispatch";
 import DispatchArchive from "@/pages/dispatch-archive";
 import DispatchPost from "@/pages/dispatch-post";
 import Admin from "@/pages/admin";
+import Privacy from "@/pages/privacy";
+import Terms from "@/pages/terms";
 
 const queryClient = new QueryClient();
 
@@ -20,6 +22,8 @@ function Router() {
       <Route path="/dispatch/archive" component={DispatchArchive} />
       <Route path="/dispatch/:id" component={DispatchPost} />
       <Route path="/admin" component={Admin} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/terms" component={Terms} />
       <Route component={NotFound} />
     </Switch>
   );

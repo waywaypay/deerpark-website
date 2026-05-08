@@ -1223,6 +1223,7 @@ const LeadCapture = () => {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<FormStatus>({ state: "idle" });
+  const [smsConsent, setSmsConsent] = useState(false);
   const isMobile = useIsMobile();
   const contactType: "sms" | "email" = isMobile ? "sms" : "email";
   // Capture once at mount so a hash navigation later doesn't overwrite the
@@ -1291,6 +1292,15 @@ const LeadCapture = () => {
       return;
     }
 
+    if (contactType === "sms" && !smsConsent) {
+      setStatus({
+        state: "error",
+        message:
+          "Please check the SMS consent box to confirm you agree to receive text messages.",
+      });
+      return;
+    }
+
     const payload = {
       name: String(formData.get("name") || "").trim(),
       contact: contact ?? "",
@@ -1319,6 +1329,7 @@ const LeadCapture = () => {
       }
 
       form.reset();
+      setSmsConsent(false);
       setStatus({ state: "success" });
     } catch {
       setStatus({
@@ -1541,7 +1552,46 @@ const LeadCapture = () => {
                     <label htmlFor="company" className="section-label block mb-2">Company</label>
                     <input id="company" name="company" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
                   </div>
-                  <Button type="submit" size="lg" disabled={submitting} className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
+                  {contactType === "sms" && (
+                    <div className="flex items-start gap-3 pt-1">
+                      <input
+                        id="sms-consent"
+                        name="sms-consent"
+                        type="checkbox"
+                        checked={smsConsent}
+                        onChange={(e) => setSmsConsent(e.target.checked)}
+                        disabled={submitting}
+                        required
+                        className="mt-1 h-4 w-4 shrink-0 accent-primary border border-foreground/30 disabled:opacity-50"
+                      />
+                      <label htmlFor="sms-consent" className="text-xs text-muted-foreground font-light leading-relaxed">
+                        I agree to receive SMS messages from DeerPark at the number provided,
+                        including a confirmation and short follow-ups about my assessment.
+                        Message frequency varies. Message and data rates may apply. Reply{" "}
+                        <span className="text-foreground">STOP</span> to opt out,{" "}
+                        <span className="text-foreground">HELP</span> for help. See our{" "}
+                        <a
+                          href="/privacy"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2 hover:text-foreground"
+                        >
+                          Privacy Policy
+                        </a>{" "}
+                        and{" "}
+                        <a
+                          href="/terms"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2 hover:text-foreground"
+                        >
+                          Terms
+                        </a>
+                        .
+                      </label>
+                    </div>
+                  )}
+                  <Button type="submit" size="lg" disabled={submitting || (contactType === "sms" && !smsConsent)} className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
                     {submitting ? "Submitting…" : (
                       <>
                         Send My Deployment Plan <ArrowRight className="ml-2 w-4 h-4" />

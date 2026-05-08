@@ -261,8 +261,8 @@ export const Footer = () => (
       <div className="flex flex-col md:flex-row justify-between items-center pt-8 border-t border-foreground/10 text-xs text-muted-foreground font-light">
         <div>&copy; {new Date().getFullYear()} DeerPark.io. All rights reserved.</div>
         <div className="flex gap-6 mt-4 md:mt-0">
-          <a href="mailto:contact@deerpark.io?subject=Privacy+Inquiry" className="hover:text-foreground transition-colors">Privacy Policy</a>
-          <a href="mailto:contact@deerpark.io?subject=Terms+Inquiry" className="hover:text-foreground transition-colors">Terms of Service</a>
+          <Link href="/privacy" className="hover:text-foreground transition-colors">Privacy Policy</Link>
+          <Link href="/terms" className="hover:text-foreground transition-colors">Terms of Service</Link>
         </div>
       </div>
     </div>
