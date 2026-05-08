@@ -1576,6 +1576,379 @@ const JudgeTab = ({ token }: { token: string }) => {
   );
 };
 
+type SubscriberRow = {
+  email: string;
+  source: string | null;
+  createdAt: string;
+  unsubscribedAt: string | null;
+  sends: number;
+  delivered: number;
+  opens: number;
+  uniqueOpens: number;
+  clicks: number;
+  uniqueClicks: number;
+  bounces: number;
+  complaints: number;
+  lastOpenAt: string | null;
+  lastClickAt: string | null;
+  avgSecondsToFirstClick: number | null;
+};
+
+type EmailAnalyticsResponse = {
+  totals: {
+    activeSubscribers: number;
+    unsubscribed: number;
+    sends: number;
+    delivered: number;
+    opens: number;
+    clicks: number;
+    bounces: number;
+    complaints: number;
+    uniqueOpenEmails: number;
+    uniqueClickEmails: number;
+    openRate: number;
+    clickRate: number;
+    avgSecondsOpenToClick: number | null;
+  };
+  topLinks: Array<{ link: string; clicks: number; uniqueClickers: number }>;
+  recentEvents: Array<{
+    id: number;
+    email: string;
+    eventType: string;
+    link: string | null;
+    occurredAt: string;
+  }>;
+};
+
+const formatPct = (n: number) => `${(n * 100).toFixed(1)}%`;
+
+const formatDuration = (sec: number | null | undefined) => {
+  if (sec == null || !Number.isFinite(sec)) return "—";
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  if (sec < 86400) return `${(sec / 3600).toFixed(1)}h`;
+  return `${(sec / 86400).toFixed(1)}d`;
+};
+
+const truncateUrl = (url: string, max = 60) =>
+  url.length <= max ? url : `${url.slice(0, max - 1)}…`;
+
+type EngagementSort = "recent" | "opens" | "clicks" | "subscribed";
+
+const SubscribersAndAnalytics = ({ token }: { token: string }) => {
+  const [subscribers, setSubscribers] = useState<SubscriberRow[] | null>(null);
+  const [analytics, setAnalytics] = useState<EmailAnalyticsResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [sort, setSort] = useState<EngagementSort>("recent");
+  const [showUnsubscribed, setShowUnsubscribed] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [subRes, anaRes] = await Promise.all([
+        apiFetch(token, "/admin/subscribers"),
+        apiFetch(token, "/admin/email/analytics"),
+      ]);
+      if (!subRes.ok) throw new Error(`Subscribers: HTTP ${subRes.status}`);
+      if (!anaRes.ok) throw new Error(`Analytics: HTTP ${anaRes.status}`);
+      const subJson = (await subRes.json()) as { items: SubscriberRow[] };
+      const anaJson = (await anaRes.json()) as EmailAnalyticsResponse;
+      setSubscribers(subJson.items);
+      setAnalytics(anaJson);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const visibleSubscribers = useMemo(() => {
+    if (!subscribers) return [];
+    let rows = showUnsubscribed
+      ? subscribers
+      : subscribers.filter((s) => !s.unsubscribedAt);
+    if (filter.trim()) {
+      const q = filter.trim().toLowerCase();
+      rows = rows.filter(
+        (s) => s.email.toLowerCase().includes(q) || (s.source ?? "").toLowerCase().includes(q),
+      );
+    }
+    const cmp = (a: SubscriberRow, b: SubscriberRow) => {
+      switch (sort) {
+        case "opens":
+          return b.uniqueOpens - a.uniqueOpens || b.opens - a.opens;
+        case "clicks":
+          return b.uniqueClicks - a.uniqueClicks || b.clicks - a.clicks;
+        case "subscribed":
+          return b.createdAt.localeCompare(a.createdAt);
+        case "recent":
+        default: {
+          const aRecent = a.lastClickAt ?? a.lastOpenAt ?? a.createdAt;
+          const bRecent = b.lastClickAt ?? b.lastOpenAt ?? b.createdAt;
+          return bRecent.localeCompare(aRecent);
+        }
+      }
+    };
+    return [...rows].sort(cmp);
+  }, [subscribers, sort, showUnsubscribed, filter]);
+
+  const t = analytics?.totals;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div>
+          <h3 className="text-xl font-serif">Subscribers & analytics</h3>
+          <p className="text-xs text-muted-foreground font-light mt-1 max-w-xl">
+            Engagement is sourced from the Resend webhook
+            (<code className="font-mono">/api/webhooks/resend</code>). Standard email
+            doesn't expose dwell time — "time to first click" is the closest
+            proxy for read time, alongside open count.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded-none text-xs uppercase tracking-widest"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </Button>
+      </div>
+
+      {error && <p className="text-xs text-red-400">{error}</p>}
+
+      {t && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2">
+          <div className="border border-foreground/15 bg-card px-3 py-2.5">
+            <div className="section-label text-[10px]">Subscribers</div>
+            <div className="text-lg font-serif mt-0.5">{t.activeSubscribers.toLocaleString()}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              {t.unsubscribed} unsubscribed
+            </div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-3 py-2.5">
+            <div className="section-label text-[10px]">Sends</div>
+            <div className="text-lg font-serif mt-0.5">{t.sends.toLocaleString()}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              {t.delivered.toLocaleString()} delivered
+            </div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-3 py-2.5">
+            <div className="section-label text-[10px]">Open rate</div>
+            <div className="text-lg font-serif mt-0.5">{formatPct(t.openRate)}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              {t.uniqueOpenEmails.toLocaleString()} unique
+            </div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-3 py-2.5">
+            <div className="section-label text-[10px]">Click rate</div>
+            <div className="text-lg font-serif mt-0.5">{formatPct(t.clickRate)}</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              {t.uniqueClickEmails.toLocaleString()} unique
+            </div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-3 py-2.5">
+            <div className="section-label text-[10px]">Avg send→click</div>
+            <div className="text-lg font-serif mt-0.5">
+              {formatDuration(t.avgSecondsOpenToClick)}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">read-time proxy</div>
+          </div>
+          <div className="border border-foreground/15 bg-card px-3 py-2.5">
+            <div className="section-label text-[10px]">Issues</div>
+            <div className="text-lg font-serif mt-0.5">
+              {(t.bounces + t.complaints).toLocaleString()}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">
+              {t.bounces} bounces · {t.complaints} complaints
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="border border-foreground/15 bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-foreground/10 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className="section-label">Subscriber list</div>
+            <span className="text-[11px] text-muted-foreground">
+              {visibleSubscribers.length} of {subscribers?.length ?? 0}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <input
+              type="search"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="Filter email…"
+              className="h-7 px-2 bg-background border border-foreground/20 text-[11px] font-mono outline-none focus:border-foreground/50 w-44"
+            />
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as EngagementSort)}
+              className="h-7 px-2 bg-background border border-foreground/20 text-[10px] uppercase tracking-widest outline-none focus:border-foreground/50"
+            >
+              <option value="recent">Most recent activity</option>
+              <option value="opens">Most opens</option>
+              <option value="clicks">Most clicks</option>
+              <option value="subscribed">Newest subscriber</option>
+            </select>
+            <label className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={showUnsubscribed}
+                onChange={(e) => setShowUnsubscribed(e.target.checked)}
+              />
+              Include unsubscribed
+            </label>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-left bg-background/40">
+              <tr className="border-b border-foreground/10">
+                <th className="px-4 py-2 section-label">Email</th>
+                <th className="px-3 py-2 section-label text-right">Sends</th>
+                <th className="px-3 py-2 section-label text-right">Opens</th>
+                <th className="px-3 py-2 section-label text-right">Clicks</th>
+                <th className="px-3 py-2 section-label">Last open</th>
+                <th className="px-3 py-2 section-label">Last click</th>
+                <th className="px-3 py-2 section-label">Avg→click</th>
+                <th className="px-3 py-2 section-label">Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visibleSubscribers.map((s) => (
+                <tr key={s.email} className="border-b border-foreground/10 hover:bg-background/40">
+                  <td className="px-4 py-2 font-mono">
+                    <span className={s.unsubscribedAt ? "text-muted-foreground line-through" : ""}>
+                      {s.email}
+                    </span>
+                    {s.unsubscribedAt && (
+                      <span className="ml-2 text-[10px] uppercase tracking-widest text-amber-400">
+                        unsubscribed
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">{s.sends}</td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {s.uniqueOpens}
+                    {s.opens > s.uniqueOpens && (
+                      <span className="text-muted-foreground ml-1">({s.opens})</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">
+                    {s.uniqueClicks}
+                    {s.clicks > s.uniqueClicks && (
+                      <span className="text-muted-foreground ml-1">({s.clicks})</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {s.lastOpenAt ? formatDate(s.lastOpenAt) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {s.lastClickAt ? formatDate(s.lastClickAt) : "—"}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">
+                    {formatDuration(s.avgSecondsToFirstClick)}
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground">{s.source ?? "—"}</td>
+                </tr>
+              ))}
+              {!loading && visibleSubscribers.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
+                    {subscribers && subscribers.length > 0
+                      ? "No subscribers match your filter."
+                      : "No subscribers yet."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {analytics && analytics.topLinks.length > 0 && (
+        <div className="border border-foreground/15 bg-card">
+          <div className="px-4 py-3 border-b border-foreground/10 section-label">
+            Top clicked links
+          </div>
+          <table className="w-full text-xs">
+            <thead className="text-left bg-background/40">
+              <tr className="border-b border-foreground/10">
+                <th className="px-4 py-2 section-label">URL</th>
+                <th className="px-3 py-2 section-label text-right">Clicks</th>
+                <th className="px-3 py-2 section-label text-right">Unique</th>
+              </tr>
+            </thead>
+            <tbody>
+              {analytics.topLinks.map((row) => (
+                <tr key={row.link} className="border-b border-foreground/10 hover:bg-background/40">
+                  <td className="px-4 py-2 font-mono">
+                    <a
+                      href={row.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="hover:text-primary inline-flex items-center gap-1.5"
+                      title={row.link}
+                    >
+                      {truncateUrl(row.link)}
+                      <ExternalLink className="w-3 h-3 opacity-60" />
+                    </a>
+                  </td>
+                  <td className="px-3 py-2 text-right font-mono">{row.clicks}</td>
+                  <td className="px-3 py-2 text-right font-mono">{row.uniqueClickers}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {analytics && analytics.recentEvents.length > 0 && (
+        <details className="border border-foreground/15 bg-card">
+          <summary className="px-4 py-3 cursor-pointer section-label inline-flex items-center gap-2">
+            <ChevronRight className="w-3 h-3" />
+            Recent events ({analytics.recentEvents.length})
+          </summary>
+          <div className="max-h-80 overflow-y-auto text-[11px] font-mono divide-y divide-foreground/5 border-t border-foreground/10">
+            {analytics.recentEvents.map((e) => (
+              <div key={e.id} className="px-4 py-1.5 flex items-start gap-3">
+                <span className="text-muted-foreground shrink-0 w-32">
+                  {formatDate(e.occurredAt)}
+                </span>
+                <span
+                  className={`shrink-0 w-28 ${
+                    e.eventType === "email.bounced" || e.eventType === "email.complained"
+                      ? "text-red-400"
+                      : e.eventType === "email.clicked"
+                        ? "text-primary"
+                        : "text-foreground/80"
+                  }`}
+                >
+                  {e.eventType.replace("email.", "")}
+                </span>
+                <span className="flex-1 break-all text-foreground/80">{e.email}</span>
+                {e.link && (
+                  <span className="text-muted-foreground truncate max-w-[40%]" title={e.link}>
+                    {truncateUrl(e.link, 50)}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
+  );
+};
+
 const EmailAgentsTab = ({ token }: { token: string }) => {
   const [state, setState] = useState<DigestState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -2070,6 +2443,10 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
           )}
         </div>
       )}
+
+      <div className="pt-4 border-t border-foreground/10">
+        <SubscribersAndAnalytics token={token} />
+      </div>
     </div>
   );
 };

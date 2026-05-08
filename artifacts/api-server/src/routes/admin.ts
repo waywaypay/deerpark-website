@@ -43,6 +43,10 @@ import {
   resetBannerPrompt,
   DEFAULT_BANNER_PROMPT_TEMPLATE,
 } from "../lib/image-gen";
+import {
+  listSubscribersWithEngagement,
+  getEmailAnalytics,
+} from "../lib/email-events";
 
 const router: IRouter = Router();
 
@@ -603,6 +607,30 @@ router.delete("/admin/email/banner-prompt", async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     req.log.error({ err }, "Failed to reset banner prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Subscriber list with per-subscriber engagement (sends/opens/clicks/etc).
+// Single endpoint — the UI does its own client-side sort/filter.
+router.get("/admin/subscribers", async (req, res) => {
+  try {
+    const items = await listSubscribersWithEngagement();
+    return res.json({ items });
+  } catch (err) {
+    req.log.error({ err }, "Subscribers list failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Aggregated email analytics: KPI totals (open rate, click rate, etc),
+// top-clicked links, and a recent-events feed for ops debugging.
+router.get("/admin/email/analytics", async (req, res) => {
+  try {
+    const analytics = await getEmailAnalytics();
+    return res.json(analytics);
+  } catch (err) {
+    req.log.error({ err }, "Email analytics failed");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

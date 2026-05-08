@@ -10,6 +10,7 @@ import { ensureLeadsSchema } from "./routes/leads";
 import { runDataMigrations } from "./lib/migrate";
 import { ensureJudgeSchema } from "./lib/headline-judge";
 import { ensureCommentatorSchema } from "./lib/headline-commentator";
+import { ensureEmailEventsSchema } from "./lib/email-events";
 
 const rawPort = process.env["PORT"];
 
@@ -35,6 +36,10 @@ app.listen(port, (err) => {
 
   ensureLeadsSchema().catch((schemaErr) => {
     logger.error({ err: schemaErr }, "Leads: ensureSchema failed");
+  });
+
+  ensureEmailEventsSchema().catch((err) => {
+    logger.error({ err }, "Email events: ensureSchema failed");
   });
 
   runDataMigrations().catch((err) => {

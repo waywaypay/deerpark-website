@@ -56,8 +56,19 @@ app.use(
   }),
 );
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// JSON / urlencoded parsers run for everything EXCEPT the Resend webhook —
+// that path needs the raw request body to verify the Svix HMAC signature,
+// and a JSON-parsed-then-re-serialized body wouldn't match. The webhook
+// router installs its own express.raw() inside the route definition.
+const SKIP_BODY_PARSE = /^\/api\/webhooks\/resend(\/|$)/;
+app.use((req, res, next) => {
+  if (SKIP_BODY_PARSE.test(req.path)) return next();
+  return express.json()(req, res, next);
+});
+app.use((req, res, next) => {
+  if (SKIP_BODY_PARSE.test(req.path)) return next();
+  return express.urlencoded({ extended: true })(req, res, next);
+});
 
 app.use("/api", router);
 
