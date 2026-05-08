@@ -1,5 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, leadsTable, headlinesTable, postsTable } from "@workspace/db";
+import {
+  db,
+  leadsTable,
+  headlinesTable,
+  postsTable,
+  smsMessagesTable,
+} from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { adminAuth } from "../middlewares/admin-auth";
 import { SOURCES } from "../lib/headline-sources";
@@ -37,6 +43,12 @@ import {
   getDailyDigestState,
   sendTestDigest,
 } from "../lib/daily-digest";
+import {
+  DEFAULT_BANNER_PROMPT_TEMPLATE,
+  getBannerPromptTemplate,
+  setBannerPromptTemplate,
+  resetBannerPromptTemplate,
+} from "../lib/image-gen";
 
 const router: IRouter = Router();
 
@@ -44,6 +56,86 @@ router.use("/admin", adminAuth);
 
 router.get("/admin/whoami", (_req, res) => {
   return res.json({ ok: true });
+});
+
+// Aggregate Venice (LLM) spend across every place we log token usage.
+// Two sources today:
+//   - posts.{prompt,completion,total}_tokens / cost_usd  (writer agent)
+//   - sms_messages.{prompt,completion}_tokens / cost_usd (SMS bot)
+// Other Venice callers (judge, commentator, image-gen, top-10 polish) don't
+// persist usage yet — the totals here are an under-count, not a full bill.
+router.get("/admin/usage/venice", async (req, res) => {
+  try {
+    const [postUsage] = await db
+      .select({
+        promptTokens: sql<number>`coalesce(sum(${postsTable.promptTokens}), 0)::bigint`,
+        completionTokens: sql<number>`coalesce(sum(${postsTable.completionTokens}), 0)::bigint`,
+        totalTokens: sql<number>`coalesce(sum(${postsTable.totalTokens}), 0)::bigint`,
+        costUsd: sql<string>`coalesce(sum(${postsTable.costUsd}::numeric), 0)::text`,
+        callCount: sql<number>`count(*)::int`,
+      })
+      .from(postsTable);
+
+    const [smsUsage] = await db
+      .select({
+        promptTokens: sql<number>`coalesce(sum(${smsMessagesTable.promptTokens}), 0)::bigint`,
+        completionTokens: sql<number>`coalesce(sum(${smsMessagesTable.completionTokens}), 0)::bigint`,
+        costUsd: sql<string>`coalesce(sum(${smsMessagesTable.costUsd}), 0)::text`,
+        callCount: sql<number>`count(*) filter (where ${smsMessagesTable.direction} = 'outbound' and ${smsMessagesTable.model} is not null)::int`,
+      })
+      .from(smsMessagesTable);
+
+    const writerPromptTokens = Number(postUsage?.promptTokens ?? 0);
+    const writerCompletionTokens = Number(postUsage?.completionTokens ?? 0);
+    const writerTotalTokens =
+      Number(postUsage?.totalTokens ?? 0) ||
+      writerPromptTokens + writerCompletionTokens;
+    const writerCostUsd = Number(postUsage?.costUsd ?? "0");
+    const writerCallCount = Number(postUsage?.callCount ?? 0);
+
+    const smsPromptTokens = Number(smsUsage?.promptTokens ?? 0);
+    const smsCompletionTokens = Number(smsUsage?.completionTokens ?? 0);
+    const smsTotalTokens = smsPromptTokens + smsCompletionTokens;
+    const smsCostUsd = Number(smsUsage?.costUsd ?? "0");
+    const smsCallCount = Number(smsUsage?.callCount ?? 0);
+
+    const totalPromptTokens = writerPromptTokens + smsPromptTokens;
+    const totalCompletionTokens = writerCompletionTokens + smsCompletionTokens;
+    const totalTokens = writerTotalTokens + smsTotalTokens;
+    const totalCostUsd = writerCostUsd + smsCostUsd;
+    const totalCallCount = writerCallCount + smsCallCount;
+
+    return res.json({
+      total: {
+        promptTokens: totalPromptTokens,
+        completionTokens: totalCompletionTokens,
+        totalTokens,
+        costUsd: totalCostUsd,
+        callCount: totalCallCount,
+      },
+      breakdown: {
+        writer: {
+          promptTokens: writerPromptTokens,
+          completionTokens: writerCompletionTokens,
+          totalTokens: writerTotalTokens,
+          costUsd: writerCostUsd,
+          callCount: writerCallCount,
+        },
+        sms: {
+          promptTokens: smsPromptTokens,
+          completionTokens: smsCompletionTokens,
+          totalTokens: smsTotalTokens,
+          costUsd: smsCostUsd,
+          callCount: smsCallCount,
+        },
+      },
+      note:
+        "Aggregated from posts + sms_messages. Judge, commentator, image-gen, and email-polish calls don't persist token usage yet — total is a lower bound.",
+    });
+  } catch (err) {
+    req.log.error({ err }, "Venice usage aggregation failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
 });
 
 router.get("/admin/leads", async (req, res) => {
@@ -545,6 +637,48 @@ router.post("/admin/digest/send-test", async (req, res) => {
       ok: false,
       error: err instanceof Error ? err.message : String(err),
     });
+  }
+});
+
+// Banner-image prompt template editor. Stored in `settings` under
+// `email.banner_prompt_template`. Substitutes `{{stories}}` with a
+// "/"-joined string of the day's top three headline titles at send time.
+router.get("/admin/email/banner-prompt", async (req, res) => {
+  try {
+    const { template, isCustom } = await getBannerPromptTemplate();
+    return res.json({
+      template,
+      isCustom,
+      defaultTemplate: DEFAULT_BANNER_PROMPT_TEMPLATE,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load banner prompt template");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/email/banner-prompt", async (req, res) => {
+  const body = req.body as { template?: unknown };
+  const value = typeof body?.template === "string" ? body.template.trim() : "";
+  if (!value) return res.status(400).json({ error: "Missing or empty template" });
+  if (value.length < 20) return res.status(400).json({ error: "Template too short (< 20 chars)" });
+  if (value.length > 4000) return res.status(400).json({ error: "Template too long (> 4000 chars)" });
+  try {
+    await setBannerPromptTemplate(value);
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to save banner prompt template");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/email/banner-prompt", async (req, res) => {
+  try {
+    await resetBannerPromptTemplate();
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to reset banner prompt template");
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 

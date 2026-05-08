@@ -1639,6 +1639,86 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<DigestTestSendResult | null>(null);
 
+  // Banner-image prompt editor state
+  const [bannerPromptOpen, setBannerPromptOpen] = useState(false);
+  const [bannerPromptDraft, setBannerPromptDraft] = useState<string>("");
+  const [bannerPromptIsCustom, setBannerPromptIsCustom] = useState(false);
+  const [bannerPromptDefault, setBannerPromptDefault] = useState<string>("");
+  const [bannerPromptLoading, setBannerPromptLoading] = useState(false);
+  const [bannerPromptSaving, setBannerPromptSaving] = useState(false);
+  const [bannerPromptStatus, setBannerPromptStatus] =
+    useState<{ ok: boolean; message: string } | null>(null);
+
+  const openBannerPromptEditor = async () => {
+    setBannerPromptOpen(true);
+    setBannerPromptStatus(null);
+    setBannerPromptLoading(true);
+    try {
+      const res = await apiFetch(token, "/admin/email/banner-prompt");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as {
+        template: string;
+        isCustom: boolean;
+        defaultTemplate: string;
+      };
+      setBannerPromptDraft(json.template);
+      setBannerPromptIsCustom(json.isCustom);
+      setBannerPromptDefault(json.defaultTemplate);
+    } catch (err) {
+      setBannerPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Failed to load template",
+      });
+    } finally {
+      setBannerPromptLoading(false);
+    }
+  };
+
+  const saveBannerPrompt = async () => {
+    setBannerPromptSaving(true);
+    setBannerPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/email/banner-prompt", {
+        method: "PUT",
+        body: JSON.stringify({ template: bannerPromptDraft }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (res.ok) {
+        setBannerPromptIsCustom(true);
+        setBannerPromptStatus({ ok: true, message: "Template saved. Next send will use it." });
+      } else {
+        setBannerPromptStatus({ ok: false, message: json.error ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      setBannerPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Save failed",
+      });
+    } finally {
+      setBannerPromptSaving(false);
+    }
+  };
+
+  const resetBannerPrompt = async () => {
+    if (!confirm("Reset banner prompt to the built-in default? Your custom edits will be deleted.")) return;
+    setBannerPromptSaving(true);
+    setBannerPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/email/banner-prompt", { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setBannerPromptDraft(bannerPromptDefault);
+      setBannerPromptIsCustom(false);
+      setBannerPromptStatus({ ok: true, message: "Reset to default." });
+    } catch (err) {
+      setBannerPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Reset failed",
+      });
+    } finally {
+      setBannerPromptSaving(false);
+    }
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -1742,6 +1822,13 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            onClick={() => void openBannerPromptEditor()}
+            className="rounded-none text-xs uppercase tracking-widest"
+          >
+            <PenLine className="w-3.5 h-3.5" /> Edit banner prompt
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => void load()}
             disabled={loading}
             className="rounded-none text-xs uppercase tracking-widest"
@@ -1750,6 +1837,104 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
           </Button>
         </div>
       </div>
+
+      {bannerPromptOpen && (
+        <div className="border border-foreground/30 bg-card">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
+            <div>
+              <div className="section-label">Banner image prompt</div>
+              <div className="text-xs text-muted-foreground font-light mt-1">
+                Sent to Venice's image endpoint to generate the email banner. Use{" "}
+                <code className="font-mono">{`{{stories}}`}</code> as a placeholder for the
+                day's top three headlines.{" "}
+                <span className={bannerPromptIsCustom ? "text-primary" : ""}>
+                  {bannerPromptIsCustom ? "Using custom template." : "Using built-in default."}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setBannerPromptOpen(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+          {bannerPromptLoading ? (
+            <div className="p-6 text-xs text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="p-4 space-y-3">
+              <textarea
+                value={bannerPromptDraft}
+                onChange={(e) => setBannerPromptDraft(e.target.value)}
+                spellCheck={false}
+                rows={8}
+                className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
+              />
+              <div className="flex items-center justify-between text-xs">
+                <div className="text-muted-foreground">
+                  {bannerPromptDraft.length.toLocaleString()} chars
+                  {bannerPromptDraft.length < 20 && (
+                    <span className="text-red-400 ml-2">— too short (min 20)</span>
+                  )}
+                  {bannerPromptDraft.length > 4000 && (
+                    <span className="text-red-400 ml-2">— too long (max 4,000)</span>
+                  )}
+                  {bannerPromptDraft.length >= 20 &&
+                    !bannerPromptDraft.includes("{{stories}}") && (
+                      <span className="text-amber-400 ml-2">
+                        — no <code className="font-mono">{`{{stories}}`}</code> placeholder; the
+                        prompt will be sent verbatim regardless of the day's headlines
+                      </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => void resetBannerPrompt()}
+                    disabled={bannerPromptSaving || !bannerPromptIsCustom}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Reset to default
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setBannerPromptDraft(bannerPromptDefault)}
+                    disabled={bannerPromptSaving}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Load default into editor
+                  </Button>
+                  <Button
+                    onClick={() => void saveBannerPrompt()}
+                    disabled={
+                      bannerPromptSaving ||
+                      bannerPromptDraft.length < 20 ||
+                      bannerPromptDraft.length > 4000
+                    }
+                    className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+                  >
+                    {bannerPromptSaving ? "Saving…" : "Save template"}
+                  </Button>
+                </div>
+              </div>
+              {bannerPromptStatus && (
+                <div
+                  className={`text-xs ${
+                    bannerPromptStatus.ok ? "text-primary" : "text-red-400"
+                  }`}
+                >
+                  {bannerPromptStatus.message}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
+                Saved templates take effect on the next email send (manual run or scheduled).
+                The Preview button re-runs image generation.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
@@ -2050,7 +2235,115 @@ const TileGrid = <T extends string>({
   </div>
 );
 
-const Home = ({ onSelect }: { onSelect: (view: "agents" | "leads") => void }) => (
+type VeniceUsageBucket = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  callCount: number;
+};
+
+type VeniceUsage = {
+  total: VeniceUsageBucket;
+  breakdown: { writer: VeniceUsageBucket; sms: VeniceUsageBucket };
+  note?: string;
+};
+
+const VeniceUsageCard = ({ token }: { token: string }) => {
+  const [usage, setUsage] = useState<VeniceUsage | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(token, "/admin/usage/venice");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setUsage((await res.json()) as VeniceUsage);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load Venice usage");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const total = usage?.total;
+  const writer = usage?.breakdown.writer;
+  const sms = usage?.breakdown.sms;
+
+  return (
+    <div className="border border-foreground/15 bg-card">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/10">
+        <div>
+          <div className="section-label">Venice API spend</div>
+          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+            Cumulative tokens and estimated USD across writer + SMS bot.
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded-none text-[10px] uppercase tracking-widest"
+        >
+          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </Button>
+      </div>
+      {error && <div className="px-4 py-3 text-xs text-red-400">{error}</div>}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-foreground/10">
+        <div className="bg-card px-4 py-3">
+          <div className="section-label text-[10px]">Total tokens</div>
+          <div className="text-2xl font-serif mt-1">
+            {total ? formatTokens(total.totalTokens) : "—"}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            {total
+              ? `${formatTokens(total.promptTokens)} in · ${formatTokens(total.completionTokens)} out`
+              : ""}
+          </div>
+        </div>
+        <div className="bg-card px-4 py-3">
+          <div className="section-label text-[10px]">Total cost</div>
+          <div className="text-2xl font-serif mt-1">
+            {total ? formatUsd(total.costUsd) : "—"}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            {total ? `${total.callCount.toLocaleString()} calls` : ""}
+          </div>
+        </div>
+        <div className="bg-card px-4 py-3">
+          <div className="section-label text-[10px]">Writer agent</div>
+          <div className="text-xl font-serif mt-1">
+            {writer ? formatUsd(writer.costUsd) : "—"}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            {writer ? `${formatTokens(writer.totalTokens)} tok · ${writer.callCount.toLocaleString()} posts` : ""}
+          </div>
+        </div>
+        <div className="bg-card px-4 py-3">
+          <div className="section-label text-[10px]">SMS bot</div>
+          <div className="text-xl font-serif mt-1">
+            {sms ? formatUsd(sms.costUsd) : "—"}
+          </div>
+          <div className="text-[10px] text-muted-foreground mt-1">
+            {sms ? `${formatTokens(sms.totalTokens)} tok · ${sms.callCount.toLocaleString()} replies` : ""}
+          </div>
+        </div>
+      </div>
+      {usage?.note && (
+        <div className="px-4 py-2 text-[10px] text-muted-foreground font-light border-t border-foreground/10">
+          {usage.note}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Home = ({ token, onSelect }: { token: string; onSelect: (view: "agents" | "leads") => void }) => (
   <div className="space-y-8">
     <div>
       <div className="section-label">Admin</div>
@@ -2059,6 +2352,7 @@ const Home = ({ onSelect }: { onSelect: (view: "agents" | "leads") => void }) =>
         Pick a surface to manage.
       </p>
     </div>
+    <VeniceUsageCard token={token} />
     <TileGrid tiles={HOME_TILES} onSelect={onSelect} />
   </div>
 );
@@ -2178,7 +2472,7 @@ const Admin = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-10">
-        {view === "home" && <Home onSelect={setView} />}
+        {view === "home" && <Home token={token} onSelect={setView} />}
         {view === "agents" && <AgentsHome onSelect={setView} />}
         {view === "dispatch" && <DispatchView token={token} />}
         {view === "leads" && <LeadsTab token={token} />}

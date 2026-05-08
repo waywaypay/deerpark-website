@@ -4,6 +4,8 @@
 // without a banner rather than failing the send.
 
 import { PNG } from "pngjs";
+import { db, settingsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import type { HeadlineRow } from "./top-headlines";
 
@@ -23,20 +25,81 @@ const WATERMARK_CROP_FRACTION = 0.12;
 export type GeneratedImage = { base64: string; mimeType: string };
 
 /**
- * Compose the image prompt from the day's top headlines. Editorial style,
- * muted palette, no text — the title text comes from the email body.
+ * Default banner prompt template. `{{stories}}` is substituted with a
+ * "/"-joined string of the day's top three headline titles. Operators
+ * can override the template via the admin UI; the substitution is the
+ * only contract between template and runtime.
+ */
+export const DEFAULT_BANNER_PROMPT_TEMPLATE = [
+  "Editorial illustration banner for an enterprise-AI daily news dispatch.",
+  "Today's leading stories: {{stories}}.",
+  "Muted, magazine-cover palette. No text, no logos, no UI elements.",
+  "Wide aspect ratio, abstract conceptual composition over photorealism.",
+].join(" ");
+
+const BANNER_PROMPT_KEY = "email.banner_prompt_template";
+
+function renderTemplate(template: string, stories: string): string {
+  return template.replace(/\{\{\s*stories\s*\}\}/g, stories);
+}
+
+function storiesFromHeadlines(top: HeadlineRow[]): string {
+  return top.slice(0, 3).map((h) => h.title).join(" / ");
+}
+
+/**
+ * Compose the image prompt from the day's top headlines using the default
+ * template. Synchronous — no DB lookup. Used as a fallback when the async
+ * variant can't be awaited (and kept for backwards compatibility).
  */
 export function buildPromptFromHeadlines(top: HeadlineRow[]): string {
-  const stories = top
-    .slice(0, 3)
-    .map((h) => h.title)
-    .join(" / ");
-  return [
-    "Editorial illustration banner for an enterprise-AI daily news dispatch.",
-    `Today's leading stories: ${stories}.`,
-    "Muted, magazine-cover palette. No text, no logos, no UI elements.",
-    "Wide aspect ratio, abstract conceptual composition over photorealism.",
-  ].join(" ");
+  return renderTemplate(DEFAULT_BANNER_PROMPT_TEMPLATE, storiesFromHeadlines(top));
+}
+
+/**
+ * Async variant that honors the operator-edited template stored in the
+ * settings table. Falls back to the default template on lookup failure
+ * so a DB hiccup doesn't break the banner.
+ */
+export async function buildPromptFromHeadlinesAsync(top: HeadlineRow[]): Promise<string> {
+  const stories = storiesFromHeadlines(top);
+  try {
+    const { template } = await getBannerPromptTemplate();
+    return renderTemplate(template, stories);
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "Banner prompt: settings lookup failed — using default template",
+    );
+    return renderTemplate(DEFAULT_BANNER_PROMPT_TEMPLATE, stories);
+  }
+}
+
+export async function getBannerPromptTemplate(): Promise<{
+  template: string;
+  isCustom: boolean;
+}> {
+  const [row] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.key, BANNER_PROMPT_KEY))
+    .limit(1);
+  if (row?.value) return { template: row.value, isCustom: true };
+  return { template: DEFAULT_BANNER_PROMPT_TEMPLATE, isCustom: false };
+}
+
+export async function setBannerPromptTemplate(value: string): Promise<void> {
+  await db
+    .insert(settingsTable)
+    .values({ key: BANNER_PROMPT_KEY, value })
+    .onConflictDoUpdate({
+      target: settingsTable.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+export async function resetBannerPromptTemplate(): Promise<void> {
+  await db.delete(settingsTable).where(eq(settingsTable.key, BANNER_PROMPT_KEY));
 }
 
 type VeniceImageResponse = {

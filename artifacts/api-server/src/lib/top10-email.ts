@@ -16,7 +16,7 @@ import OpenAI from "openai";
 import { marked } from "marked";
 import { selectTopHeadlines, type HeadlineRow } from "./top-headlines";
 import {
-  buildPromptFromHeadlines,
+  buildPromptFromHeadlinesAsync,
   generateBannerImage,
   type GeneratedImage,
 } from "./image-gen";
@@ -433,8 +433,9 @@ export async function composeDailyEmail(
 
   // Image gen + polish run in parallel — both are independent calls and the
   // total wall-clock cost is dominated by whichever is slower.
+  const bannerPrompt = await buildPromptFromHeadlinesAsync(headlines);
   const [bannerImage, polished] = await Promise.all([
-    generateBannerImage(buildPromptFromHeadlines(headlines)),
+    generateBannerImage(bannerPrompt),
     polishWithLlm(headlines),
   ]);
   const bannerSrc = bannerImage ? `cid:${BANNER_CID}` : null;
