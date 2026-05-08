@@ -20,6 +20,7 @@ import {
   generateBannerImage,
   type GeneratedImage,
 } from "./image-gen";
+import { generateMissingCommentary } from "./headline-commentator";
 import { logger } from "./logger";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
@@ -379,6 +380,30 @@ function fallbackIntroHtml(headlines: HeadlineRow[]): string {
 export async function composeDailyEmail(
   opts: ComposeOptions,
 ): Promise<ComposedEmail | null> {
+  // Back-fill commentary for any top-eligible item that doesn't have it yet.
+  // The commentator normally runs after each ingest tick (every 15 min) but
+  // gets skipped when the judge stalls on rate-limit streaks — and then
+  // top headlines land in the email with NULL commentary. Idempotent: a
+  // no-op when every top-eligible row already has commentary, so the cost
+  // is bounded by the actual gap to fill.
+  try {
+    const summary = await generateMissingCommentary();
+    if (summary.commented > 0 || summary.errors > 0) {
+      logger.info(
+        { summary },
+        "Email compose: pre-load commentary back-fill",
+      );
+    }
+  } catch (err) {
+    // Defensive — generateMissingCommentary swallows per-batch errors but
+    // not setup errors (e.g. DB unavailable mid-call). We never want this
+    // to abort the email composition.
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "Email compose: commentary back-fill threw — continuing without it",
+    );
+  }
+
   const headlines = await loadTopHeadlinesForEmail(opts.days ?? 1, opts.limit ?? 10);
   if (headlines.length === 0) return null;
 
