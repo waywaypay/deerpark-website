@@ -31,11 +31,26 @@ export type GeneratedImage = { base64: string; mimeType: string };
  * only contract between template and runtime.
  */
 export const DEFAULT_BANNER_PROMPT_TEMPLATE = [
-  "Editorial illustration banner for an enterprise-AI daily news dispatch.",
-  "Today's leading stories: {{stories}}.",
-  "Muted, magazine-cover palette. No text, no logos, no UI elements.",
-  "Wide aspect ratio, abstract conceptual composition over photorealism.",
-].join(" ");
+  "Wide horizontal editorial banner image for DeerPark.",
+  "",
+  "Single restrained visual idea related to: {{stories}}",
+  "",
+  "Style reference: modern print magazine illustration, not digital concept art.",
+  "",
+  "Use only 2–4 large shapes in the composition. Large areas of negative space. Minimal object count. No centered focal point.",
+  "",
+  "Flat matte shading only. Soft edge transitions. Very limited detail. Slight paper grain texture.",
+  "",
+  "Color palette restricted to dark forest green, olive gray, faded sage, charcoal, and warm stone. Low saturation.",
+  "",
+  "Composition should feel quiet, restrained, and intentionally incomplete rather than fully rendered.",
+  "",
+  "Avoid realism. Avoid spectacle. Avoid polished gradients. Avoid glow effects. Avoid depth-of-field blur. Avoid dramatic lighting. Avoid reflections. Avoid chrome. Avoid futuristic imagery. Avoid UI overlays. Avoid tiny details. Avoid symmetry. Avoid “beautiful” rendering.",
+  "",
+  "The image should resemble an art-directed magazine illustration scanned from print, with subtle imperfection and restraint.",
+  "",
+  "No text or logos.",
+].join("\n");
 
 const BANNER_PROMPT_KEY = "email.banner_prompt_template";
 
