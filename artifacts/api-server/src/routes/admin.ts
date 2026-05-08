@@ -35,6 +35,7 @@ import {
   runDailyDigest,
   previewDailyDigest,
   getDailyDigestState,
+  sendTestDigest,
 } from "../lib/daily-digest";
 
 const router: IRouter = Router();
@@ -491,7 +492,9 @@ router.post("/admin/digest/run", async (req, res) => {
       failed: result.failed,
       bannerGenerated: result.bannerGenerated,
       polishApplied: result.polishApplied,
-      // Don't echo full results — could leak emails. Sample first failure if any.
+      // Per-recipient outcomes — admin route, so the visibility is intentional.
+      // Surfaced so the operator can see who actually got the mail.
+      results: result.results,
       firstFailure: result.results.find((r) => !r.ok)?.error ?? null,
     });
   } catch (err) {
@@ -520,6 +523,27 @@ router.get("/admin/digest/preview", async (req, res) => {
     req.log.error({ err }, "Digest preview failed");
     return res.status(500).json({
       error: err instanceof Error ? err.message : "Internal server error",
+    });
+  }
+});
+
+// Send a single composed top-10 email to one address. Bypasses the daily
+// idempotency lock and the subscribers table so the operator can verify
+// rendering + deliverability without disturbing the scheduled send.
+router.post("/admin/digest/send-test", async (req, res) => {
+  try {
+    const to = typeof req.body?.to === "string" ? req.body.to : "";
+    if (!to) return res.status(400).json({ ok: false, error: "Missing 'to' address" });
+    const result = await sendTestDigest(to);
+    if (!result.ok) {
+      return res.status(400).json(result);
+    }
+    return res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Digest send-test failed");
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
     });
   }
 });

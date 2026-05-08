@@ -326,6 +326,71 @@ export async function runDailyDigest(): Promise<DigestRunResult | null> {
   };
 }
 
+// Loose RFC 5321 sanity check — good enough to reject typos before we hand
+// the address to Resend, which does the real validation.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export type SendTestResult =
+  | { ok: true; recipient: string; subject: string; headlineCount: number; bannerGenerated: boolean; polishApplied: boolean }
+  | { ok: false; recipient: string; error: string };
+
+/**
+ * Send the day's composed top-10 to a single address — bypasses the
+ * subscribers table, the per-day idempotency lock, and the last-sent
+ * marker. Subject is prefixed with `[TEST] ` so a test send can't be
+ * confused with the real dispatch. Used by the admin "send a test to me"
+ * button so we can debug delivery without a fresh dispatch cycle.
+ */
+export async function sendTestDigest(to: string): Promise<SendTestResult> {
+  const recipient = to.trim();
+  if (!EMAIL_RE.test(recipient)) {
+    return { ok: false, recipient, error: "Invalid email address" };
+  }
+
+  const cfg = readConfig();
+  if ("error" in cfg) {
+    return { ok: false, recipient, error: cfg.error };
+  }
+
+  const composed = await composeDailyEmail({
+    unsubscribeUrl: `${cfg.publicBaseUrl}/api/unsubscribe?token=test`,
+    archiveUrl: cfg.archiveUrl,
+  });
+  if (!composed) {
+    return { ok: false, recipient, error: "No top-10 candidates available — nothing to send" };
+  }
+
+  const subject = `[TEST] ${composed.subject}`;
+  const res = await fetch(RESEND_API, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: cfg.fromEmail,
+      to: [recipient],
+      subject,
+      html: composed.html,
+      text: composed.text,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    return { ok: false, recipient, error: `Resend ${res.status}: ${body}` };
+  }
+
+  return {
+    ok: true,
+    recipient,
+    subject,
+    headlineCount: composed.headlineCount,
+    bannerGenerated: composed.bannerGenerated,
+    polishApplied: composed.polishApplied,
+  };
+}
+
 /**
  * Compose the email without sending. Returns subject + HTML so the admin
  * UI can preview it in an iframe before bulk send.
