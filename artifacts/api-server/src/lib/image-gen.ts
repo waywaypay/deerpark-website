@@ -26,38 +26,40 @@ const WATERMARK_CROP_FRACTION = 0.12;
 export type GeneratedImage = { base64: string; mimeType: string };
 
 /**
- * Curated rotation of primary visual motifs. The model otherwise converges
- * to "mountains under a sun" regardless of the day's stories, so we pick
- * one motif per UTC day and inject it as the primary subject. Keep these
- * compatible with the rest of the prompt (2–4 large shapes, negative
- * space, no horizons-with-sun) so style stays consistent across the rotation.
+ * Curated rotation of abstract, non-representational motifs. The model
+ * otherwise converges on landscapes (mountains under a sun, paths, trees)
+ * regardless of the day's stories. Banners must always be abstract — no
+ * scenery, no objects, no figures — so the rotation is restricted to
+ * geometric and gestural compositions. Keep these compatible with the
+ * rest of the prompt (2–4 large shapes, negative space, flat matte) so
+ * style stays consistent across the rotation.
  */
 const BANNER_MOTIFS = [
-  "an empty open doorway with soft light beyond",
-  "a single bird mid-flight against a blank field",
-  "a lone tree silhouette in negative space",
-  "stacked architectural blocks at a slight isometric tilt",
-  "a quiet tabletop still life with a vessel and folded cloth",
-  "a winding footpath receding into negative space",
-  "an open window frame with a sliver of sky",
-  "stone arches in repetition, partly cropped",
-  "a small wooden bridge crossing flat water, side view",
-  "drifting low clouds across a flat plain",
-  "a folded paper letter on a plain surface",
-  "concentric ripples on still water, top-down view",
-  "an empty wooden chair in a plain room",
-  "a row of standing stones at an oblique angle",
-  "a single ladder leaning against a flat wall",
-  "a single seedling in a plain pot",
-  "an open envelope with a folded note inside",
-  "a stack of stones balanced in an empty field",
-  "a path of stepping stones across still water",
-  "a single hanging lantern in negative space",
-  "an open book lying flat on a plain surface",
-  "a small sailboat low in the frame on still water",
-  "a curtain catching air in an otherwise empty room",
-  "a tiled rooftop, partial, at an oblique angle",
-  "a single column standing alone in a plain field",
+  "two large overlapping circles in flat color",
+  "a single bold diagonal line cutting across a flat color field",
+  "three nested rectangles, off-center",
+  "a half-circle rising from the bottom edge into negative space",
+  "two color fields meeting at a soft vertical seam",
+  "a single arc sweeping from one edge",
+  "a cluster of small dots loosely scattered in one corner",
+  "stepped color blocks ascending from left to right",
+  "concentric circles, off-center",
+  "a wedge of color cutting in from the right edge",
+  "horizontal bands of color of varying thickness",
+  "a single large square offset from center against negative space",
+  "a curved line dividing two flat color regions",
+  "a triangle and a circle in loose tension",
+  "vertical bands of color in irregular widths",
+  "a torn-paper edge running diagonally across a flat plane",
+  "a bold horizontal band low in the frame",
+  "two parallel arcs against negative space",
+  "a single soft brushstroke gesture across a flat field",
+  "a grid of squares with one square missing",
+  "overlapping translucent rectangles at a slight angle",
+  "a chain of small circles forming a loose arc",
+  "a single thick line bending at a soft angle",
+  "a half-square cropped at the top edge",
+  "two circles of unequal size, slightly overlapping",
 ];
 
 function pickMotif(now: Date = new Date()): string {
@@ -73,15 +75,17 @@ function pickMotif(now: Date = new Date()): string {
  * the only contract between template and runtime.
  */
 export const DEFAULT_BANNER_PROMPT_TEMPLATE = [
-  "Wide horizontal editorial banner image for DeerPark.",
+  "Wide horizontal abstract editorial banner image for DeerPark.",
   "",
-  "Primary subject: {{motif}}. This is what is actually depicted in the image.",
+  "The image must be ABSTRACT and NON-REPRESENTATIONAL. Pure geometric and gestural composition only. Do NOT depict landscapes, scenery, mountains, hills, valleys, water, sky, clouds, sun, moon, stars, horizons, paths, roads, bridges, fields, plants, trees, flowers, animals, birds, people, figures, faces, hands, buildings, architecture, doors, windows, rooms, furniture, objects, vessels, books, papers, tools, vehicles, or any recognizable real-world subject. The viewer should not be able to name what they see beyond shape and color.",
   "",
-  "This banner accompanies a newsletter about: {{stories}}. The illustration may evoke this thematic material through mood and color, but the primary subject above is what is drawn — not the stories themselves.",
+  "Composition: {{motif}}. This is the abstract arrangement that fills the frame.",
   "",
-  "Style reference: modern print magazine illustration, not digital concept art.",
+  "This banner accompanies a newsletter about: {{stories}}. Use this only as loose mood guidance for color choice and rhythm. Do NOT illustrate the stories. Do NOT depict any subject from them.",
   "",
-  "Use only 2–4 large shapes in the composition. Large areas of negative space. Minimal object count. No centered focal point.",
+  "Style reference: modern print magazine abstract illustration — Ellsworth Kelly, Josef Albers, mid-century editorial color-field work. Not digital concept art. Not landscape painting.",
+  "",
+  "Use only 2–4 large flat shapes. Large areas of negative space. Minimal element count. No centered focal point.",
   "",
   "Flat matte shading only. Soft edge transitions. Very limited detail. Slight paper grain texture.",
   "",
@@ -89,9 +93,9 @@ export const DEFAULT_BANNER_PROMPT_TEMPLATE = [
   "",
   "Composition should feel quiet, restrained, and intentionally incomplete rather than fully rendered.",
   "",
-  "Avoid realism. Avoid spectacle. Avoid polished gradients. Avoid glow effects. Avoid depth-of-field blur. Avoid dramatic lighting. Avoid reflections. Avoid chrome. Avoid futuristic imagery. Avoid UI overlays. Avoid tiny details. Avoid symmetry. Avoid “beautiful” rendering. Avoid mountains. Avoid suns, sunrises, and sunsets.",
+  "Avoid realism. Avoid representational imagery of any kind. Avoid landscapes. Avoid scenery. Avoid mountains, hills, horizons, suns, sunrises, sunsets, water, sky, clouds. Avoid any recognizable object, plant, animal, figure, or place. Avoid spectacle. Avoid polished gradients. Avoid glow effects. Avoid depth-of-field blur. Avoid dramatic lighting. Avoid reflections. Avoid chrome. Avoid futuristic imagery. Avoid UI overlays. Avoid tiny details. Avoid symmetry. Avoid \"beautiful\" rendering.",
   "",
-  "The image should resemble an art-directed magazine illustration scanned from print, with subtle imperfection and restraint.",
+  "The image should resemble an art-directed abstract magazine cover scanned from print, with subtle imperfection and restraint.",
   "",
   "No text or logos. No Chinese characters or any other written language.",
 ].join("\n");
