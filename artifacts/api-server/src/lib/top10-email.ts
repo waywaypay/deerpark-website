@@ -18,7 +18,7 @@ import { selectTopHeadlines, type HeadlineRow } from "./top-headlines";
 import {
   buildPromptFromHeadlines,
   generateBannerImage,
-  asDataUrl,
+  type GeneratedImage,
 } from "./image-gen";
 import { logger } from "./logger";
 
@@ -33,6 +33,10 @@ const PUBLIC_SITE_URL = (
 ).replace(/\/$/, "");
 const LOGO_URL = `${PUBLIC_SITE_URL}/favicon-192.png`;
 
+// Stable CID for the banner so the same constant is referenced both in the
+// HTML <img src="cid:..."> and the Resend attachments[].content_id.
+export const BANNER_CID = "banner.png";
+
 export type ComposedEmail = {
   subject: string;
   html: string;
@@ -42,6 +46,14 @@ export type ComposedEmail = {
   polishApplied: boolean;
   /** The actual headlines included — caller may want to mark them sent. */
   headlines: HeadlineRow[];
+  /**
+   * Raw banner bytes. The sender attaches this inline via Resend's
+   * `attachments[].content_id` so the binary rides in the MIME part
+   * instead of bloating the HTML body. Gmail clips messages whose HTML
+   * body exceeds ~102KB; a base64-inlined 1200x400 PNG blows past that
+   * on its own and hides the entire top-10 behind "View entire message."
+   */
+  bannerImage: GeneratedImage | null;
 };
 
 export type ComposeOptions = {
@@ -137,7 +149,7 @@ function renderHtml({
   subject,
   introHtml,
   itemsHtml,
-  bannerDataUrl,
+  bannerSrc,
   unsubscribeUrl,
   archiveUrl,
   dateLabel,
@@ -145,13 +157,14 @@ function renderHtml({
   subject: string;
   introHtml: string;
   itemsHtml: string;
-  bannerDataUrl: string | null;
+  /** Either a `cid:...` reference or null. Never a `data:` URL — see ComposedEmail.bannerImage. */
+  bannerSrc: string | null;
   unsubscribeUrl: string;
   archiveUrl: string;
   dateLabel: string;
 }): string {
-  const banner = bannerDataUrl
-    ? `<img src="${bannerDataUrl}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;margin:0 0 24px 0;" />`
+  const banner = bannerSrc
+    ? `<img src="${bannerSrc}" alt="" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;outline:none;text-decoration:none;margin:0 0 24px 0;" />`
     : "";
 
   return `<!doctype html>
@@ -371,7 +384,7 @@ export async function composeDailyEmail(
     generateBannerImage(buildPromptFromHeadlines(headlines)),
     polishWithLlm(headlines),
   ]);
-  const bannerDataUrl = bannerImage ? asDataUrl(bannerImage) : null;
+  const bannerSrc = bannerImage ? `cid:${BANNER_CID}` : null;
 
   // Apply per-id commentary edits.
   const finalHeadlines = polished
@@ -392,7 +405,7 @@ export async function composeDailyEmail(
     subject,
     introHtml,
     itemsHtml,
-    bannerDataUrl,
+    bannerSrc,
     unsubscribeUrl: opts.unsubscribeUrl,
     archiveUrl: opts.archiveUrl,
     dateLabel,
@@ -407,8 +420,9 @@ export async function composeDailyEmail(
     html,
     text,
     headlineCount: finalHeadlines.length,
-    bannerGenerated: bannerDataUrl !== null,
+    bannerGenerated: bannerImage !== null,
     polishApplied: polished !== null,
     headlines: finalHeadlines,
+    bannerImage,
   };
 }
