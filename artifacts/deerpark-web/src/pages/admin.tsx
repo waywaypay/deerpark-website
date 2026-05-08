@@ -1,4 +1,4 @@
-import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,7 +13,6 @@ import {
   PenLine,
   Send,
   ChevronRight,
-  ChevronDown,
   Gavel,
   Eye,
 } from "lucide-react";
@@ -1981,29 +1980,82 @@ const WORKFLOW_NODES: WorkflowNodeSpec[] = [
   },
 ];
 
+const CANVAS_WIDTH = 1080;
+const CANVAS_HEIGHT = 400;
+const NODE_W = 224;
+const NODE_H = 200;
+const DRAG_THRESHOLD = 4;
+
+const INITIAL_POSITIONS: Record<DispatchSection, { x: number; y: number }> = {
+  headlines: { x: 32, y: 100 },
+  judge: { x: 304, y: 100 },
+  writers: { x: 576, y: 100 },
+  emails: { x: 848, y: 100 },
+};
+
+const WORKFLOW_EDGES: [DispatchSection, DispatchSection][] = [
+  ["headlines", "judge"],
+  ["judge", "writers"],
+  ["writers", "emails"],
+];
+
+type DragState = {
+  id: DispatchSection;
+  startX: number;
+  startY: number;
+  origX: number;
+  origY: number;
+  moved: boolean;
+};
+
 const WorkflowNodeCard = ({
   node,
   index,
   isFirst,
   isLast,
-  onClick,
+  pos,
+  isDragging,
+  onPointerDown,
+  onActivate,
 }: {
   node: WorkflowNodeSpec;
   index: number;
   isFirst: boolean;
   isLast: boolean;
-  onClick: () => void;
+  pos: { x: number; y: number };
+  isDragging: boolean;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onActivate: () => void;
 }) => {
   const { Icon, label, description, io } = node;
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group relative w-full lg:w-56 lg:shrink-0 border-2 border-foreground/25 bg-background/90 backdrop-blur p-5 text-left flex flex-col gap-4 hover:border-primary hover:shadow-[0_0_0_4px_rgba(255,255,255,0.04)] transition-all"
+    <div
+      role="button"
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onActivate();
+        }
+      }}
+      style={{
+        left: pos.x,
+        top: pos.y,
+        width: NODE_W,
+        height: NODE_H,
+        zIndex: isDragging ? 20 : 10,
+        touchAction: "none",
+      }}
+      className={`absolute select-none border-2 bg-background/95 backdrop-blur p-5 flex flex-col gap-3 outline-none focus-visible:ring-2 focus-visible:ring-primary/60 ${
+        isDragging
+          ? "border-primary cursor-grabbing shadow-[0_12px_30px_rgba(0,0,0,0.55)]"
+          : "border-foreground/25 cursor-grab hover:border-primary"
+      }`}
     >
       <div className="flex items-center justify-between">
-        <div className="p-2 border border-foreground/20 bg-card group-hover:border-primary/60 transition-colors">
-          <Icon className="w-4 h-4 text-foreground/80 group-hover:text-primary transition-colors" />
+        <div className="p-2 border border-foreground/20 bg-card">
+          <Icon className="w-4 h-4 text-foreground/80" />
         </div>
         <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
           Step {index + 1}
@@ -2015,80 +2067,171 @@ const WorkflowNodeCard = ({
           {description}
         </p>
       </div>
-      <div className="text-[10px] text-muted-foreground/80 font-mono border-t border-foreground/10 pt-2">
+      <div className="text-[10px] text-muted-foreground/80 font-mono border-t border-foreground/10 pt-2 mt-auto truncate">
         {io}
       </div>
-      <span className="text-[10px] uppercase tracking-[0.18em] text-foreground/60 group-hover:text-primary inline-flex items-center gap-1 font-sans transition-colors">
-        Open <ChevronRight className="w-3 h-3" />
-      </span>
       {!isFirst && (
         <span
           aria-hidden
-          className="hidden lg:block absolute -left-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-background border-2 border-foreground/50 group-hover:border-primary transition-colors"
+          className="absolute -left-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-background border-2 border-foreground/50"
         />
       )}
       {!isLast && (
         <span
           aria-hidden
-          className="hidden lg:block absolute -right-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-foreground group-hover:bg-primary transition-colors"
+          className="absolute -right-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-foreground"
         />
       )}
-    </button>
+    </div>
   );
 };
-
-const WorkflowConnector = () => (
-  <div className="flex items-center justify-center self-center">
-    <div className="hidden lg:flex items-center w-10 xl:w-14">
-      <div className="flex-1 border-t border-dashed border-foreground/40" />
-      <ChevronRight className="w-4 h-4 text-foreground/60 -ml-1" />
-    </div>
-    <div className="lg:hidden flex flex-col items-center py-2">
-      <div className="h-6 w-px border-l border-dashed border-foreground/40" />
-      <ChevronDown className="w-4 h-4 text-foreground/60 -mt-1" />
-    </div>
-  </div>
-);
 
 const WorkflowCanvas = ({
   onSelect,
 }: {
   onSelect: (id: DispatchSection) => void;
-}) => (
-  <div className="relative border border-foreground/15 bg-card overflow-hidden">
-    <div
-      aria-hidden
-      className="absolute inset-0 pointer-events-none"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)",
-        backgroundSize: "22px 22px",
-      }}
-    />
-    <div className="relative px-5 py-3 border-b border-foreground/10 flex items-center justify-between">
-      <span className="section-label">Workflow canvas</span>
-      <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans hidden sm:inline">
-        Ingestion → Judge → Writers → Email
-      </span>
-    </div>
-    <div className="relative px-6 py-10 lg:px-10 lg:py-14">
-      <div className="flex flex-col lg:flex-row lg:items-stretch lg:justify-center lg:flex-wrap gap-y-2 lg:gap-y-6">
-        {WORKFLOW_NODES.map((node, i) => (
-          <Fragment key={node.id}>
+}) => {
+  const [positions, setPositions] = useState(INITIAL_POSITIONS);
+  const [draggingId, setDraggingId] = useState<DispatchSection | null>(null);
+  const dragRef = useRef<DragState | null>(null);
+
+  useEffect(() => {
+    const onMove = (e: PointerEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      if (!drag.moved && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
+        drag.moved = true;
+      }
+      if (!drag.moved) return;
+      const x = Math.max(0, Math.min(CANVAS_WIDTH - NODE_W, drag.origX + dx));
+      const y = Math.max(0, Math.min(CANVAS_HEIGHT - NODE_H, drag.origY + dy));
+      setPositions((prev) => ({ ...prev, [drag.id]: { x, y } }));
+    };
+    const onUp = () => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const moved = drag.moved;
+      const id = drag.id;
+      dragRef.current = null;
+      setDraggingId(null);
+      if (!moved) onSelect(id);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+    };
+  }, [onSelect]);
+
+  const handlePointerDown = (id: DispatchSection, e: React.PointerEvent) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    e.preventDefault();
+    const start = positions[id];
+    dragRef.current = {
+      id,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: start.x,
+      origY: start.y,
+      moved: false,
+    };
+    setDraggingId(id);
+  };
+
+  const resetLayout = () => setPositions(INITIAL_POSITIONS);
+
+  return (
+    <div className="relative border border-foreground/15 bg-card">
+      <div className="relative px-5 py-3 border-b border-foreground/10 flex items-center justify-between gap-3">
+        <span className="section-label">Workflow canvas</span>
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans hidden sm:inline">
+            Click to open · Drag to reposition
+          </span>
+          <button
+            type="button"
+            onClick={resetLayout}
+            className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-sans"
+          >
+            Reset layout
+          </button>
+        </div>
+      </div>
+      <div className="overflow-auto">
+        <div
+          className="relative"
+          style={{
+            width: CANVAS_WIDTH,
+            height: CANVAS_HEIGHT,
+            backgroundImage:
+              "radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)",
+            backgroundSize: "22px 22px",
+          }}
+        >
+          <svg
+            className="absolute inset-0 pointer-events-none"
+            width={CANVAS_WIDTH}
+            height={CANVAS_HEIGHT}
+            aria-hidden
+          >
+            <defs>
+              <marker
+                id="workflow-arrow"
+                viewBox="0 0 10 10"
+                refX="8"
+                refY="5"
+                markerWidth="6"
+                markerHeight="6"
+                orient="auto-start-reverse"
+              >
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="rgba(255,255,255,0.55)" />
+              </marker>
+            </defs>
+            {WORKFLOW_EDGES.map(([from, to]) => {
+              const a = positions[from];
+              const b = positions[to];
+              const x1 = a.x + NODE_W;
+              const y1 = a.y + NODE_H / 2;
+              const x2 = b.x;
+              const y2 = b.y + NODE_H / 2;
+              const cx = Math.max(40, Math.abs(x2 - x1) * 0.5);
+              const path = `M ${x1} ${y1} C ${x1 + cx} ${y1}, ${x2 - cx} ${y2}, ${x2} ${y2}`;
+              return (
+                <path
+                  key={`${from}-${to}`}
+                  d={path}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.45)"
+                  strokeWidth={1.5}
+                  strokeDasharray="6 4"
+                  markerEnd="url(#workflow-arrow)"
+                />
+              );
+            })}
+          </svg>
+          {WORKFLOW_NODES.map((node, i) => (
             <WorkflowNodeCard
+              key={node.id}
               node={node}
               index={i}
               isFirst={i === 0}
               isLast={i === WORKFLOW_NODES.length - 1}
-              onClick={() => onSelect(node.id)}
+              pos={positions[node.id]}
+              isDragging={draggingId === node.id}
+              onPointerDown={(e) => handlePointerDown(node.id, e)}
+              onActivate={() => onSelect(node.id)}
             />
-            {i < WORKFLOW_NODES.length - 1 && <WorkflowConnector />}
-          </Fragment>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 const DispatchView = ({ token }: { token: string }) => {
   const [section, setSection] = useState<DispatchSection | null>(null);
