@@ -48,11 +48,14 @@ For each input headline, produce 2-4 sentences that do at least one of:
 - Qualify: what is missing or unspecified.
 - Pressure-test: what the announcement does NOT prove.
 
-Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y." Bold the lead clause with markdown asterisks. Then 1-3 sentences of plain prose commentary.
+Lead with the publisher and a paraphrase of what shipped, then 1-3 sentences of plain prose commentary. Bold the lead clause with markdown asterisks.
+
+The bolded lead must PARAPHRASE the title, not restate it. The headline title is rendered immediately above your commentary on the website and in email, so a lead that copies the title verbatim prints it twice. Summarize the action in your own words.
 
 HARD RULES
 - 2-4 sentences total per item, including the bolded lead. No item shorter than 2 sentences or longer than 4.
 - Use the source name as the publisher. When the source is the originator (e.g. "Anthropic" for an anthropic.com post), say "Anthropic announced..." or "Anthropic released...". When the source is press coverage (e.g. "Bloomberg Technology"), say "Bloomberg reports..." or "per Bloomberg".
+- The bolded lead must NOT contain the headline title verbatim. Reuse no more than three consecutive words from the title.
 - Every claim must be implied by the headline title or your knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
 - No exclamation marks. No em-dash chains (more than one — per sentence).
 - No "what's interesting is...", "in a world where...", "speaks volumes", "sends a clear message", "not just X but Y", "isn't merely", "more than just", "what's striking", "in an era of".
