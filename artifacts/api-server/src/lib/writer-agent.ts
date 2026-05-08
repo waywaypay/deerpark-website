@@ -171,12 +171,16 @@ No abstract claims without evidence. If a sentence could apply to any tech compa
 - At most ONE "however" across the entire top-10.
 - Vary the lead verb across items. Don't repeat "announced", "development", "capabilities".
 - Replace generic business language ("positions itself", "leverages", "drives value", "in this landscape") with specific actions.
+- The SECOND sentence of any item must NOT begin with "This". The bolded lead is sentence 1; the analysis sentence that follows must not lazily kick off with "This X…" — restructure to name the actor or consequence directly.
 
 🚫 BANNED HEDGING (cut or rewrite — these dilute authority)
 "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "raises questions", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become"
 
 🚫 BANNED CORPORATE-CHECKLIST JARGON
 "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "operator implications", "for CIOs evaluating vendors", "enterprise buyers should". Use specific market consequences instead.
+
+🚫 BANNED WORDS (overused AI-ese — never use, anywhere in the post)
+"formidable player", "formidable" (as a descriptor for a company), "structural" (use a concrete word — "operational", "competitive" — or delete the modifier), "swiftly" (use "quickly", or restructure to drop the adverb).
 
 🚫 BANNED AI-ESE FILLER
 "What's interesting is…", "In a world where…", "It will be interesting to see…", "Speaks volumes", "Sends a clear message", "Isn't merely", "More than just", "What's striking", "In an era of", "Points to", "Highlights the growing appetite", "Reflecting a broader trend", "Increasingly flowing into", "Growing trend", "In this landscape", "Positions itself", "Leverages", "Drives value", negation pivots ("not X, but Y"), fake balance ("on one hand…").

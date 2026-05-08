@@ -323,12 +323,16 @@ HARD RULES for commentary:
 - Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
 - At most ONE "however" across all 10 items. No exclamation marks. No em-dash chains (more than one — per sentence).
 - Vary nouns and verbs across items. Do NOT repeat "announced", "development", "capabilities" across items.
+- The SECOND sentence of any item must NOT begin with "This". The bolded lead is sentence 1; the analysis sentence that follows must not lazily kick off with "This X…" or "This Y…". Restructure: name the actor or consequence directly.
 
 BANNED HEDGING (cut or rewrite — these dilute authority):
 - "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "raises questions", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become"
 
 BANNED CORPORATE-CHECKLIST JARGON (don't fall back into laundry-list framing):
 - "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "operator implications", "for CIOs evaluating vendors", "enterprise buyers should". Use specific market consequences instead — name the company, the product, the competitive shift.
+
+BANNED WORDS (overused AI-ese — never use, including in the intro):
+- "formidable player", "formidable" (as a descriptor for a company), "structural" (use a concrete word: "operational", "competitive", or just delete the modifier), "swiftly" (use "quickly", or restructure to drop the adverb)
 
 BANNED AI-ESE FILLER:
 - "what's interesting is", "in a world where", "speaks volumes", "sends a clear message", "not just X but Y", "isn't merely", "more than just", "what's striking", "in an era of", "points to"
@@ -489,8 +493,10 @@ HARD RULES
 - The bolded lead must NOT contain the headline title verbatim.
 - Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
 - No exclamation marks. No generic "however," hedge transitions used as filler.
+- The SECOND sentence must NOT begin with "This". The bolded lead is sentence 1; the analysis sentence that follows must not start with "This X…" — name the actor or consequence directly.
 - BANNED HEDGING: "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become".
 - BANNED CORPORATE JARGON: "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "for CIOs evaluating vendors", "enterprise buyers should".
+- BANNED WORDS: "formidable player", "formidable" (as a descriptor for a company), "structural" (use a concrete word or delete), "swiftly" (use "quickly" or restructure to drop the adverb).
 - BANNED AI-ESE: "what's interesting", "in a world where", "speaks volumes", "isn't merely", "more than just", "in an era of", "growing trend", "highlights the growing appetite", "reflecting a broader trend", "in this landscape", "positions itself", "leverages", "drives value".
 
 Return ONLY this JSON:
