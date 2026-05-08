@@ -25,15 +25,58 @@ const WATERMARK_CROP_FRACTION = 0.12;
 export type GeneratedImage = { base64: string; mimeType: string };
 
 /**
- * Default banner prompt template. `{{stories}}` is substituted with a
- * "/"-joined string of the day's top three headline titles. Operators
- * can override the template via the admin UI; the substitution is the
- * only contract between template and runtime.
+ * Curated rotation of primary visual motifs. The model otherwise converges
+ * to "mountains under a sun" regardless of the day's stories, so we pick
+ * one motif per UTC day and inject it as the primary subject. Keep these
+ * compatible with the rest of the prompt (2–4 large shapes, negative
+ * space, no horizons-with-sun) so style stays consistent across the rotation.
+ */
+const BANNER_MOTIFS = [
+  "an empty open doorway with soft light beyond",
+  "a single bird mid-flight against a blank field",
+  "a lone tree silhouette in negative space",
+  "stacked architectural blocks at a slight isometric tilt",
+  "a quiet tabletop still life with a vessel and folded cloth",
+  "a winding footpath receding into negative space",
+  "an open window frame with a sliver of sky",
+  "stone arches in repetition, partly cropped",
+  "a small wooden bridge crossing flat water, side view",
+  "drifting low clouds across a flat plain",
+  "a folded paper letter on a plain surface",
+  "concentric ripples on still water, top-down view",
+  "an empty wooden chair in a plain room",
+  "a row of standing stones at an oblique angle",
+  "a single ladder leaning against a flat wall",
+  "a single seedling in a plain pot",
+  "an open envelope with a folded note inside",
+  "a stack of stones balanced in an empty field",
+  "a path of stepping stones across still water",
+  "a single hanging lantern in negative space",
+  "an open book lying flat on a plain surface",
+  "a small sailboat low in the frame on still water",
+  "a curtain catching air in an otherwise empty room",
+  "a tiled rooftop, partial, at an oblique angle",
+  "a single column standing alone in a plain field",
+];
+
+function pickMotif(now: Date = new Date()): string {
+  const dayIndex = Math.floor(now.getTime() / 86_400_000);
+  return BANNER_MOTIFS[dayIndex % BANNER_MOTIFS.length]!;
+}
+
+/**
+ * Default banner prompt template. `{{motif}}` is the day's rotated
+ * primary subject; `{{stories}}` is a "/"-joined string of the top three
+ * headline titles, used only as atmospheric context. Operators can
+ * override the template via the admin UI; the substitution tokens are
+ * the only contract between template and runtime.
  */
 export const DEFAULT_BANNER_PROMPT_TEMPLATE = [
   "Wide horizontal editorial banner image for DeerPark.",
   "",
-  "Single restrained visual idea related to: {{stories}}",
+  "Primary subject: {{motif}}. This is what is actually depicted in the image.",
+  "",
+  "This banner accompanies a newsletter about: {{stories}}. The illustration may evoke this thematic material through mood and color, but the primary subject above is what is drawn — not the stories themselves.",
   "",
   "Style reference: modern print magazine illustration, not digital concept art.",
   "",
@@ -45,17 +88,22 @@ export const DEFAULT_BANNER_PROMPT_TEMPLATE = [
   "",
   "Composition should feel quiet, restrained, and intentionally incomplete rather than fully rendered.",
   "",
-  "Avoid realism. Avoid spectacle. Avoid polished gradients. Avoid glow effects. Avoid depth-of-field blur. Avoid dramatic lighting. Avoid reflections. Avoid chrome. Avoid futuristic imagery. Avoid UI overlays. Avoid tiny details. Avoid symmetry. Avoid “beautiful” rendering.",
+  "Avoid realism. Avoid spectacle. Avoid polished gradients. Avoid glow effects. Avoid depth-of-field blur. Avoid dramatic lighting. Avoid reflections. Avoid chrome. Avoid futuristic imagery. Avoid UI overlays. Avoid tiny details. Avoid symmetry. Avoid “beautiful” rendering. Avoid mountains. Avoid suns, sunrises, and sunsets.",
   "",
   "The image should resemble an art-directed magazine illustration scanned from print, with subtle imperfection and restraint.",
   "",
-  "No text or logos.",
+  "No text or logos. No Chinese characters or any other written language.",
 ].join("\n");
 
 const BANNER_PROMPT_KEY = "email.banner_prompt_template";
 
-function renderTemplate(template: string, stories: string): string {
-  return template.replace(/\{\{\s*stories\s*\}\}/g, stories);
+function renderTemplate(
+  template: string,
+  params: { stories: string; motif: string },
+): string {
+  return template
+    .replace(/\{\{\s*stories\s*\}\}/g, params.stories)
+    .replace(/\{\{\s*motif\s*\}\}/g, params.motif);
 }
 
 function storiesFromHeadlines(top: HeadlineRow[]): string {
@@ -68,7 +116,10 @@ function storiesFromHeadlines(top: HeadlineRow[]): string {
  * variant can't be awaited (and kept for backwards compatibility).
  */
 export function buildPromptFromHeadlines(top: HeadlineRow[]): string {
-  return renderTemplate(DEFAULT_BANNER_PROMPT_TEMPLATE, storiesFromHeadlines(top));
+  return renderTemplate(DEFAULT_BANNER_PROMPT_TEMPLATE, {
+    stories: storiesFromHeadlines(top),
+    motif: pickMotif(),
+  });
 }
 
 /**
@@ -77,16 +128,16 @@ export function buildPromptFromHeadlines(top: HeadlineRow[]): string {
  * so a DB hiccup doesn't break the banner.
  */
 export async function buildPromptFromHeadlinesAsync(top: HeadlineRow[]): Promise<string> {
-  const stories = storiesFromHeadlines(top);
+  const params = { stories: storiesFromHeadlines(top), motif: pickMotif() };
   try {
     const { template } = await getBannerPromptTemplate();
-    return renderTemplate(template, stories);
+    return renderTemplate(template, params);
   } catch (err) {
     logger.warn(
       { err: err instanceof Error ? err.message : String(err) },
       "Banner prompt: settings lookup failed — using default template",
     );
-    return renderTemplate(DEFAULT_BANNER_PROMPT_TEMPLATE, stories);
+    return renderTemplate(DEFAULT_BANNER_PROMPT_TEMPLATE, params);
   }
 }
 
