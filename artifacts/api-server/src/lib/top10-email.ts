@@ -228,28 +228,50 @@ function renderText(
 }
 
 // LLM polish step --------------------------------------------------------
+//
+// One LLM call produces subject + intro + per-item commentary in a single
+// round-trip. This decouples the email's commentary from the standalone
+// headline-commentator pipeline, which keeps stalling on Venice rate-limit
+// streaks (commits #92, #93). The commentator still runs on its 15-min
+// ingest tick to populate the website's /dispatch view; the email no
+// longer waits on it.
 
 type PolishResult = {
   subject: string;
   introHtml: string;
-  edits: Map<number, string>;
+  /** Commentary text per headline id. Always covers every input id. */
+  commentary: Map<number, string>;
 };
 
-const POLISH_SYSTEM_PROMPT = `You are an email editor for DeerPark's daily dispatch — a top-10 list of AI/tech headlines for enterprise AI buyers and operators.
+const POLISH_SYSTEM_PROMPT = `You are the editor of DeerPark's daily dispatch — a top-10 newsletter of AI and tech headlines for enterprise AI buyers and operators (CIOs, IT directors, AI program owners).
 
-Given the day's top-10 headlines and their existing commentary, produce:
-1. A concise email subject line, under 70 characters, referencing the strongest story by name. No emoji. No "Daily Dispatch:" prefix.
-2. A 1-2 sentence intro paragraph framing the day. Skeptical, concrete, naming actual companies. Plain prose, no list, no exclamation marks.
-3. Optional light copy edits to existing commentary. Edit ONLY to reduce hedging or fix obvious clunk — never invent facts, dates, prices, or quotes. Skip items that don't need editing.
+Given the day's top-10 headlines, produce three things in a single JSON object.
 
-Return ONLY this JSON:
+1. SUBJECT — concise email subject under 70 characters referencing the strongest story by name. No emoji. No "Daily Dispatch:" prefix.
+
+2. INTRO — 1-2 sentence paragraph framing the day. Skeptical, concrete, naming actual companies. Plain prose. No list. No exclamation marks.
+
+3. COMMENTARY for EVERY item — 2-4 sentences each. Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y." Bold the lead clause with markdown asterisks. Then 1-3 sentences of plain prose commentary that does at least one of:
+   - Contextualize: where this fits in the market
+   - Qualify: what's missing or unspecified
+   - Pressure-test: what the announcement does NOT prove
+
+HARD RULES for commentary:
+- 2-4 sentences total per item including the bolded lead. No shorter than 2, no longer than 4.
+- Use the source name as the publisher. When the source is the originator (e.g. "Anthropic" for an anthropic.com post), say "Anthropic announced..." or "Anthropic released...". When the source is press coverage (e.g. "Bloomberg Technology"), say "Bloomberg reports..." or "per Bloomberg".
+- Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
+- No exclamation marks. No em-dash chains (more than one — per sentence).
+- Banned phrases: "what's interesting is", "in a world where", "speaks volumes", "sends a clear message", "not just X but Y", "isn't merely", "more than just", "what's striking", "in an era of".
+- If existing commentary is provided in the input you may keep it, lightly edit, or replace it — but every item MUST have commentary in the output.
+
+Return ONLY this JSON, no prose outside it:
 {
   "subject": "<string>",
   "intro": "<string, 1-2 sentences>",
-  "edits": [{ "id": <number>, "replacement": "<string>" }]
+  "items": [{ "id": <number>, "commentary": "<2-4 sentences with bolded lead>" }, ...]
 }
 
-Empty edits array is fine. No prose outside JSON.`;
+One entry per input id. No omissions. No extra ids.`;
 
 function getPolishClient(): { client: OpenAI; model: string } | null {
   const apiKey = process.env["LLM_API_KEY"];
@@ -268,7 +290,7 @@ function getPolishClient(): { client: OpenAI; model: string } | null {
 function parsePolishJson(text: string): {
   subject?: string;
   intro?: string;
-  edits?: Array<{ id?: unknown; replacement?: unknown }>;
+  items?: Array<{ id?: unknown; commentary?: unknown }>;
 } | null {
   const start = text.indexOf("{");
   if (start === -1) return null;
@@ -333,19 +355,21 @@ async function polishWithLlm(
       typeof parsed.intro === "string" ? parsed.intro.trim() : "";
     if (!subject || !introMd) return null;
     const introHtml = marked.parse(introMd, { async: false }) as string;
-    const edits = new Map<number, string>();
-    if (Array.isArray(parsed.edits)) {
+    const commentary = new Map<number, string>();
+    if (Array.isArray(parsed.items)) {
       const validIds = new Set(headlines.map((h) => h.id));
-      for (const e of parsed.edits) {
+      for (const e of parsed.items) {
         const id = Number(e.id);
-        const replacement =
-          typeof e.replacement === "string" ? e.replacement.trim() : "";
+        const text =
+          typeof e.commentary === "string" ? e.commentary.trim() : "";
         if (!Number.isFinite(id) || !validIds.has(id)) continue;
-        if (!replacement || replacement.length > 800) continue;
-        edits.set(id, replacement);
+        // Same 800-char ceiling as the standalone commentator — drops
+        // wall-of-text padding while leaving room for 4 long sentences.
+        if (!text || text.length > 800) continue;
+        commentary.set(id, text);
       }
     }
-    return { subject, introHtml, edits };
+    return { subject, introHtml, commentary };
   } catch (err) {
     logger.warn(
       { err: err instanceof Error ? err.message : String(err) },
@@ -415,13 +439,16 @@ export async function composeDailyEmail(
   ]);
   const bannerSrc = bannerImage ? `cid:${BANNER_CID}` : null;
 
-  // Apply per-id commentary edits.
-  const finalHeadlines = polished
-    ? headlines.map((h) => {
-        const replacement = polished.edits.get(h.id);
-        return replacement ? { ...h, commentary: replacement } : h;
-      })
-    : headlines;
+  // Use polished commentary as canonical when available — the polish step
+  // writes 2-4 sentences for every item in one LLM call. Fall back to DB
+  // commentary (populated by the standalone commentator pipeline) if
+  // polish failed or skipped an id. Last resort is the empty string,
+  // which renders the headline without a write-up rather than crashing.
+  const finalHeadlines = headlines.map((h) => {
+    const polishedText = polished?.commentary.get(h.id);
+    if (polishedText) return { ...h, commentary: polishedText };
+    return h;
+  });
 
   const subject = polished?.subject ?? fallbackSubject(finalHeadlines);
   const introHtml = polished?.introHtml ?? fallbackIntroHtml(finalHeadlines);

@@ -3,6 +3,7 @@
 // API key. Falls back to null on any error — the email composer ships
 // without a banner rather than failing the send.
 
+import { PNG } from "pngjs";
 import { logger } from "./logger";
 import type { HeadlineRow } from "./top-headlines";
 
@@ -11,6 +12,13 @@ const DEFAULT_MODEL = "venice-sd35";
 const DEFAULT_WIDTH = 1200;
 const DEFAULT_HEIGHT = 400;
 const TIMEOUT_MS = 90_000;
+// Strip the bottom 12% of the generated banner. Venice burns its
+// "generated with venice.ai" watermark into the bottom-right corner
+// for non-Pro accounts and silently ignores `hide_watermark: true` on
+// the API. 12% of 400 = 48px — comfortably above the watermark's
+// ~25-30px text height with a safety margin, while preserving a wide
+// editorial aspect ratio.
+const WATERMARK_CROP_FRACTION = 0.12;
 
 export type GeneratedImage = { base64: string; mimeType: string };
 
@@ -101,7 +109,8 @@ export async function generateBannerImage(
       );
       return null;
     }
-    return { base64: b64, mimeType: "image/png" };
+    const cropped = cropWatermark(b64);
+    return { base64: cropped, mimeType: "image/png" };
   } catch (err) {
     logger.warn(
       { err: err instanceof Error ? err.message : String(err) },
@@ -116,4 +125,39 @@ export async function generateBannerImage(
 /** `data:` URL ready to drop into an <img src="..."/> attribute. */
 export function asDataUrl(image: GeneratedImage): string {
   return `data:${image.mimeType};base64,${image.base64}`;
+}
+
+/**
+ * Trim the watermarked strip off the bottom of a Venice-generated banner.
+ * Venice silently ignores the `hide_watermark: true` API parameter for
+ * non-Pro accounts (and even with Pro, account/key linking can fail), so
+ * we deterministically remove the watermark zone client-side: decode the
+ * PNG, copy the top (1 - WATERMARK_CROP_FRACTION) of rows, re-encode.
+ *
+ * Pure JS (pngjs), no native bindings — keeps the Fly image lean. On any
+ * decode/encode failure we return the original base64 unchanged rather
+ * than failing the email send.
+ */
+function cropWatermark(base64: string): string {
+  try {
+    const buf = Buffer.from(base64, "base64");
+    const src = PNG.sync.read(buf);
+    const newHeight = Math.max(
+      1,
+      Math.floor(src.height * (1 - WATERMARK_CROP_FRACTION)),
+    );
+    if (newHeight >= src.height) return base64;
+    const dst = new PNG({ width: src.width, height: newHeight });
+    // PNG pixel buffers are row-major RGBA, so copying the first
+    // newHeight rows is just a single byte-level slice.
+    const bytesPerRow = src.width * 4;
+    src.data.copy(dst.data, 0, 0, newHeight * bytesPerRow);
+    return PNG.sync.write(dst).toString("base64");
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "Image gen: watermark crop failed — returning original",
+    );
+    return base64;
+  }
 }
