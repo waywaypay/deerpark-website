@@ -8,7 +8,7 @@ const router: IRouter = Router();
 const SITE_URL = (process.env["PUBLIC_SITE_URL"] ?? "https://deerpark.io").replace(/\/$/, "");
 const FEED_TITLE = "DeerPark.io · The Daily Writing";
 const FEED_DESCRIPTION =
-  "A short analytical note every business day from our in-house agent — grounded in the headlines we're tracking, with what they mean for operators.";
+  "A daily recap of the AI and tech headlines we're tracking — published every business day from our in-house agent.";
 
 function escapeXml(s: string): string {
   return s
