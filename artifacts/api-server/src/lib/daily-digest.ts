@@ -13,6 +13,7 @@ import { logger } from "./logger";
 import {
   composeDailyEmail,
   loadTopHeadlinesForEmail,
+  BANNER_CID,
   type ComposedEmail,
 } from "./top10-email";
 
@@ -181,12 +182,31 @@ export async function loadActiveSubscribers(): Promise<
 
 type SendResult = { recipient: string; ok: boolean; error?: string };
 
+/**
+ * Build the Resend `attachments` array for the composed email's banner.
+ * Inlining via `content_id` keeps the binary out of the HTML body so
+ * Gmail's ~102KB clip threshold isn't tripped by a base64-encoded PNG.
+ */
+function buildAttachments(
+  email: ComposedEmail,
+): Array<{ filename: string; content: string; content_id: string }> {
+  if (!email.bannerImage) return [];
+  return [
+    {
+      filename: BANNER_CID,
+      content: email.bannerImage.base64,
+      content_id: BANNER_CID,
+    },
+  ];
+}
+
 async function sendOne(
   email: ComposedEmail,
   recipient: { email: string; unsubscribeToken: string },
   cfg: DigestConfig,
 ): Promise<SendResult> {
   const unsubscribeUrl = `${cfg.publicBaseUrl}/api/unsubscribe?token=${encodeURIComponent(recipient.unsubscribeToken)}`;
+  const attachments = buildAttachments(email);
   // The composed HTML/text already contain the per-recipient unsubscribe URL
   // because we re-compose per recipient (see composeAndSendDailyTop10 below).
   const res = await fetch(RESEND_API, {
@@ -201,6 +221,7 @@ async function sendOne(
       subject: email.subject,
       html: email.html,
       text: email.text,
+      ...(attachments.length > 0 ? { attachments } : {}),
       // RFC 8058 one-click unsubscribe header. Gmail/Yahoo prefer this.
       headers: {
         "List-Unsubscribe": `<${unsubscribeUrl}>`,
@@ -361,6 +382,7 @@ export async function sendTestDigest(to: string): Promise<SendTestResult> {
   }
 
   const subject = `[TEST] ${composed.subject}`;
+  const attachments = buildAttachments(composed);
   const res = await fetch(RESEND_API, {
     method: "POST",
     headers: {
@@ -373,6 +395,7 @@ export async function sendTestDigest(to: string): Promise<SendTestResult> {
       subject,
       html: composed.html,
       text: composed.text,
+      ...(attachments.length > 0 ? { attachments } : {}),
     }),
   });
 
@@ -415,9 +438,19 @@ export async function previewDailyDigest(): Promise<
   });
   if (!composed) return null;
 
+  // Sends use `cid:` references resolved against MIME attachments, but the
+  // admin preview renders inside a browser iframe where `cid:` won't load.
+  // Swap to a `data:` URL just for the preview so the banner shows up.
+  const previewHtml = composed.bannerImage
+    ? composed.html.replace(
+        `cid:${BANNER_CID}`,
+        `data:${composed.bannerImage.mimeType};base64,${composed.bannerImage.base64}`,
+      )
+    : composed.html;
+
   return {
     subject: composed.subject,
-    html: composed.html,
+    html: previewHtml,
     text: composed.text,
     headlineCount: composed.headlineCount,
     bannerGenerated: composed.bannerGenerated,
