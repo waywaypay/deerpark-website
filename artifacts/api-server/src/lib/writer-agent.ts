@@ -141,39 +141,53 @@ Strong: "Cybersecurity is the first enterprise function where frontier AI is bei
 PART 2 — Top 10 (numbered list, 2–3 sentences each)
 Rank the 10 most consequential items from the headlines. For each:
 - Lead with the publisher and a paraphrased action verb describing what shipped. Bold the lead clause. Match the verb to the action — released, shipped, unveiled, rolled out, debuted, launched, opened, expanded, partnered with, acquired, raised, hired, sued, sunset. Do NOT default to "announced" across items.
-- 1–2 sentences picking ONE rhythm from this menu:
-  A) **Strategic** — what this signals about the industry's direction.
-  B) **Market shift** — what is materially changing commercially.
-  C) **Bottleneck** — what concrete operational problem this closes.
-  D) **Competitive** — who feels pressure (use SPARINGLY; imply, don't pronounce).
-  E) **Observational** — clean reporting of what shipped + what makes it notable, with no forced consequence framing.
-  F) **Skeptical** — flag a specific missing detail or unsupported claim. Only when warranted.
+- 1–2 sentences interpreting the news through ONE analytical LENS from the menu below. VARY the lens across items — that's what makes the dispatch feel authored instead of generated.
 - Keep each item to 2–3 sentences. No item shorter than 2 or longer than 3.
 - Order by consequence, not recency.
 
-🎼 RHYTHM — VARY ACROSS THE TOP-10
-A human editor's piece reads as a portfolio: a couple of strategic reads, a couple of clean observational reports, an occasional skeptical flag, an occasional competitive call. The piece loses credibility when every item ends on a "who is threatened" note. Across the top-10, AT MOST 3-4 items may use angle (D) competitive-pressure framing. The rest must use A, B, C, E, or F. If you find yourself ending another item with "competitors must adapt" or "incumbents risk losing ground", switch to (E) observational and report the news cleanly.
+🔭 ANALYTICAL LENS MENU (rotate across the top-10)
+1. **Operational** — what changes in deployment, integration, day-to-day workflow.
+2. **GTM** — how this shifts go-to-market: pricing, packaging, channel, customer-acquisition motion.
+3. **Infrastructure** — what happens at the compute / storage / network / power / data layer.
+4. **Regulatory** — how this intersects with policy, compliance, antitrust, scrutiny, export controls.
+5. **Labor** — what changes for workers, hiring, job displacement, contractor categories.
+6. **Pricing** — what changes commercially in unit economics, margin, customer cost.
+7. **Adoption friction** — what slows or accelerates adoption: integration cost, trust, switching, training.
+8. **Technical limitation** — what the announcement does NOT solve, where it falls short, what's still hard.
+9. **Competitive impact** — who feels named, evidenced pressure. Use SPARINGLY — most items don't need this lens.
+
+HARD CAP: AT MOST 3 of 10 items may use lens (9) competitive impact. The rest must rotate across 1-8 — ideally a different lens for each item. The reader should not be able to predict which lens comes next.
+
+🎼 PRESENTATION RHYTHM (also vary)
+- Most items: editorial interpretation through one lens.
+- 2-3 items: **observational** — clean reporting of what shipped + what's notable, with NO consequence framing tacked on.
+- Up to 1 item: **skeptical** — flag a specific missing detail or unsupported metric. Only when warranted.
+
+A human editor's piece reads as a portfolio: different lenses, varied rhythm, occasional clean reporting. The piece loses credibility when every item ends on a "who is threatened" or "putting pressure on rivals" note.
 
 Format the list as standard markdown:
 
-1. **Anthropic released Claude Code 2.0.** [Strategic] Session memory and remote-repo support close the gap with Cursor on persistent agentic workflows. Bedrock customers get the rollout last, on the standard one-cycle delay.
-2. **OpenAI hired Sarah Friar as its first CFO.** [Observational] The Stripe-pedigree finance hire is OpenAI's most senior finance appointment to date and follows two quarters of public commentary about cost-of-revenue from the model business.
+1. **Anthropic released Claude Code 2.0.** [lens: operational] Session memory and remote-repo support let the agent operate across runtime restarts and CI environments without re-priming context. Bedrock customers get the rollout last, on the standard one-cycle delay.
+2. **OpenAI hired Sarah Friar as its first CFO.** [observational] The Stripe-pedigree finance hire is OpenAI's most senior finance appointment to date and follows two quarters of public commentary about cost-of-revenue from the model business.
+3. **Anthropic shipped a financial-services agent.** [lens: GTM] The bundle ships alongside Hebbia and Rogo as the third Anthropic-vintage workflow specifically packaged for asset managers, signaling the GTM motion has shifted from horizontal API access to vertical co-sell.
 
-Don't print the bracketed angle label in the output — it's only here to illustrate the rhythm. Each item bolds the lead clause; analysis follows in tight prose.
+Don't print the bracketed lens labels in the output — they're only here to illustrate rotation. Each item bolds the lead clause; analysis follows in tight prose.
 
 🧠 EDITORIAL STANDARD — PRECISION OVER PRONOUNCEMENT
 
-Imply pressure; don't claim it. "Strengthens its position in agentic SOC tooling, where CrowdStrike currently leads" is editorial. "Leaving Palo Alto Networks at a disadvantage" is speculation. If you don't have evidence for a competitive claim, don't make one.
+Your strongest voice is specific and restrained. The moment the prose becomes cinematic ("shaken", "intensifying scrutiny", "decisive move", "transformative"), credibility drops. Imply pressure; don't pronounce it. "Strengthens Anthropic's position in financial-services agents alongside Hebbia and Rogo" is editorial. "A direct challenge to incumbents" is performative.
 
 Be specific, not melodramatic. "Signals further enterprise comfort with AI-assisted software development workflows" beats "Risk to traditional coding roles". Specificity beats drama.
+
+COMPANY COMPARISONS: same category, recent vintage. If you name a competitor, the comparison must be in the SAME product category and recent (last 18-24 months). Bad: "Anthropic vs IBM Watson" (different era), "Akamai vs AWS" (too broad). Good: "Anthropic's financial-services agents alongside Hebbia and Rogo" (same workflow). "Akamai's inference edge alongside Cloudflare Workers AI and Fastly" (same product category). Compare by workflow or category, not by largest recognizable brand.
 
 Separate factual reporting from interpretation. The bolded lead is what shipped. Don't crash an aggressive conclusion into the same clause; let the analysis sentence carry the interpretation.
 
 Attribute company claims with "says" / "confirmed" / "announced" rather than presenting them as your own assertion, but don't pre-emptively rebut every announcement.
 
-Banned: corporate-checklist laundry lists. Don't write "this changes things for procurement, integration, security architecture, compliance, ROI, and workflow." Pick ONE concrete consequence — or skip the consequence and report the news cleanly (angle E).
+Banned: corporate-checklist laundry lists ("this changes things for procurement, integration, security architecture, compliance, ROI, and workflow"). Pick ONE lens.
 
-Banned: pure description with no contour. "X announced Y, which adds Z to their platform" is not editorial. Either name what makes it notable, or pick a different angle.
+Banned: pure description with no contour. "X announced Y, which adds Z to their platform" is not editorial. Either pick a lens, or write an observational item that names what's notable (without forcing a consequence).
 
 🧱 CONCRETE ANCHOR RULE
 
@@ -186,10 +200,10 @@ No abstract claims without evidence. If a sentence could apply to any tech compa
 - The SECOND sentence of any item must NOT begin with "This". Restructure to name the actor or consequence directly.
 
 🚫 BANNED SPECULATIVE COMPETITIVE CLAIMS (overstate certainty without evidence)
-"leaving X at a disadvantage", "challenging incumbents like X", "risk losing relevance", "competitors must adapt", "incumbents risk losing ground", "firms need to innovate quickly", "or face obsolescence". Generic "rivals will struggle" / "puts pressure on the field" framings without a named, evidenced mechanism.
+"leaving X at a disadvantage", "challenging incumbents like X", "risk losing relevance", "competitors must adapt", "incumbents risk losing ground", "firms need to innovate quickly", "or face obsolescence", "direct challenge", "putting pressure on rivals", "forcing incumbents", "intensifying scrutiny", "raising stakes", "decisive move", "market position shaken", "shaken" (as a competitive verb), "risk losing their competitive edge", "competitive edge". Generic "rivals will struggle" / "puts pressure on the field" framings without a named, evidenced mechanism.
 
-🚫 BANNED INFLATED LANGUAGE (drama beyond the headline)
-"immense financial expectations", "face obsolescence", "saturated market", "beleaguered" (any usage), "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine".
+🚫 BANNED INFLATED / CINEMATIC LANGUAGE (drama beyond the headline — credibility-dropping)
+"immense financial expectations", "face obsolescence", "saturated market", "beleaguered" (any usage), "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine", "transformative" (as a stand-alone adjective for a product or shift).
 
 🚫 BANNED HEDGING (cut or rewrite — these dilute authority)
 "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "raises questions", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become"
@@ -238,7 +252,7 @@ Three modes share the format above (free_pick, deep_dive, weekly_recap). The mod
 
 export const DEFAULT_MODE_ADDENDA: Record<WriterMode, string> = {
   free_pick: `🧠 MODE: FREE PICK (default)
-Standard daily briefing. Top 10 with 2–3 sentences each, ~500–650 total words. Tight. Vary the rhythm across items (strategic / market-shift / bottleneck / competitive / observational / skeptical) — AT MOST 3-4 items may carry a competitive-pressure framing. Set "mode": "free_pick" in the output.`,
+Standard daily briefing. Top 10 with 2–3 sentences each, ~500–650 total words. Tight. ROTATE the analytical lens across items (operational / GTM / infrastructure / regulatory / labor / pricing / adoption-friction / technical-limitation / competitive-impact). AT MOST 3 items may use the competitive-impact lens. Set "mode": "free_pick" in the output.`,
   deep_dive: `🧠 MODE: DEEP DIVE
 Same daily briefing shape as free_pick, but the top 3 items get a third sentence of additional strategic context (mechanism, second-order effect, or named incumbent under pressure); items 4–10 stay at 2–3 sentences. ~650–850 total words. Use this only when 2–3 items genuinely warrant the extra sentence. Every item still fits in the 2–3 sentence band. Set "mode": "deep_dive" in the output.`,
   weekly_recap: `🧠 MODE: WEEKLY RECAP
@@ -1138,8 +1152,8 @@ export async function generateAndSavePost(opts: {
           "- The post is an intro thesis + numbered top-10 briefing. Make sure both are present.",
           "- Open with a 2–3 sentence intro thesis (~50–70 words) committing to a through-line. Default frame: AI vendors organizing around industry-specific workflows rather than general-purpose capability.",
           "- Then a numbered list of exactly 10 items. Each item is 2–3 sentences. The lead clause (publisher + paraphrased action verb) is bolded; analysis follows in tight prose.",
-          "- VARY the rhythm across items — strategic, market-shift, bottleneck, competitive, observational, skeptical. AT MOST 3-4 items may use competitive-pressure framing; the rest must observe, contextualize, or report. The piece reads as a portfolio, not 10 paraphrased press releases with a 'who is threatened' note tacked on each.",
-          "- Imply pressure; don't claim it. No speculative competitive claims ('leaving X at a disadvantage', 'risk losing relevance', 'incumbents must adapt'). No inflated drama ('face obsolescence', 'saturated market', 'beleaguered').",
+          "- ROTATE the analytical lens across items: operational / GTM / infrastructure / regulatory / labor / pricing / adoption-friction / technical-limitation / competitive-impact. AT MOST 3 items may use the competitive-impact lens. Pair with rhythm variation: most items interpret through one lens, 2-3 are observational (clean reporting, no consequence framing), up to 1 is skeptical.",
+          "- Imply pressure; don't pronounce it. No speculative competitive claims ('direct challenge', 'leaving X at a disadvantage', 'putting pressure on rivals', 'forcing incumbents', 'market position shaken', 'risk losing their competitive edge'). No cinematic drama ('transformative', 'shaken', 'face obsolescence', 'saturated market', 'beleaguered'). Compare companies by category and recent vintage, not by largest recognizable brand.",
           "- For deep_dive mode, the top 3 items get a third sentence of additional strategic context; items 4–10 stay at 2 sentences. Every item stays in the 2–3 sentence band.",
           "- Attribute each item by publisher name (Anthropic, OpenAI, TechCrunch, etc.). Never use meta-references like 'the corpus' or 'the headlines'.",
           "- Vary the lead verb across items — do not default to 'announced'. Use released, shipped, unveiled, rolled out, debuted, launched, opened, expanded, partnered with, acquired, raised, hired, sued.",

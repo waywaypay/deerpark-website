@@ -310,27 +310,41 @@ Given the day's top-10 headlines, produce three things in a single JSON object.
    Strong example (use this register):
    "AI vendors are increasingly organizing around industry-specific workflows rather than general-purpose capability. This week's launches in cybersecurity, customer service, and financial services suggest the competitive edge is shifting toward operational specialization, compliance alignment, and domain-specific deployment."
 
-3. COMMENTARY for EVERY item — 2-3 sentences each. Lead with the publisher and a paraphrased action verb describing what shipped, bolded with markdown asterisks. Then 1-2 sentences picking ONE rhythm from this menu:
+3. COMMENTARY for EVERY item — 2-3 sentences each. Lead with the publisher and a paraphrased action verb describing what shipped, bolded with markdown asterisks. Then 1-2 sentences interpreting the news through ONE analytical LENS. Vary the lens across items — that's what makes the dispatch feel authored instead of generated.
 
-   A) **Strategic** — what this signals about the industry's direction.
-   B) **Market shift** — what is materially changing commercially.
-   C) **Bottleneck** — what concrete operational problem this closes.
-   D) **Competitive** — who feels pressure (use SPARINGLY, only when the headline genuinely supports it; imply, don't pronounce).
-   E) **Observational** — clean reporting of what shipped + what makes it notable, with no forced consequence framing.
-   F) **Skeptical** — flag a specific missing detail, an unsupported metric, or a vendor claim worth pressure-testing. Only when the headline genuinely warrants it.
+   ANALYTICAL LENS MENU (rotate across the top-10):
+   1. **Operational** — what changes in deployment, integration, day-to-day workflow.
+   2. **GTM** — how this shifts go-to-market: pricing, packaging, channel, customer-acquisition motion.
+   3. **Infrastructure** — what happens at the compute / storage / network / power / data layer.
+   4. **Regulatory** — how this intersects with policy, compliance, antitrust, scrutiny, export controls.
+   5. **Labor** — what changes for workers, hiring, job displacement, contractor categories.
+   6. **Pricing** — what changes commercially in unit economics, margin, customer cost.
+   7. **Adoption friction** — what slows or accelerates adoption: integration cost, trust, switching, training.
+   8. **Technical limitation** — what the announcement does NOT solve, where it falls short, what's still hard.
+   9. **Competitive impact** — who feels named, evidenced pressure. Use SPARINGLY — most items don't need this lens.
 
-   VARY THE RHYTHM. The dispatch reads as a portfolio: a couple of strategic reads, a couple of clean observational reports, an occasional skeptical flag, an occasional competitive call. The piece loses credibility when every item ends on a "who is threatened" note.
+   HARD CAP: At most 3 of 10 items may use lens (9) competitive impact. The rest must rotate across 1-8 — ideally a different lens for each item. The reader should not be able to predict which lens comes next.
 
-PRECISION OVER PRONOUNCEMENT
-- Imply pressure; don't claim it. "Strengthens its position in agentic SOC tooling, where CrowdStrike and Wiz currently lead" is editorial. "Leaving Palo Alto Networks at a disadvantage" is speculation. If you don't have evidence for a competitive claim, don't make one.
-- Be specific, not melodramatic. "Signals further enterprise comfort with AI-assisted software development workflows" beats "Risk to traditional coding roles". Specificity beats drama.
-- Separate factual reporting from interpretation. Sentence 1 is the bolded lead — what shipped. Don't crash an aggressive conclusion into the same clause; let the analysis sentence carry the interpretation.
+   PRESENTATION RHYTHM (also vary):
+   - Most items: editorial interpretation through one lens.
+   - 2-3 items: **observational** — clean reporting of what shipped + what's notable, with NO consequence framing tacked on.
+   - Up to 1 item: **skeptical** — flag a specific missing detail or unsupported metric. Only when warranted.
+
+PRECISION OVER PRONOUNCEMENT — your strongest voice is specific and restrained
+The moment the prose becomes cinematic ("shaken", "intensifying scrutiny", "decisive move", "transformative"), credibility drops. Imply pressure; don't pronounce. "Strengthens Anthropic's position in financial-services agents alongside Hebbia and Rogo" is editorial. "A direct challenge to Anthropic's competitors" is performative.
+
+Be specific, not melodramatic. "Signals further enterprise comfort with AI-assisted software development workflows" beats "Risk to traditional coding roles". Specificity beats drama.
+
+COMPANY COMPARISONS: same category, recent vintage
+If you name a competitor, the comparison must be in the SAME product category and recent (last 18-24 months). Bad: "Anthropic vs IBM Watson" (different era), "Akamai vs AWS" (too broad). Good: "Anthropic's financial-services agents alongside Hebbia and Rogo" (same workflow). "Akamai's inference edge alongside Cloudflare Workers AI and Fastly" (same product category). Compare by workflow or category, not by largest recognizable brand.
+
+Separate factual reporting from interpretation. Sentence 1 is the bolded lead — what shipped. Don't crash an aggressive conclusion into the same clause; let the analysis sentence carry the interpretation.
 
 VARY the lead verb. Do NOT default to "announced". Match the verb to the action: released, shipped, unveiled, rolled out, debuted, launched, opened, expanded, extended, partnered with, acquired, raised, hired, sued, sunset, etc.
 
 HARD RULES for commentary:
 - 2-3 sentences total per item including the bolded lead. No shorter than 2, no longer than 3.
-- Vary the angle across items. Across the top-10, AT MOST 3-4 items may use angle (D) competitive-pressure framing. The rest must use A, B, C, E, or F. If you're tempted to end yet another item with "competitors must adapt" or "incumbents risk losing ground", switch to (E) observational and report the news cleanly.
+- Vary the lens across items. AT MOST 3 of 10 items may use lens (9) competitive impact. The rest must use a different lens from 1-8.
 - Use the source name as the publisher. Originator (e.g. "Anthropic" for an anthropic.com post): "Anthropic released...". Press coverage (e.g. "Bloomberg Technology"): "Bloomberg reports..." or "per Bloomberg".
 - The bolded lead must NOT contain the headline title verbatim. Reuse no more than three consecutive words from the title.
 - Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
@@ -340,10 +354,11 @@ HARD RULES for commentary:
 
 BANNED SPECULATIVE COMPETITIVE CLAIMS (overstate certainty without evidence):
 - "leaving X at a disadvantage", "challenging incumbents like X", "risk losing relevance", "competitors must adapt", "incumbents risk losing ground", "firms need to innovate quickly", "or face obsolescence"
+- "direct challenge", "putting pressure on rivals", "forcing incumbents", "intensifying scrutiny", "raising stakes", "decisive move", "market position shaken" / "shaken", "risk losing their competitive edge", "competitive edge"
 - Generic "rivals will struggle" / "puts pressure on the field" framings without a named, evidenced mechanism
 
-BANNED INFLATED LANGUAGE (drama beyond the headline):
-- "immense financial expectations", "face obsolescence", "saturated market", "beleaguered" (any usage), "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine"
+BANNED INFLATED / CINEMATIC LANGUAGE (drama beyond the headline):
+- "immense financial expectations", "face obsolescence", "saturated market", "beleaguered" (any usage), "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine", "transformative" (as a stand-alone adjective for a product or shift)
 
 BANNED HEDGING (cut or rewrite — these dilute authority):
 - "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "raises questions", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become"
@@ -496,35 +511,40 @@ async function polishWithLlm(
  */
 const COMMENTARY_FALLBACK_PROMPT = `You write 2-3 sentence editorial briefs for AI/tech headlines. Sharp, varied, written like a human editor — not a market-commentary template.
 
-For each headline, lead with the publisher and a paraphrased action verb describing what shipped (bolded with markdown asterisks). Then 1-2 sentences picking ONE rhythm from the menu below — vary the rhythm across items so the piece doesn't read as 10 paraphrased press releases with the same competitive-pressure note tacked on each.
+For each headline, lead with the publisher and a paraphrased action verb describing what shipped (bolded with markdown asterisks). Then 1-2 sentences interpreting the news through ONE analytical LENS. Vary the lens across items.
 
-ANGLE MENU
-A) Strategic — what this signals about the industry's direction.
-B) Market shift — what is materially changing commercially.
-C) Bottleneck — what operational problem this closes.
-D) Competitive — who feels pressure (use SPARINGLY; imply, don't pronounce).
-E) Observational — clean reporting of what shipped + what makes it notable.
-F) Skeptical — flag a specific missing detail or unsupported claim. Only when the headline genuinely warrants it.
+ANALYTICAL LENS MENU (rotate across items):
+1. Operational — what changes in deployment, integration, day-to-day workflow.
+2. GTM — how this shifts pricing, packaging, channel, customer-acquisition motion.
+3. Infrastructure — what happens at the compute / storage / network / power / data layer.
+4. Regulatory — policy, compliance, antitrust, scrutiny, export controls.
+5. Labor — workers, hiring, job displacement.
+6. Pricing — unit economics, margin, customer cost.
+7. Adoption friction — integration cost, trust, switching, training.
+8. Technical limitation — what this does NOT solve, where it falls short.
+9. Competitive impact — named, evidenced pressure on a specific company. Use SPARINGLY.
+
+HARD CAP: At most 3 of the items may use lens (9) competitive impact. The rest must rotate across 1-8.
 
 The bolded lead must PARAPHRASE the title. Reuse no more than three consecutive words. Vary the lead verb: released, shipped, unveiled, rolled out, debuted, launched, opened, expanded, partnered with, acquired, raised, hired, sued — match the verb to the action.
 
-PRECISION OVER PRONOUNCEMENT
-- Imply pressure; don't claim it. "Strengthens its position in agentic SOC tooling, where CrowdStrike currently leads" is editorial. "Leaving Palo Alto Networks at a disadvantage" is speculation.
+PRECISION OVER PRONOUNCEMENT — your strongest voice is specific and restrained
+- Imply pressure; don't claim it. "Strengthens Anthropic's position in financial-services agents alongside Hebbia and Rogo" is editorial. "A direct challenge to incumbents" is performative. Cinematic verbs ("shaken", "intensifying", "decisive", "transformative") drop credibility — cut them.
 - Be specific, not melodramatic. "Signals further enterprise comfort with AI-assisted software development workflows" beats "Risk to traditional coding roles".
+- Compare by category, not scale. "Anthropic vs IBM Watson" is dated. "Akamai vs AWS" is too broad. Compare to same-category, recent-vintage competitors.
 
 HARD RULES
 - 2-3 sentences total per item including the bolded lead.
-- Across the items, AT MOST 3-4 may use angle (D) competitive-pressure framing. The rest must use A, B, C, E, or F.
 - Use the source name as the publisher.
 - The bolded lead must NOT contain the headline title verbatim.
 - Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
 - No exclamation marks. No generic "however," hedge transitions used as filler.
 - The SECOND sentence must NOT begin with "This". Restructure: name the actor or consequence directly.
-- BANNED SPECULATIVE COMPETITIVE: "leaving X at a disadvantage", "challenging incumbents like X", "risk losing relevance", "competitors must adapt", "incumbents risk losing ground", "firms need to innovate quickly", "or face obsolescence".
-- BANNED INFLATED LANGUAGE: "immense financial expectations", "face obsolescence", "saturated market", "beleaguered", "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine".
+- BANNED SPECULATIVE COMPETITIVE: "leaving X at a disadvantage", "challenging incumbents like X", "risk losing relevance", "competitors must adapt", "incumbents risk losing ground", "firms need to innovate quickly", "or face obsolescence", "direct challenge", "putting pressure on rivals", "forcing incumbents", "intensifying scrutiny", "raising stakes", "decisive move", "market position shaken", "shaken", "risk losing their competitive edge", "competitive edge".
+- BANNED INFLATED / CINEMATIC: "immense financial expectations", "face obsolescence", "saturated market", "beleaguered", "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine", "transformative" (as stand-alone adjective).
 - BANNED HEDGING: "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become".
 - BANNED CORPORATE JARGON: "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "for CIOs evaluating vendors", "enterprise buyers should".
-- BANNED WORDS: "formidable player", "formidable" (as a descriptor for a company), "structural" (use a concrete word or delete), "swiftly" (use "quickly" or restructure to drop the adverb).
+- BANNED WORDS: "formidable player", "formidable" (as company descriptor), "structural" (use a concrete word or delete), "swiftly" (use "quickly" or drop the adverb).
 - BANNED AI-ESE: "what's interesting", "in a world where", "speaks volumes", "isn't merely", "more than just", "in an era of", "growing trend", "highlights the growing appetite", "reflecting a broader trend", "in this landscape", "positions itself", "leverages", "drives value".
 
 Return ONLY this JSON:
