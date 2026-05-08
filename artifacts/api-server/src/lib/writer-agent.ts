@@ -1349,48 +1349,20 @@ export async function clearRunState(): Promise<void> {
   await writeRunState({ ...IDLE_STATE });
 }
 
-let writerHandle: NodeJS.Timeout | null = null;
-
-// Tick every 12h. The agent self-throttles via abort when the corpus is too
-// thin to support a real piece, so the scheduler doesn't need a separate
-// recency floor — slow news days produce no post regardless.
-const WRITER_TICK_MS = 12 * 60 * 60 * 1000;
-
-export function startWriterScheduler(intervalMs = WRITER_TICK_MS): void {
-  if (writerHandle) return;
-
-  const tick = async () => {
-    try {
-      logger.info("Writer tick: generating post");
-      const result = await generateAndSavePost({});
-      if (!result.ok) {
-        // Abort (corpus too thin to write a real piece) is the expected
-        // clean outcome on slow days. Log at info, not warn.
-        if (result.error.startsWith("Agent aborted:")) {
-          logger.info({ rationale: result.error }, "Writer tick aborted (clean)");
-        } else {
-          logger.warn({ error: result.error }, "Writer tick failed");
-        }
-      }
-    } catch (err) {
-      logger.error({ err }, "Writer tick threw");
-    }
-  };
-
-  // Kick off after 30s so the server is fully up; then every interval.
-  setTimeout(() => void tick(), 30_000);
-  writerHandle = setInterval(() => void tick(), intervalMs);
-}
-
 // ============================================================================
-// Weekly recap scheduler
+// Weekly schedulers
 // ============================================================================
-// Once-per-ISO-week tick. Default: Monday 09:00 PT. Idempotent via the
-// posts table — if a row with mode='weekly_recap' already exists for the
-// current ISO week, the tick no-ops.
+// Two once-per-ISO-week ticks: one deep_dive on Monday mornings and one
+// weekly_recap (top-10) on Friday mornings. Idempotent via the posts table —
+// if a row with the matching mode already exists for the current ISO week,
+// the tick no-ops.
 
 const WEEKLY_TIMEZONE = "America/Los_Angeles";
-const DEFAULT_WEEKLY_DOW_PT = 1; // 1 = Monday (Sun=0)
+// 0 = Sunday, 1 = Monday, ..., 5 = Friday, 6 = Saturday.
+const DEFAULT_DEEP_DIVE_DOW_PT = 1; // Monday
+const DEFAULT_DEEP_DIVE_HOUR_PT = 9;
+const DEFAULT_DEEP_DIVE_MINUTE_PT = 0;
+const DEFAULT_WEEKLY_DOW_PT = 5; // Friday
 const DEFAULT_WEEKLY_HOUR_PT = 9;
 const DEFAULT_WEEKLY_MINUTE_PT = 0;
 // Tick every 30 minutes; the day-of-week + minute-of-day check inside
@@ -1398,6 +1370,7 @@ const DEFAULT_WEEKLY_MINUTE_PT = 0;
 const WEEKLY_TICK_MS = 30 * 60 * 1000;
 
 let weeklyHandle: NodeJS.Timeout | null = null;
+let deepDiveHandle: NodeJS.Timeout | null = null;
 
 function ptParts(now: Date = new Date()): {
   dayOfWeek: number;
@@ -1451,14 +1424,13 @@ function formatIsoWeek(d: Date): string {
   return `${date.getUTCFullYear()}-W${String(weekNo).padStart(2, "0")}`;
 }
 
-/** True if a weekly_recap post has been published for the current PT ISO week. */
-async function weeklyRecapAlreadyPublishedThisWeek(): Promise<boolean> {
+/** True if a post with the given mode has been published for the current PT ISO week. */
+async function modeAlreadyPublishedThisWeek(mode: WriterMode): Promise<boolean> {
   const { isoWeekKey } = ptParts();
-  // Find the most recent weekly_recap post and compare its ISO week key.
   const [latest] = await db
     .select({ publishedAt: postsTable.publishedAt })
     .from(postsTable)
-    .where(eq(postsTable.mode, "weekly_recap"))
+    .where(eq(postsTable.mode, mode))
     .orderBy(desc(postsTable.publishedAt))
     .limit(1);
   if (!latest) return false;
@@ -1478,10 +1450,31 @@ export async function runWeeklyRecap(opts: { force?: boolean } = {}): Promise<We
   if (!process.env["LLM_API_KEY"]) {
     return { ran: false, reason: "LLM_API_KEY not configured" };
   }
-  if (!opts.force && (await weeklyRecapAlreadyPublishedThisWeek())) {
+  if (!opts.force && (await modeAlreadyPublishedThisWeek("weekly_recap"))) {
     return { ran: false, reason: "weekly_recap already published this ISO week" };
   }
   const result = await generateAndSavePost({ modeHint: "weekly_recap" });
+  if (result.ok) {
+    return { ran: true, ok: true, postId: result.postId };
+  }
+  return { ran: true, ok: false, error: result.error };
+}
+
+/**
+ * Run one deep_dive. Idempotent: no-ops if one is already published for the
+ * current PT ISO week. Exposed so the admin "Run deep dive now" button can
+ * call it directly.
+ */
+export async function runWeeklyDeepDive(
+  opts: { force?: boolean } = {},
+): Promise<WeeklyRunResult> {
+  if (!process.env["LLM_API_KEY"]) {
+    return { ran: false, reason: "LLM_API_KEY not configured" };
+  }
+  if (!opts.force && (await modeAlreadyPublishedThisWeek("deep_dive"))) {
+    return { ran: false, reason: "deep_dive already published this ISO week" };
+  }
+  const result = await generateAndSavePost({ modeHint: "deep_dive" });
   if (result.ok) {
     return { ran: true, ok: true, postId: result.postId };
   }
@@ -1506,7 +1499,7 @@ export function startWeeklyRecapScheduler(intervalMs = WEEKLY_TICK_MS): void {
       // duplicate work; this gate just avoids early-of-day fires.
       if (dayOfWeek !== targetDow) return;
       if (minutesOfDay < targetMinutesOfDay) return;
-      if (await weeklyRecapAlreadyPublishedThisWeek()) return;
+      if (await modeAlreadyPublishedThisWeek("weekly_recap")) return;
       logger.info("Weekly recap tick: generating");
       const result = await runWeeklyRecap();
       if (!result.ran) {
@@ -1526,4 +1519,44 @@ export function startWeeklyRecapScheduler(intervalMs = WEEKLY_TICK_MS): void {
   // Kick off after 60s; then every interval.
   setTimeout(() => void tick(), 60_000);
   weeklyHandle = setInterval(() => void tick(), intervalMs);
+}
+
+export function startWeeklyDeepDiveScheduler(intervalMs = WEEKLY_TICK_MS): void {
+  if (deepDiveHandle) return;
+
+  const targetDow = Number(
+    process.env["WEEKLY_DEEP_DIVE_DOW_PT"] ?? String(DEFAULT_DEEP_DIVE_DOW_PT),
+  );
+  const targetHour = Number(
+    process.env["WEEKLY_DEEP_DIVE_HOUR_PT"] ?? String(DEFAULT_DEEP_DIVE_HOUR_PT),
+  );
+  const targetMinute = Number(
+    process.env["WEEKLY_DEEP_DIVE_MINUTE_PT"] ?? String(DEFAULT_DEEP_DIVE_MINUTE_PT),
+  );
+  const targetMinutesOfDay = targetHour * 60 + targetMinute;
+
+  const tick = async () => {
+    try {
+      const { dayOfWeek, minutesOfDay } = ptParts();
+      if (dayOfWeek !== targetDow) return;
+      if (minutesOfDay < targetMinutesOfDay) return;
+      if (await modeAlreadyPublishedThisWeek("deep_dive")) return;
+      logger.info("Weekly deep_dive tick: generating");
+      const result = await runWeeklyDeepDive();
+      if (!result.ran) {
+        logger.info({ reason: result.reason }, "Weekly deep_dive skipped");
+        return;
+      }
+      if (result.ok) {
+        logger.info({ postId: result.postId }, "Weekly deep_dive published");
+      } else {
+        logger.warn({ error: result.error }, "Weekly deep_dive failed");
+      }
+    } catch (err) {
+      logger.error({ err }, "Weekly deep_dive tick threw");
+    }
+  };
+
+  setTimeout(() => void tick(), 60_000);
+  deepDiveHandle = setInterval(() => void tick(), intervalMs);
 }
