@@ -53,5 +53,9 @@ COPY --from=build /app/artifacts/api-server/dist ./dist
 # logic works in both dev (tsx-run from src) and prod (bundle-run from dist).
 COPY --from=build /app/lib/db/migrations ./lib/db/migrations
 
+# Drop root. node:22-slim ships a `node` user (uid 1000); files copied above
+# inherit world-readable perms so no chown is needed.
+USER node
+
 EXPOSE 8080
 CMD ["node", "--enable-source-maps", "./dist/index.mjs"]

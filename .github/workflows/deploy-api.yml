@@ -41,7 +41,11 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup flyctl
-        uses: superfly/flyctl-actions/setup-flyctl@master
+        # Pinned to a SHA — `@master` is mutable and the next step uses
+        # FLY_API_TOKEN, which can deploy any image to prod. Bump by
+        # re-resolving the SHA for the latest release tag:
+        #   gh api repos/superfly/flyctl-actions/git/refs/tags
+        uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # 1.6
 
       - name: Deploy
         run: flyctl deploy --remote-only
