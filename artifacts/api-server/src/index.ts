@@ -1,7 +1,10 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startHeadlineScheduler } from "./lib/ingest-headlines";
-import { startWriterScheduler, startWeeklyRecapScheduler } from "./lib/writer-agent";
+import {
+  startWeeklyDeepDiveScheduler,
+  startWeeklyRecapScheduler,
+} from "./lib/writer-agent";
 import { startDailyDigestScheduler } from "./lib/daily-digest";
 import { ensureLeadsSchema } from "./routes/leads";
 import { runDataMigrations } from "./lib/migrate";
@@ -58,12 +61,20 @@ app.listen(port, (err) => {
     }
   });
 
-  if (process.env["DISABLE_WRITER_SCHEDULER"] !== "1") {
+  if (process.env["DISABLE_WEEKLY_DEEP_DIVE_SCHEDULER"] !== "1") {
     if (process.env["LLM_API_KEY"]) {
-      startWriterScheduler();
-      logger.info("Writer scheduler started (12h tick, 36h floor — ~2-3 posts/week when corpus supports)");
+      startWeeklyDeepDiveScheduler();
+      logger.info(
+        {
+          dowPt: process.env["WEEKLY_DEEP_DIVE_DOW_PT"] ?? "1",
+          hourPt: process.env["WEEKLY_DEEP_DIVE_HOUR_PT"] ?? "9",
+          minutePt: process.env["WEEKLY_DEEP_DIVE_MINUTE_PT"] ?? "0",
+          timezone: "America/Los_Angeles",
+        },
+        "Weekly deep_dive scheduler started (Monday 9:00 PT — once per ISO week)",
+      );
     } else {
-      logger.warn("LLM_API_KEY not set — writer scheduler disabled");
+      logger.warn("LLM_API_KEY not set — weekly deep_dive scheduler disabled");
     }
   }
 
@@ -72,12 +83,12 @@ app.listen(port, (err) => {
       startWeeklyRecapScheduler();
       logger.info(
         {
-          dowPt: process.env["WEEKLY_RECAP_DOW_PT"] ?? "1",
+          dowPt: process.env["WEEKLY_RECAP_DOW_PT"] ?? "5",
           hourPt: process.env["WEEKLY_RECAP_HOUR_PT"] ?? "9",
           minutePt: process.env["WEEKLY_RECAP_MINUTE_PT"] ?? "0",
           timezone: "America/Los_Angeles",
         },
-        "Weekly recap scheduler started (Monday 9:00 PT — once per ISO week)",
+        "Weekly recap scheduler started (Friday 9:00 PT — once per ISO week)",
       );
     } else {
       logger.warn("LLM_API_KEY not set — weekly recap scheduler disabled");
