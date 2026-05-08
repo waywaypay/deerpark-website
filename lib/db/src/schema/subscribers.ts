@@ -7,6 +7,9 @@ export const subscribersTable = pgTable(
   {
     id: serial("id").primaryKey(),
     email: text("email").notNull().unique(),
+    /** Nullable in the DB so legacy rows survive; required at the API boundary. */
+    firstName: text("first_name"),
+    lastName: text("last_name"),
     source: text("source"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     /** Random per-subscriber token for one-click unsubscribe. */
@@ -19,6 +22,8 @@ export const subscribersTable = pgTable(
 
 export const insertSubscriberSchema = createInsertSchema(subscribersTable, {
   email: (schema) => schema.email().max(320),
+  firstName: () => z.string().trim().min(1, "First name required").max(100),
+  lastName: () => z.string().trim().min(1, "Last name required").max(100),
   source: (schema) => schema.max(100).optional(),
 }).omit({ id: true, createdAt: true, unsubscribeToken: true, unsubscribedAt: true });
 

@@ -84,6 +84,8 @@ type SubscribeStatus =
   | { state: "error"; message: string };
 
 const DispatchSubscribe = () => {
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<SubscribeStatus>({ state: "idle" });
 
@@ -95,18 +97,25 @@ const DispatchSubscribe = () => {
       const res = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, source: "dispatch" }),
+        body: JSON.stringify({
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          email,
+          source: "dispatch",
+        }),
       });
 
       if (res.ok) {
         setStatus({ state: "success" });
+        setFirstName("");
+        setLastName("");
         setEmail("");
         return;
       }
 
       const message =
         res.status === 400
-          ? "Please enter a valid email address."
+          ? "Please enter your first name, last name, and a valid email address."
           : "Couldn't reach our subscribe service. Try again in a moment, or email contact@deerpark.io.";
       setStatus({ state: "error", message });
     } catch {
@@ -129,9 +138,35 @@ const DispatchSubscribe = () => {
   }
 
   const submitting = status.state === "loading";
+  const inputClass =
+    "flex-1 h-12 px-4 bg-foreground/[0.04] border border-foreground/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors disabled:opacity-60";
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
+        <input
+          type="text"
+          required
+          value={firstName}
+          onChange={(e) => setFirstName(e.target.value)}
+          placeholder="First name"
+          aria-label="First name"
+          autoComplete="given-name"
+          disabled={submitting}
+          className={inputClass}
+        />
+        <input
+          type="text"
+          required
+          value={lastName}
+          onChange={(e) => setLastName(e.target.value)}
+          placeholder="Last name"
+          aria-label="Last name"
+          autoComplete="family-name"
+          disabled={submitting}
+          className={inputClass}
+        />
+      </div>
       <div className="flex flex-col sm:flex-row gap-3">
         <input
           type="email"
@@ -142,7 +177,7 @@ const DispatchSubscribe = () => {
           aria-label="Email address"
           autoComplete="email"
           disabled={submitting}
-          className="flex-1 h-12 px-4 bg-foreground/[0.04] border border-foreground/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors disabled:opacity-60"
+          className={inputClass}
         />
         <Button
           type="submit"
