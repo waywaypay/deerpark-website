@@ -1,7 +1,7 @@
 // Daily top-10 email composer.
 //
 // Pipeline per send:
-//   1. selectTopHeadlines(days=1, limit=10) — same selection the website
+//   1. selectTopHeadlines(days=7, limit=10) — same selection the website
 //      uses, so the email and /dispatch always agree.
 //   2. generateBannerImage() — fresh banner illustration prompted by the
 //      day's top stories. Embedded inline as a data: URL.
@@ -86,21 +86,29 @@ export type ComposedEmail = {
   diagnostics: ComposeDiagnostics;
 };
 
+// Match the website's /api/headlines?mode=top default so the dispatch
+// email and the public Top 10 view always pull the same selection. Until
+// 2026-05 the email used a 1-day window and the website used 7 days,
+// which silently diverged whenever a mid-week banger aged out of 24h
+// but was still the website's #1.
+const EMAIL_DAYS_DEFAULT = 7;
+const EMAIL_LIMIT_DEFAULT = 10;
+
 export type ComposeOptions = {
   /** Public-facing unsubscribe URL for this recipient. */
   unsubscribeUrl: string;
   /** Public archive link. */
   archiveUrl: string;
-  /** Override; default 1d / top 10. */
+  /** Override; default matches the website's /dispatch Top 10 (7d / top 10). */
   days?: number;
   limit?: number;
 };
 
-/** Look up the day's top dispatch — exposed so callers can short-circuit
+/** Look up the dispatch top-10 — exposed so callers can short-circuit
  * (e.g. status route reports candidate count without building the email). */
 export async function loadTopHeadlinesForEmail(
-  days = 1,
-  limit = 10,
+  days = EMAIL_DAYS_DEFAULT,
+  limit = EMAIL_LIMIT_DEFAULT,
 ): Promise<HeadlineRow[]> {
   return selectTopHeadlines({ days, limit });
 }
@@ -571,7 +579,10 @@ export async function composeDailyEmail(
   // tipped preview/test-send past the Vercel proxy timeout (502) after
   // any outage filled the backlog. The in-email backfill below
   // (`backfillCommentaryViaLlm`) still covers items shown in this send.
-  const headlines = await loadTopHeadlinesForEmail(opts.days ?? 1, opts.limit ?? 10);
+  const headlines = await loadTopHeadlinesForEmail(
+    opts.days ?? EMAIL_DAYS_DEFAULT,
+    opts.limit ?? EMAIL_LIMIT_DEFAULT,
+  );
   if (headlines.length === 0) return null;
 
   // Image gen + polish run in parallel — both are independent calls and the
