@@ -149,7 +149,7 @@ router.get("/admin/leads", async (req, res) => {
         source: "dispatch" as const,
         sourceDetail: s.source,
         createdAt: s.createdAt,
-        name: null as string | null,
+        name: [s.firstName, s.lastName].filter(Boolean).join(" ") || null,
         contact: s.email,
         contactType: "email" as const,
         company: null as string | null,
