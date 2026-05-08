@@ -1191,12 +1191,46 @@ const formatAssessmentForAdmin = (
   return lines.join("\n").trim();
 };
 
+// Surface the lead came in from. Resolves `?ref=` first (set by every CTA
+// across the site), then known internal referrers (e.g. from /dispatch or
+// /products), then falls back to "homepage" for organic scrollers.
+const resolveLeadSource = (): string => {
+  if (typeof window === "undefined") return "homepage";
+  try {
+    const ref = new URLSearchParams(window.location.search).get("ref")?.trim();
+    if (ref) return ref.slice(0, 100);
+  } catch {
+    // ignore — URL parsing edge cases
+  }
+  const referrer = typeof document !== "undefined" ? document.referrer : "";
+  if (referrer) {
+    try {
+      const refUrl = new URL(referrer);
+      if (refUrl.origin === window.location.origin) {
+        const path = refUrl.pathname.replace(/^\/+|\/+$/g, "");
+        if (path) return `internal:${path}`.slice(0, 100);
+      } else {
+        return `external:${refUrl.host}`.slice(0, 100);
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return "homepage";
+};
+
 const LeadCapture = () => {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<FormStatus>({ state: "idle" });
   const isMobile = useIsMobile();
   const contactType: "sms" | "email" = isMobile ? "sms" : "email";
+  // Capture once at mount so a hash navigation later doesn't overwrite the
+  // original entry signal.
+  const sourceRef = useRef<string>("homepage");
+  useEffect(() => {
+    sourceRef.current = resolveLeadSource();
+  }, []);
 
   const totalQuestions = QUESTIONS.length;
   const onResultStep = step >= totalQuestions;
@@ -1263,6 +1297,7 @@ const LeadCapture = () => {
       contactType,
       company: String(formData.get("company") || "").trim(),
       challenge: formatAssessmentForAdmin(answers, recommendation),
+      source: sourceRef.current,
     };
 
     setStatus({ state: "submitting" });

@@ -11,6 +11,7 @@ export const leadsTable = pgTable("leads", {
     .notNull(),
   company: text("company").notNull(),
   challenge: text("challenge").notNull(),
+  source: text("source"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -22,6 +23,7 @@ export const insertLeadSchema = createInsertSchema(leadsTable, {
   contactType: z.enum(["email", "sms"]),
   company: (schema) => schema.min(1).max(200),
   challenge: (schema) => schema.min(1).max(5000),
+  source: (schema) => schema.max(100).optional(),
 })
   .omit({ id: true, createdAt: true })
   .refine(

@@ -572,6 +572,11 @@ const LeadsTab = ({ token }: { token: string }) => {
                     <span className={`text-[10px] uppercase tracking-widest border px-1.5 py-0.5 ${sourceClass}`}>
                       {sourceLabel}
                     </span>
+                    {l.sourceDetail && (
+                      <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                        {l.sourceDetail}
+                      </span>
+                    )}
                     {l.source === "dispatch" && l.unsubscribedAt && (
                       <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
                         Unsubscribed

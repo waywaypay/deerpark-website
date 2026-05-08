@@ -100,7 +100,7 @@ const ProductGrid = () => (
             </p>
           </div>
           <a
-            href="/#assessment"
+            href="/?ref=products#assessment"
             className="inline-flex items-center gap-2 bg-foreground text-background px-6 py-3 font-sans text-xs uppercase tracking-widest hover:bg-foreground/90"
           >
             <Mail className="w-3.5 h-3.5" />

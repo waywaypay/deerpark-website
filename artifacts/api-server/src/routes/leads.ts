@@ -32,6 +32,13 @@ export async function ensureLeadsSchema(): Promise<void> {
       ) THEN
         ALTER TABLE leads ADD COLUMN contact_type text NOT NULL DEFAULT 'email';
       END IF;
+
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'leads' AND column_name = 'source'
+      ) THEN
+        ALTER TABLE leads ADD COLUMN source text;
+      END IF;
     END $$
   `);
   logger.info("Leads: ensureSchema ok");
