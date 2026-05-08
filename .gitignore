@@ -50,3 +50,8 @@ Thumbs.db
 .vercel
 .gstack/
 .claude/
+
+# secrets — match .dockerignore
+.env
+.env.*
+!.env.example
