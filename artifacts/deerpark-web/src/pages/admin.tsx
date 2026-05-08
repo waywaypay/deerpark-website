@@ -1019,55 +1019,6 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
-      {agents && agents.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {(() => {
-            const a = agents[0];
-            const avgCost =
-              a.postCount > 0
-                ? Number(a.totalCostUsd) / a.postCount
-                : 0;
-            const avgTokens = a.postCount > 0 ? a.totalTokens / a.postCount : 0;
-            return (
-              <>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Total spent</div>
-                  <div className="text-xl font-serif mt-1">
-                    {formatUsd(a.totalCostUsd)}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    over {a.postCount} {a.postCount === 1 ? "post" : "posts"}
-                  </div>
-                </div>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Avg cost / post</div>
-                  <div className="text-xl font-serif mt-1">{formatUsd(avgCost)}</div>
-                  <div className="text-[10px] text-muted-foreground mt-1">running average</div>
-                </div>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Total tokens</div>
-                  <div className="text-xl font-serif mt-1">
-                    {formatTokens(a.totalTokens)}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    {formatTokens(a.totalPromptTokens)} in · {formatTokens(a.totalCompletionTokens)} out
-                  </div>
-                </div>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Avg tokens / post</div>
-                  <div className="text-xl font-serif mt-1">
-                    {formatTokens(Math.round(avgTokens))}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    in + out combined
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </div>
-      )}
-
       {lastRun && (
         <div
           className={`border p-3 text-xs font-sans ${
@@ -1638,6 +1589,13 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
   const [testEmail, setTestEmail] = useState("");
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<DigestTestSendResult | null>(null);
+  const [bannerPromptOpen, setBannerPromptOpen] = useState(false);
+  const [bannerPromptDraft, setBannerPromptDraft] = useState<string>("");
+  const [bannerPromptIsCustom, setBannerPromptIsCustom] = useState(false);
+  const [bannerPromptDefault, setBannerPromptDefault] = useState<string>("");
+  const [bannerPromptLoading, setBannerPromptLoading] = useState(false);
+  const [bannerPromptSaving, setBannerPromptSaving] = useState(false);
+  const [bannerPromptStatus, setBannerPromptStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1718,6 +1676,76 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
     }
   };
 
+  const openBannerPromptEditor = async () => {
+    setBannerPromptOpen(true);
+    setBannerPromptStatus(null);
+    setBannerPromptLoading(true);
+    try {
+      const res = await apiFetch(token, "/admin/email/banner-prompt");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as {
+        prompt: string;
+        isCustom: boolean;
+        defaultPrompt: string;
+      };
+      setBannerPromptDraft(json.prompt);
+      setBannerPromptIsCustom(json.isCustom);
+      setBannerPromptDefault(json.defaultPrompt);
+    } catch (err) {
+      setBannerPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Failed to load prompt",
+      });
+    } finally {
+      setBannerPromptLoading(false);
+    }
+  };
+
+  const saveBannerPrompt = async () => {
+    setBannerPromptSaving(true);
+    setBannerPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/email/banner-prompt", {
+        method: "PUT",
+        body: JSON.stringify({ prompt: bannerPromptDraft }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (res.ok) {
+        setBannerPromptIsCustom(true);
+        setBannerPromptStatus({ ok: true, message: "Banner prompt saved. Next send will use it." });
+      } else {
+        setBannerPromptStatus({ ok: false, message: json.error ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      setBannerPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Save failed",
+      });
+    } finally {
+      setBannerPromptSaving(false);
+    }
+  };
+
+  const resetBannerPromptToDefault = async () => {
+    if (!confirm("Reset to the built-in default banner prompt? Your custom edits will be deleted.")) return;
+    setBannerPromptSaving(true);
+    setBannerPromptStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/email/banner-prompt", { method: "DELETE" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setBannerPromptDraft(bannerPromptDefault);
+      setBannerPromptIsCustom(false);
+      setBannerPromptStatus({ ok: true, message: "Reset to default." });
+    } catch (err) {
+      setBannerPromptStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Reset failed",
+      });
+    } finally {
+      setBannerPromptSaving(false);
+    }
+  };
+
   const cfg = state?.config;
   const ready = Boolean(cfg?.ready);
   const statusLabel = !cfg
@@ -1742,6 +1770,13 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
+            onClick={() => void openBannerPromptEditor()}
+            className="rounded-none text-xs uppercase tracking-widest"
+          >
+            <PenLine className="w-3.5 h-3.5" /> Banner prompt
+          </Button>
+          <Button
+            variant="outline"
             onClick={() => void load()}
             disabled={loading}
             className="rounded-none text-xs uppercase tracking-widest"
@@ -1750,6 +1785,106 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
           </Button>
         </div>
       </div>
+
+      {bannerPromptOpen && (
+        <div className="border border-foreground/30 bg-card">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
+            <div>
+              <div className="section-label">Banner image prompt</div>
+              <div className="text-xs text-muted-foreground font-light mt-1">
+                Sent to the image model when generating the email's hero banner.{" "}
+                <span className="font-mono text-foreground">{"{{headlines}}"}</span>{" "}
+                is replaced with the day's top story titles.{" "}
+                <span className={bannerPromptIsCustom ? "text-primary" : ""}>
+                  {bannerPromptIsCustom ? "Using custom prompt." : "Using built-in default."}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setBannerPromptOpen(false)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Close
+            </button>
+          </div>
+          {bannerPromptLoading ? (
+            <div className="p-6 text-xs text-muted-foreground">Loading…</div>
+          ) : (
+            <div className="p-4 space-y-3">
+              <textarea
+                value={bannerPromptDraft}
+                onChange={(e) => setBannerPromptDraft(e.target.value)}
+                spellCheck={false}
+                rows={8}
+                className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
+              />
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="text-muted-foreground">
+                  {bannerPromptDraft.length.toLocaleString()} chars
+                  {bannerPromptDraft.length < 40 && (
+                    <span className="text-red-400 ml-2">— too short (min 40)</span>
+                  )}
+                  {bannerPromptDraft.length > 4_000 && (
+                    <span className="text-red-400 ml-2">— too long (max 4,000)</span>
+                  )}
+                  {bannerPromptDraft.length >= 40 &&
+                    bannerPromptDraft.length <= 4_000 &&
+                    !bannerPromptDraft.includes("{{headlines}}") && (
+                      <span className="text-amber-400 ml-2">
+                        — no {"{{headlines}}"} placeholder; titles will be appended
+                      </span>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => void resetBannerPromptToDefault()}
+                    disabled={bannerPromptSaving || !bannerPromptIsCustom}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Reset to default
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setBannerPromptDraft(bannerPromptDefault)}
+                    disabled={bannerPromptSaving}
+                    className="rounded-none text-[10px] uppercase tracking-widest"
+                  >
+                    Load default into editor
+                  </Button>
+                  <Button
+                    onClick={() => void saveBannerPrompt()}
+                    disabled={
+                      bannerPromptSaving ||
+                      bannerPromptDraft.length < 40 ||
+                      bannerPromptDraft.length > 4_000
+                    }
+                    className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+                  >
+                    {bannerPromptSaving ? "Saving…" : "Save prompt"}
+                  </Button>
+                </div>
+              </div>
+              {bannerPromptStatus && (
+                <div
+                  className={`text-xs ${
+                    bannerPromptStatus.ok ? "text-primary" : "text-red-400"
+                  }`}
+                >
+                  {bannerPromptStatus.message}
+                </div>
+              )}
+              <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
+                The prompt is sent verbatim to Venice's image endpoint with{" "}
+                <span className="font-mono">{"{{headlines}}"}</span> substituted. If the placeholder
+                is missing, the day's top three titles are appended automatically so the model still
+                has subject context. Image gen failures fall back to no banner — they don't block sends.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
@@ -2233,6 +2368,107 @@ const WorkflowCanvas = ({
   );
 };
 
+type UsageTotals = {
+  runCount: number;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  costUsd: string;
+};
+
+type UsageResponse = {
+  totals: UsageTotals;
+  bySurface: { writers: UsageTotals };
+};
+
+const UsageStrip = ({ token }: { token: string }) => {
+  const [data, setData] = useState<UsageResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(token, "/admin/usage");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setData((await res.json()) as UsageResponse);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load usage");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const totals = data?.totals;
+  const writers = data?.bySurface.writers;
+  const avgCost =
+    totals && totals.runCount > 0 ? Number(totals.costUsd) / totals.runCount : 0;
+
+  return (
+    <div className="border border-foreground/15 bg-card">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-foreground/10">
+        <div>
+          <div className="section-label">Aggregate spend</div>
+          <div className="text-[10px] text-muted-foreground font-sans mt-0.5">
+            Summed across all agents in the dispatch pipeline
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+          className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground font-sans inline-flex items-center gap-1.5"
+        >
+          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </button>
+      </div>
+      {error ? (
+        <div className="px-4 py-3 text-xs text-red-400">{error}</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-foreground/10">
+          <div className="px-4 py-3">
+            <div className="section-label text-[10px]">Total spent</div>
+            <div className="text-xl font-serif mt-1">
+              {totals ? formatUsd(totals.costUsd) : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-1">
+              {totals ? `over ${totals.runCount} ${totals.runCount === 1 ? "run" : "runs"}` : "loading…"}
+            </div>
+          </div>
+          <div className="px-4 py-3">
+            <div className="section-label text-[10px]">Avg cost / run</div>
+            <div className="text-xl font-serif mt-1">{totals ? formatUsd(avgCost) : "—"}</div>
+            <div className="text-[10px] text-muted-foreground mt-1">running average</div>
+          </div>
+          <div className="px-4 py-3">
+            <div className="section-label text-[10px]">Total tokens</div>
+            <div className="text-xl font-serif mt-1">
+              {totals ? formatTokens(totals.totalTokens) : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-1">
+              {totals
+                ? `${formatTokens(totals.promptTokens)} in · ${formatTokens(totals.completionTokens)} out`
+                : ""}
+            </div>
+          </div>
+          <div className="px-4 py-3">
+            <div className="section-label text-[10px]">Writer share</div>
+            <div className="text-xl font-serif mt-1">
+              {writers ? formatUsd(writers.costUsd) : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-1">
+              judge + email not yet metered
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DispatchView = ({ token }: { token: string }) => {
   const [section, setSection] = useState<DispatchSection | null>(null);
 
@@ -2280,6 +2516,8 @@ const DispatchView = ({ token }: { token: string }) => {
           The full pipeline that ingests AI news, writes posts about it, and sends email out the door. Click any node to open it.
         </p>
       </div>
+
+      <UsageStrip token={token} />
 
       <WorkflowCanvas onSelect={setSection} />
     </div>

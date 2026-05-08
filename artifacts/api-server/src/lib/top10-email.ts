@@ -410,7 +410,7 @@ export async function composeDailyEmail(
   // Image gen + polish run in parallel — both are independent calls and the
   // total wall-clock cost is dominated by whichever is slower.
   const [bannerImage, polished] = await Promise.all([
-    generateBannerImage(buildPromptFromHeadlines(headlines)),
+    buildPromptFromHeadlines(headlines).then(generateBannerImage),
     polishWithLlm(headlines),
   ]);
   const bannerSrc = bannerImage ? `cid:${BANNER_CID}` : null;

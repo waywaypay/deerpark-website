@@ -37,6 +37,12 @@ import {
   getDailyDigestState,
   sendTestDigest,
 } from "../lib/daily-digest";
+import {
+  getBannerPrompt,
+  setBannerPrompt,
+  resetBannerPrompt,
+  DEFAULT_BANNER_PROMPT_TEMPLATE,
+} from "../lib/image-gen";
 
 const router: IRouter = Router();
 
@@ -554,6 +560,90 @@ router.get("/admin/digest/state", async (req, res) => {
     return res.json(state);
   } catch (err) {
     req.log.error({ err }, "Digest state failed");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Banner-image prompt template for the daily top-10 email. Same shape as
+// the writer/judge prompt CRUD: GET returns current + default + custom flag,
+// PUT saves, DELETE resets to built-in default. The {{headlines}} placeholder
+// is substituted with the day's top story titles at send time.
+router.get("/admin/email/banner-prompt", async (req, res) => {
+  try {
+    const { prompt, isCustom } = await getBannerPrompt();
+    return res.json({
+      prompt,
+      isCustom,
+      defaultPrompt: DEFAULT_BANNER_PROMPT_TEMPLATE,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load banner prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/email/banner-prompt", async (req, res) => {
+  const body = req.body as { prompt?: unknown };
+  const value = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+  if (!value) return res.status(400).json({ error: "Missing or empty prompt" });
+  if (value.length < 40) return res.status(400).json({ error: "Prompt too short (< 40 chars)" });
+  if (value.length > 4_000) return res.status(400).json({ error: "Prompt too long (> 4000 chars)" });
+  try {
+    await setBannerPrompt(value);
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to save banner prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/email/banner-prompt", async (req, res) => {
+  try {
+    await resetBannerPrompt();
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to reset banner prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Aggregate token/$ spend across the whole dispatch pipeline. Today only the
+// writer agents persist usage to postsTable; judge + email/image-gen don't
+// track spend yet, so the totals are writer-only. Returning a structured
+// per-surface breakdown keeps room to add judge/email later without
+// reshaping the response.
+router.get("/admin/usage", async (req, res) => {
+  try {
+    const [writerTotals] = await db
+      .select({
+        runCount: sql<number>`count(*)::int`,
+        promptTokens: sql<number>`coalesce(sum(${postsTable.promptTokens}), 0)::int`,
+        completionTokens: sql<number>`coalesce(sum(${postsTable.completionTokens}), 0)::int`,
+        totalTokens: sql<number>`coalesce(sum(${postsTable.totalTokens}), 0)::int`,
+        costUsd: sql<string>`coalesce(sum(${postsTable.costUsd}::numeric), 0)::text`,
+      })
+      .from(postsTable);
+    const writers = {
+      runCount: writerTotals?.runCount ?? 0,
+      promptTokens: writerTotals?.promptTokens ?? 0,
+      completionTokens: writerTotals?.completionTokens ?? 0,
+      totalTokens: writerTotals?.totalTokens ?? 0,
+      costUsd: writerTotals?.costUsd ?? "0",
+    };
+    return res.json({
+      totals: {
+        runCount: writers.runCount,
+        promptTokens: writers.promptTokens,
+        completionTokens: writers.completionTokens,
+        totalTokens: writers.totalTokens,
+        costUsd: writers.costUsd,
+      },
+      bySurface: {
+        writers,
+      },
+    });
+  } catch (err) {
+    req.log.error({ err }, "Usage aggregate failed");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

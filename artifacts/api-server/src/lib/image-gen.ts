@@ -3,6 +3,8 @@
 // API key. Falls back to null on any error — the email composer ships
 // without a banner rather than failing the send.
 
+import { db, settingsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import type { HeadlineRow } from "./top-headlines";
 
@@ -14,21 +16,63 @@ const TIMEOUT_MS = 90_000;
 
 export type GeneratedImage = { base64: string; mimeType: string };
 
-/**
- * Compose the image prompt from the day's top headlines. Editorial style,
- * muted palette, no text — the title text comes from the email body.
- */
-export function buildPromptFromHeadlines(top: HeadlineRow[]): string {
-  const stories = top
+// Editable from the admin email-agent screen. The {{headlines}} placeholder
+// is substituted with a slash-separated list of the day's top story titles
+// at send time. Anything else is passed through verbatim to Venice.
+export const DEFAULT_BANNER_PROMPT_TEMPLATE = [
+  "Editorial illustration banner for an enterprise-AI daily news dispatch.",
+  "Today's leading stories: {{headlines}}.",
+  "Muted, magazine-cover palette. No text, no logos, no UI elements.",
+  "Wide aspect ratio, abstract conceptual composition over photorealism.",
+].join(" ");
+
+const PROMPT_SETTINGS_KEY = "email.banner.prompt_template";
+const HEADLINES_PLACEHOLDER = "{{headlines}}";
+
+export async function getBannerPrompt(): Promise<{ prompt: string; isCustom: boolean }> {
+  const [row] = await db
+    .select()
+    .from(settingsTable)
+    .where(eq(settingsTable.key, PROMPT_SETTINGS_KEY))
+    .limit(1);
+  if (row?.value) return { prompt: row.value, isCustom: true };
+  return { prompt: DEFAULT_BANNER_PROMPT_TEMPLATE, isCustom: false };
+}
+
+export async function setBannerPrompt(value: string): Promise<void> {
+  await db
+    .insert(settingsTable)
+    .values({ key: PROMPT_SETTINGS_KEY, value })
+    .onConflictDoUpdate({
+      target: settingsTable.key,
+      set: { value, updatedAt: new Date() },
+    });
+}
+
+export async function resetBannerPrompt(): Promise<void> {
+  await db.delete(settingsTable).where(eq(settingsTable.key, PROMPT_SETTINGS_KEY));
+}
+
+function formatHeadlinesForPrompt(top: HeadlineRow[]): string {
+  return top
     .slice(0, 3)
     .map((h) => h.title)
     .join(" / ");
-  return [
-    "Editorial illustration banner for an enterprise-AI daily news dispatch.",
-    `Today's leading stories: ${stories}.`,
-    "Muted, magazine-cover palette. No text, no logos, no UI elements.",
-    "Wide aspect ratio, abstract conceptual composition over photorealism.",
-  ].join(" ");
+}
+
+/**
+ * Compose the image prompt from the day's top headlines. Reads the
+ * editable template from settings (or falls back to the built-in default)
+ * and substitutes the {{headlines}} placeholder. If the template lacks
+ * the placeholder, headlines are appended so the model still has context.
+ */
+export async function buildPromptFromHeadlines(top: HeadlineRow[]): Promise<string> {
+  const { prompt: template } = await getBannerPrompt();
+  const headlines = formatHeadlinesForPrompt(top);
+  if (template.includes(HEADLINES_PLACEHOLDER)) {
+    return template.split(HEADLINES_PLACEHOLDER).join(headlines);
+  }
+  return `${template} Today's leading stories: ${headlines}.`;
 }
 
 type VeniceImageResponse = {
