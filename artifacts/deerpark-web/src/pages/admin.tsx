@@ -656,7 +656,12 @@ type DigestRunResult = {
   polishApplied?: boolean;
   reason?: string;
   firstFailure?: string | null;
+  results?: Array<{ recipient: string; ok: boolean; error?: string }>;
 };
+
+type DigestTestSendResult =
+  | { ok: true; recipient: string; subject: string; headlineCount: number; bannerGenerated: boolean; polishApplied: boolean }
+  | { ok: false; recipient?: string; error: string };
 
 type JudgeSpec = {
   judge: {
@@ -1626,9 +1631,13 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [runResults, setRunResults] = useState<DigestRunResult["results"] | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview] = useState<DigestPreview | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [testEmail, setTestEmail] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<DigestTestSendResult | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1650,6 +1659,7 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
     if (!confirm(`Send the daily top-10 email to ${state?.activeSubscribers ?? "?"} subscribers right now?`)) return;
     setSending(true);
     setSendResult(null);
+    setRunResults(null);
     try {
       const res = await apiFetch(token, "/admin/digest/run", { method: "POST" });
       const json = (await res.json()) as DigestRunResult;
@@ -1660,12 +1670,33 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
           ok: (json.failed ?? 0) === 0,
           message: `Sent "${json.subject}" to ${json.sent} (failed ${json.failed ?? 0}). Banner ${json.bannerGenerated ? "generated" : "skipped"}, polish ${json.polishApplied ? "applied" : "skipped"}.`,
         });
+        setRunResults(json.results ?? null);
       }
       await load();
     } catch (err) {
       setSendResult({ ok: false, message: err instanceof Error ? err.message : "Send failed" });
     } finally {
       setSending(false);
+    }
+  };
+
+  const sendTest = async () => {
+    const to = testEmail.trim();
+    if (!to) return;
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res = await apiFetch(token, "/admin/digest/send-test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to }),
+      });
+      const json = (await res.json()) as DigestTestSendResult;
+      setTestResult(json);
+    } catch (err) {
+      setTestResult({ ok: false, error: err instanceof Error ? err.message : "Test send failed" });
+    } finally {
+      setTestSending(false);
     }
   };
 
@@ -1754,6 +1785,68 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
           {sendResult.message}
         </div>
       )}
+
+      {runResults && runResults.length > 0 && (
+        <div className="border border-foreground/15 bg-card">
+          <div className="px-4 py-2 border-b border-foreground/10 section-label text-[10px]">
+            Per-recipient results
+          </div>
+          <div className="max-h-64 overflow-y-auto text-xs font-mono">
+            {runResults.map((r) => (
+              <div
+                key={r.recipient}
+                className="flex items-start gap-3 px-4 py-1.5 border-b border-foreground/5 last:border-b-0"
+              >
+                <span className={r.ok ? "text-primary" : "text-red-400"}>
+                  {r.ok ? "✓" : "✗"}
+                </span>
+                <span className="flex-1 break-all">{r.recipient}</span>
+                {!r.ok && r.error && (
+                  <span className="text-red-400 truncate" title={r.error}>{r.error}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="border border-foreground/15 bg-card p-4">
+        <div className="section-label text-[10px] mb-2">Send a test to me</div>
+        <p className="text-xs text-muted-foreground font-light mb-3 max-w-xl">
+          Sends today's composed top-10 to one address only. Bypasses the
+          subscribers table and the once-per-day lock — useful for verifying
+          deliverability without disturbing the scheduled run. Subject is
+          prefixed with <code className="font-mono">[TEST]</code>.
+        </p>
+        <div className="flex flex-wrap gap-2 items-center">
+          <input
+            type="email"
+            value={testEmail}
+            onChange={(e) => setTestEmail(e.target.value)}
+            placeholder="you@example.com"
+            disabled={testSending}
+            className="flex-1 min-w-[240px] bg-background border border-foreground/20 px-3 py-2 text-xs font-mono focus:outline-none focus:border-foreground/50"
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={!ready || testSending || !testEmail.trim()}
+            onClick={() => void sendTest()}
+            className="rounded-none text-[10px] uppercase tracking-widest"
+          >
+            <Send className="w-3 h-3" /> {testSending ? "Sending…" : "Send test"}
+          </Button>
+        </div>
+        {testResult && (
+          <div
+            className={`mt-3 border p-3 text-xs ${testResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}
+          >
+            {testResult.ok
+              ? `Sent "${testResult.subject}" to ${testResult.recipient}. Banner ${testResult.bannerGenerated ? "generated" : "skipped"}, polish ${testResult.polishApplied ? "applied" : "skipped"}.`
+              : `Test send failed${testResult.recipient ? ` for ${testResult.recipient}` : ""}: ${testResult.error}`}
+          </div>
+        )}
+      </div>
 
       <div className="border border-foreground/15 bg-card overflow-x-auto">
         <table className="w-full text-sm">
