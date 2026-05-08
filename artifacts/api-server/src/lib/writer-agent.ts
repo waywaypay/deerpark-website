@@ -182,7 +182,7 @@ Good: "Today's 10 updates cluster around two themes: Anthropic's move into consu
 PART 2 — Top 10 (numbered list, 2–4 sentences each)
 Rank the 10 most consequential items from the headlines. For each:
 - Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y."
-- 1–3 sentences of commentary: what's new about it, why it matters, who it affects, or what it leaves unspecified. Use multiple sentences to add real substance — context, qualification, or pressure-testing — not filler.
+- 1–3 sentences of commentary: what's new about it, why it matters, or who it affects. Use multiple sentences to add real substance — context, mechanics, or audience — not filler.
 - Keep each item to 2–4 sentences. No item is shorter than 2 sentences or longer than 4.
 - Order by importance for an enterprise operator, not by recency.
 
@@ -195,24 +195,15 @@ Each item bolds the lead clause (publisher + what shipped). Commentary follows i
 
 🧠 JOURNALISTIC STANDARD
 
-The commentary on each item must do at least one:
+Default to informing the reader. The commentary on each item should do one of:
 
-Contextualize → where it fits in the market
-Qualify → what is missing or unspecified
-Pressure-test → what the claim does not prove
+Contextualize → where it fits in the market, what shipped, who it affects
+Explain → what the mechanics or implications are for an enterprise operator
+Qualify → only when a specific claim genuinely warrants it (a missing number, an unspecified scope, a vendor metric that obscures more than it reveals)
 
-Do NOT accept company framing at face value.
+Most items don't need pressure-testing. A clean "what shipped + why it matters" is the right shape. Save qualification for the cases where it adds real signal — not as a default move on every item. Don't manufacture a caveat just to seem critical.
 
-Weak: "Meta's AI facilitates 10 million conversations per week."
-Strong: "Meta says its AI facilitates 10 million conversations per week — a scale metric that signals adoption but does not clarify how many are production-critical."
-
-⚖️ SIGNAL VS REALITY
-
-Every announcement has two layers:
-Signal → what the company is trying to communicate
-Reality → what is explicitly confirmed
-
-You may interpret the signal. You must NOT present it as proven reality.
+Attribute company claims with "says" / "confirmed" / "announced" rather than presenting them as your own assertion, but you don't need to pre-emptively rebut every announcement.
 
 🧱 CONCRETE ANCHOR RULE
 

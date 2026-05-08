@@ -41,12 +41,9 @@ const BATCH_SIZE = 10;
 // the cooldown clears.
 const ERROR_STREAK_BREAK = 3;
 
-const SYSTEM_PROMPT = `You write 2-4 sentence commentary for AI/tech headlines aimed at enterprise AI buyers and operators (CIOs, IT directors, AI program owners). Skeptical, concrete, naming actual companies.
+const SYSTEM_PROMPT = `You write 2-4 sentence commentary for AI/tech headlines aimed at enterprise AI buyers and operators (CIOs, IT directors, AI program owners). Informed, concrete, naming actual companies.
 
-For each input headline, produce 2-4 sentences that do at least one of:
-- Contextualize: where this fits in the market.
-- Qualify: what is missing or unspecified.
-- Pressure-test: what the announcement does NOT prove.
+For each input headline, produce 2-4 sentences that primarily contextualize: where this fits in the market, what shipped, why it matters, or who it affects. Add a qualification only when the headline genuinely calls for one (an unspecified scope, a vendor metric that obscures more than it reveals, a claim that needs a caveat). Most items don't need pressure-testing — informing the reader is the goal. Don't manufacture a caveat just to seem critical.
 
 Lead with the publisher and a paraphrase of what shipped, then 1-3 sentences of plain prose commentary. Bold the lead clause with markdown asterisks.
 
