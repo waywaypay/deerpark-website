@@ -24,7 +24,10 @@ import { generateMissingCommentary } from "./headline-commentator";
 import { logger } from "./logger";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-const DEFAULT_MODEL = "claude-haiku-4-5-20251001";
+// See headline-commentator.ts for the rationale — Venice no longer carries
+// Anthropic models, so the prior `claude-haiku-*` default fails every chat
+// completion. gpt-4o-mini is the closest swap on Venice's catalog.
+const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
 
 // Use the apex `www.` host for the logo so email clients that don't follow
 // redirects on <img> requests (notably some Outlook builds) load it directly.
