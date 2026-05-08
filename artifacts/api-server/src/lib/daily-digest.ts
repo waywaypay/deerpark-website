@@ -352,7 +352,15 @@ export async function runDailyDigest(): Promise<DigestRunResult | null> {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export type SendTestResult =
-  | { ok: true; recipient: string; subject: string; headlineCount: number; bannerGenerated: boolean; polishApplied: boolean }
+  | {
+      ok: true;
+      recipient: string;
+      subject: string;
+      headlineCount: number;
+      bannerGenerated: boolean;
+      polishApplied: boolean;
+      diagnostics: import("./top10-email").ComposeDiagnostics;
+    }
   | { ok: false; recipient: string; error: string };
 
 /**
@@ -411,6 +419,7 @@ export async function sendTestDigest(to: string): Promise<SendTestResult> {
     headlineCount: composed.headlineCount,
     bannerGenerated: composed.bannerGenerated,
     polishApplied: composed.polishApplied,
+    diagnostics: composed.diagnostics,
   };
 }
 

@@ -659,8 +659,26 @@ type DigestRunResult = {
   results?: Array<{ recipient: string; ok: boolean; error?: string }>;
 };
 
+type ComposeDiagnostics = {
+  polishStatus: "success" | "no_api_key" | "request_failed" | "parse_failed" | "missing_subject_or_intro";
+  polishError?: string;
+  polishCommentaryCount: number;
+  fallbackCommentaryCount: number;
+  fallbackError?: string;
+  finalCommentaryCount: number;
+  headlineCount: number;
+};
+
 type DigestTestSendResult =
-  | { ok: true; recipient: string; subject: string; headlineCount: number; bannerGenerated: boolean; polishApplied: boolean }
+  | {
+      ok: true;
+      recipient: string;
+      subject: string;
+      headlineCount: number;
+      bannerGenerated: boolean;
+      polishApplied: boolean;
+      diagnostics: ComposeDiagnostics;
+    }
   | { ok: false; recipient?: string; error: string };
 
 type JudgeSpec = {
@@ -1839,11 +1857,26 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
         </div>
         {testResult && (
           <div
-            className={`mt-3 border p-3 text-xs ${testResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}
+            className={`mt-3 border p-3 text-xs space-y-1 ${testResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}
           >
-            {testResult.ok
-              ? `Sent "${testResult.subject}" to ${testResult.recipient}. Banner ${testResult.bannerGenerated ? "generated" : "skipped"}, polish ${testResult.polishApplied ? "applied" : "skipped"}.`
-              : `Test send failed${testResult.recipient ? ` for ${testResult.recipient}` : ""}: ${testResult.error}`}
+            {testResult.ok ? (
+              <>
+                <div>
+                  Sent "{testResult.subject}" to {testResult.recipient}. Banner {testResult.bannerGenerated ? "generated" : "skipped"}, polish {testResult.polishApplied ? "applied" : "skipped"}.
+                </div>
+                <div className="font-mono text-[10px] text-foreground/70">
+                  Polish: {testResult.diagnostics.polishStatus}
+                  {testResult.diagnostics.polishError ? ` (${testResult.diagnostics.polishError.slice(0, 200)})` : ""}
+                  {" · "}commentary {testResult.diagnostics.finalCommentaryCount}/{testResult.diagnostics.headlineCount}
+                  {" "}(polish {testResult.diagnostics.polishCommentaryCount}, fallback {testResult.diagnostics.fallbackCommentaryCount})
+                  {testResult.diagnostics.fallbackError ? ` · fallback err: ${testResult.diagnostics.fallbackError.slice(0, 100)}` : ""}
+                </div>
+              </>
+            ) : (
+              <div>
+                Test send failed{testResult.recipient ? ` for ${testResult.recipient}` : ""}: {testResult.error}
+              </div>
+            )}
           </div>
         )}
       </div>
