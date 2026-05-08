@@ -30,10 +30,10 @@ import {
 import { getTopSelectionSpec } from "../lib/top-headlines";
 import {
   getModelInfo,
-  getSystemPrompt,
-  setSystemPrompt,
-  resetSystemPrompt,
-  DEFAULT_SYSTEM_PROMPT,
+  getPromptSlots,
+  setPromptSlot,
+  resetPromptSlot,
+  isValidPromptSlot,
   startWriterRun,
   getRunStatus,
   clearRunState,
@@ -462,16 +462,28 @@ router.post("/admin/writers/:id/run-status/reset", async (req, res) => {
   }
 });
 
+// Per-slot prompt minimums. The base prompt carries the format/voice rules
+// and must stay substantial; addenda are short framing snippets and may be
+// blanked out (length 0) if the user wants the base to handle everything.
+const PROMPT_MIN_LEN: Record<string, number> = {
+  base: 200,
+  free_pick: 0,
+  deep_dive: 0,
+  weekly_recap: 0,
+};
+const PROMPT_MAX_LEN: Record<string, number> = {
+  base: 20_000,
+  free_pick: 4_000,
+  deep_dive: 4_000,
+  weekly_recap: 4_000,
+};
+
 router.get("/admin/writers/:id/prompt", async (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
   try {
-    const { prompt, isCustom } = await getSystemPrompt(id);
-    return res.json({
-      prompt,
-      isCustom,
-      defaultPrompt: DEFAULT_SYSTEM_PROMPT,
-    });
+    const slots = await getPromptSlots(id);
+    return res.json(slots);
   } catch (err) {
     req.log.error({ err, id }, "Failed to load prompt");
     return res.status(500).json({ error: "Internal server error" });
@@ -481,16 +493,25 @@ router.get("/admin/writers/:id/prompt", async (req, res) => {
 router.put("/admin/writers/:id/prompt", async (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
-  const body = req.body as { prompt?: unknown };
-  const value = typeof body?.prompt === "string" ? body.prompt.trim() : "";
-  if (!value) return res.status(400).json({ error: "Missing or empty prompt" });
-  if (value.length < 200) return res.status(400).json({ error: "Prompt too short (< 200 chars)" });
-  if (value.length > 20_000) return res.status(400).json({ error: "Prompt too long (> 20k chars)" });
+  const body = req.body as { slot?: unknown; value?: unknown };
+  const slot = typeof body?.slot === "string" ? body.slot : "";
+  if (!isValidPromptSlot(slot)) {
+    return res.status(400).json({ error: "Invalid slot (expected base | free_pick | deep_dive | weekly_recap)" });
+  }
+  const value = typeof body?.value === "string" ? body.value.trim() : "";
+  const min = PROMPT_MIN_LEN[slot] ?? 0;
+  const max = PROMPT_MAX_LEN[slot] ?? 20_000;
+  if (value.length < min) {
+    return res.status(400).json({ error: `Prompt too short (< ${min} chars)` });
+  }
+  if (value.length > max) {
+    return res.status(400).json({ error: `Prompt too long (> ${max} chars)` });
+  }
   try {
-    await setSystemPrompt(id, value);
+    await setPromptSlot(id, slot, value);
     return res.json({ ok: true });
   } catch (err) {
-    req.log.error({ err, id }, "Failed to save prompt");
+    req.log.error({ err, id, slot }, "Failed to save prompt");
     return res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -498,11 +519,15 @@ router.put("/admin/writers/:id/prompt", async (req, res) => {
 router.delete("/admin/writers/:id/prompt", async (req, res) => {
   const id = req.params["id"];
   if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  const slot = typeof req.query["slot"] === "string" ? req.query["slot"] : "";
+  if (!isValidPromptSlot(slot)) {
+    return res.status(400).json({ error: "Invalid slot (expected base | free_pick | deep_dive | weekly_recap)" });
+  }
   try {
-    await resetSystemPrompt(id);
+    await resetPromptSlot(id, slot);
     return res.json({ ok: true });
   } catch (err) {
-    req.log.error({ err, id }, "Failed to reset prompt");
+    req.log.error({ err, id, slot }, "Failed to reset prompt");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

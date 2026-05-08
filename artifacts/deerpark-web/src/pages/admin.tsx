@@ -784,6 +784,25 @@ const WRITER_MODES = [
 
 type WriterModeId = (typeof WRITER_MODES)[number]["id"];
 
+type WriterModeSlot = "free_pick" | "deep_dive" | "weekly_recap";
+type PromptSlotId = "base" | WriterModeSlot;
+
+type PromptSlotState = { value: string; isCustom: boolean; default: string };
+
+const PROMPT_SLOT_TABS: { id: PromptSlotId; label: string; helper: string }[] = [
+  { id: "base", label: "Shared rules", helper: "Voice, format, citation rules. Applied to every run regardless of mode." },
+  { id: "free_pick", label: "Free pick", helper: "Default daily recap framing. ~700–900 words." },
+  { id: "deep_dive", label: "Deep dive", helper: "Top 3 items get extra context. ~900–1100 words." },
+  { id: "weekly_recap", label: "Weekly recap", helper: "Once-per-week roundup framed around the week." },
+];
+
+const PROMPT_LIMITS: Record<PromptSlotId, { min: number; max: number }> = {
+  base: { min: 200, max: 20_000 },
+  free_pick: { min: 0, max: 4_000 },
+  deep_dive: { min: 0, max: 4_000 },
+  weekly_recap: { min: 0, max: 4_000 },
+};
+
 const WriterAgentsTab = ({ token }: { token: string }) => {
   const [agents, setAgents] = useState<WriterAgent[] | null>(null);
   const [posts, setPosts] = useState<AdminPost[] | null>(null);
@@ -794,11 +813,20 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
   const [lastRun, setLastRun] = useState<{ ok: boolean; message: string } | null>(null);
   const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
 
-  // Prompt editor state
+  // Prompt editor state. Four slots: a shared base prompt + one addendum per
+  // mode. Each slot has its own draft, isCustom flag, and built-in default.
   const [promptOpen, setPromptOpen] = useState(false);
-  const [promptDraft, setPromptDraft] = useState<string>("");
-  const [promptIsCustom, setPromptIsCustom] = useState(false);
-  const [promptDefault, setPromptDefault] = useState<string>("");
+  const [promptSlots, setPromptSlots] = useState<{
+    base: PromptSlotState;
+    addenda: Record<WriterModeSlot, PromptSlotState>;
+  } | null>(null);
+  const [drafts, setDrafts] = useState<Record<PromptSlotId, string>>({
+    base: "",
+    free_pick: "",
+    deep_dive: "",
+    weekly_recap: "",
+  });
+  const [activeSlot, setActiveSlot] = useState<PromptSlotId>("base");
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptSaving, setPromptSaving] = useState(false);
   const [promptStatus, setPromptStatus] = useState<{ ok: boolean; message: string } | null>(null);
@@ -903,6 +931,11 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
     }
   };
 
+  const stateForSlot = (
+    slots: { base: PromptSlotState; addenda: Record<WriterModeSlot, PromptSlotState> },
+    slot: PromptSlotId,
+  ): PromptSlotState => (slot === "base" ? slots.base : slots.addenda[slot]);
+
   const openPromptEditor = async () => {
     setPromptOpen(true);
     setPromptStatus(null);
@@ -911,13 +944,16 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
       const res = await apiFetch(token, "/admin/writers/daily-writer/prompt");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as {
-        prompt: string;
-        isCustom: boolean;
-        defaultPrompt: string;
+        base: PromptSlotState;
+        addenda: Record<WriterModeSlot, PromptSlotState>;
       };
-      setPromptDraft(json.prompt);
-      setPromptIsCustom(json.isCustom);
-      setPromptDefault(json.defaultPrompt);
+      setPromptSlots(json);
+      setDrafts({
+        base: json.base.value,
+        free_pick: json.addenda.free_pick.value,
+        deep_dive: json.addenda.deep_dive.value,
+        weekly_recap: json.addenda.weekly_recap.value,
+      });
     } catch (err) {
       setPromptStatus({
         ok: false,
@@ -928,18 +964,29 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
     }
   };
 
-  const savePrompt = async () => {
+  const savePromptSlot = async (slot: PromptSlotId) => {
     setPromptSaving(true);
     setPromptStatus(null);
     try {
       const res = await apiFetch(token, "/admin/writers/daily-writer/prompt", {
         method: "PUT",
-        body: JSON.stringify({ prompt: promptDraft }),
+        body: JSON.stringify({ slot, value: drafts[slot] }),
       });
       const json = (await res.json()) as { error?: string };
       if (res.ok) {
-        setPromptIsCustom(true);
-        setPromptStatus({ ok: true, message: "Prompt saved. Next run will use it." });
+        setPromptSlots((prev) => {
+          if (!prev) return prev;
+          const next = { ...prev, addenda: { ...prev.addenda } };
+          const updated: PromptSlotState = {
+            value: drafts[slot],
+            isCustom: true,
+            default: stateForSlot(prev, slot).default,
+          };
+          if (slot === "base") next.base = updated;
+          else next.addenda[slot] = updated;
+          return next;
+        });
+        setPromptStatus({ ok: true, message: `Saved ${slot}. Next run will use it.` });
       } else {
         setPromptStatus({ ok: false, message: json.error ?? `HTTP ${res.status}` });
       }
@@ -953,16 +1000,30 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
     }
   };
 
-  const resetPromptToDefault = async () => {
-    if (!confirm("Reset to the built-in default prompt? Your custom edits will be deleted.")) return;
+  const resetPromptSlot = async (slot: PromptSlotId) => {
+    if (!promptSlots) return;
+    const label = PROMPT_SLOT_TABS.find((t) => t.id === slot)?.label ?? slot;
+    if (!confirm(`Reset "${label}" to the built-in default? Your custom edits for this slot will be deleted.`)) return;
+    const defaultValue = stateForSlot(promptSlots, slot).default;
     setPromptSaving(true);
     setPromptStatus(null);
     try {
-      const res = await apiFetch(token, "/admin/writers/daily-writer/prompt", { method: "DELETE" });
+      const res = await apiFetch(
+        token,
+        `/admin/writers/daily-writer/prompt?slot=${encodeURIComponent(slot)}`,
+        { method: "DELETE" },
+      );
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setPromptDraft(promptDefault);
-      setPromptIsCustom(false);
-      setPromptStatus({ ok: true, message: "Reset to default." });
+      setPromptSlots((prev) => {
+        if (!prev) return prev;
+        const updated: PromptSlotState = { value: defaultValue, isCustom: false, default: defaultValue };
+        const next = { ...prev, addenda: { ...prev.addenda } };
+        if (slot === "base") next.base = updated;
+        else next.addenda[slot] = updated;
+        return next;
+      });
+      setDrafts((d) => ({ ...d, [slot]: defaultValue }));
+      setPromptStatus({ ok: true, message: `Reset ${slot} to default.` });
     } catch (err) {
       setPromptStatus({
         ok: false,
@@ -1008,10 +1069,8 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
             <div>
               <div className="section-label">System prompt</div>
               <div className="text-xs text-muted-foreground font-light mt-1">
-                Controls voice, format, and rules for the Daily Writer.{" "}
-                <span className={promptIsCustom ? "text-primary" : ""}>
-                  {promptIsCustom ? "Using custom prompt." : "Using built-in default."}
-                </span>
+                Shared rules + per-mode framing. At run time the system prompt is{" "}
+                <code className="text-[11px]">base + addendum-for-this-mode</code>.
               </div>
             </div>
             <button
@@ -1022,73 +1081,118 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
               Close
             </button>
           </div>
-          {promptLoading ? (
+          {promptLoading || !promptSlots ? (
             <div className="p-6 text-xs text-muted-foreground">Loading…</div>
           ) : (
-            <div className="p-4 space-y-3">
-              <textarea
-                value={promptDraft}
-                onChange={(e) => setPromptDraft(e.target.value)}
-                spellCheck={false}
-                rows={20}
-                className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
-              />
-              <div className="flex items-center justify-between text-xs">
-                <div className="text-muted-foreground">
-                  {promptDraft.length.toLocaleString()} chars
-                  {promptDraft.length < 200 && (
-                    <span className="text-red-400 ml-2">— too short (min 200)</span>
-                  )}
-                  {promptDraft.length > 20_000 && (
-                    <span className="text-red-400 ml-2">— too long (max 20,000)</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => void resetPromptToDefault()}
-                    disabled={promptSaving || !promptIsCustom}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    Reset to default
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setPromptDraft(promptDefault)}
-                    disabled={promptSaving}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    Load default into editor
-                  </Button>
-                  <Button
-                    onClick={() => void savePrompt()}
-                    disabled={
-                      promptSaving ||
-                      promptDraft.length < 200 ||
-                      promptDraft.length > 20_000
+            (() => {
+              const slotState = stateForSlot(promptSlots, activeSlot);
+              const draft = drafts[activeSlot];
+              const limits = PROMPT_LIMITS[activeSlot];
+              const tab = PROMPT_SLOT_TABS.find((t) => t.id === activeSlot)!;
+              const dirty = draft !== slotState.value;
+              const tooShort = draft.length < limits.min;
+              const tooLong = draft.length > limits.max;
+              return (
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center gap-1 border-b border-foreground/10 -mx-4 px-4 pb-0">
+                    {PROMPT_SLOT_TABS.map((t) => {
+                      const ts = stateForSlot(promptSlots, t.id);
+                      const isActive = t.id === activeSlot;
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          onClick={() => setActiveSlot(t.id)}
+                          className={`px-3 py-2 text-[11px] uppercase tracking-widest border-b-2 -mb-px transition-colors ${
+                            isActive
+                              ? "border-foreground text-foreground"
+                              : "border-transparent text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {t.label}
+                          {ts.isCustom && (
+                            <span className="ml-1.5 text-primary" title="Custom value saved">
+                              ●
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="text-xs text-muted-foreground font-light">
+                    {tab.helper}{" "}
+                    <span className={slotState.isCustom ? "text-primary" : ""}>
+                      {slotState.isCustom ? "Custom value saved." : "Using built-in default."}
+                    </span>
+                  </div>
+                  <textarea
+                    value={draft}
+                    onChange={(e) =>
+                      setDrafts((d) => ({ ...d, [activeSlot]: e.target.value }))
                     }
-                    className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
-                  >
-                    {promptSaving ? "Saving…" : "Save prompt"}
-                  </Button>
+                    spellCheck={false}
+                    rows={activeSlot === "base" ? 20 : 8}
+                    className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
+                  />
+                  <div className="flex items-center justify-between text-xs">
+                    <div className="text-muted-foreground">
+                      {draft.length.toLocaleString()} chars
+                      {tooShort && (
+                        <span className="text-red-400 ml-2">— too short (min {limits.min})</span>
+                      )}
+                      {tooLong && (
+                        <span className="text-red-400 ml-2">— too long (max {limits.max.toLocaleString()})</span>
+                      )}
+                      {!tooShort && !tooLong && dirty && (
+                        <span className="text-amber-400 ml-2">— unsaved changes</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => void resetPromptSlot(activeSlot)}
+                        disabled={promptSaving || !slotState.isCustom}
+                        className="rounded-none text-[10px] uppercase tracking-widest"
+                      >
+                        Reset to default
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() =>
+                          setDrafts((d) => ({ ...d, [activeSlot]: slotState.default }))
+                        }
+                        disabled={promptSaving}
+                        className="rounded-none text-[10px] uppercase tracking-widest"
+                      >
+                        Load default into editor
+                      </Button>
+                      <Button
+                        onClick={() => void savePromptSlot(activeSlot)}
+                        disabled={promptSaving || tooShort || tooLong || !dirty}
+                        className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+                      >
+                        {promptSaving ? "Saving…" : "Save"}
+                      </Button>
+                    </div>
+                  </div>
+                  {promptStatus && (
+                    <div
+                      className={`text-xs ${
+                        promptStatus.ok ? "text-primary" : "text-red-400"
+                      }`}
+                    >
+                      {promptStatus.message}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
+                    Saved prompts take effect on the next writer run. Anti-hallucination is enforced
+                    in code regardless of prompt — the citation validator rejects drafts that
+                    reference URLs not in the corpus, so even if you remove the rules from the
+                    prompt, fabricated citations still won't be saved.
+                  </p>
                 </div>
-              </div>
-              {promptStatus && (
-                <div
-                  className={`text-xs ${
-                    promptStatus.ok ? "text-primary" : "text-red-400"
-                  }`}
-                >
-                  {promptStatus.message}
-                </div>
-              )}
-              <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
-                Saved prompts take effect on the next writer run. Anti-hallucination is enforced
-                in code regardless of prompt — the citation validator rejects drafts that
-                reference URLs not in the corpus, so even if you remove the rules from the
-                prompt, fabricated citations still won't be saved.
-              </p>
-            </div>
+              );
+            })()
           )}
         </div>
       )}
