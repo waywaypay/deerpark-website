@@ -41,9 +41,20 @@ export type HeadlineRow = {
 };
 
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
-// Tier 1 → weight 4, Tier 4 → weight 1. Linear by design.
-export const TIER_WEIGHTS: Record<number, number> = { 1: 4, 2: 3, 3: 2, 4: 1 };
-export const HALF_LIFE_DAYS = 3;
+// Frontier labs (tier 1) get a 2× premium over broad-press (tier 2): a
+// week-defining Anthropic/OpenAI/DeepMind announcement is categorically
+// different from a press case-study, and the previous linear 4:3:2:1
+// scale let a 1-day-old tier-2 marketing post (e.g. "Inside Porsche Cup
+// Brasil's AI-powered race operations") beat a 3-day-old tier-1
+// announcement (Anthropic's financial-services agents). 6:3:2:1 keeps
+// the tier-2/3/4 gradient intact and only widens the top of the curve.
+export const TIER_WEIGHTS: Record<number, number> = { 1: 6, 2: 3, 3: 2, 4: 1 };
+// Half-life of 5 days against a 7-day lookback. The previous 3-day
+// half-life decayed week-old originals to ~20% weight by the edge of
+// the window, which made the dispatch read like "today's news" instead
+// of "this week's news"; tier-1 stories from earlier in the week were
+// being crowded out by fresher but lower-tier coverage.
+export const HALF_LIFE_DAYS = 5;
 export const PER_SOURCE_CAP_TOP = 2;
 export const MIN_PAPERS_IN_SELECTION = 2;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

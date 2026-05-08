@@ -81,8 +81,10 @@ function computeCost(
 const CORPUS_MAX_ITEMS = 30;
 const CORPUS_PER_SOURCE_CAP = 2;
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
-const TIER_WEIGHTS: Record<number, number> = { 1: 4, 2: 3, 3: 2, 4: 1 };
-const HALF_LIFE_DAYS = 3;
+// Mirrors top-headlines.ts so the writer's corpus selection and the
+// public dispatch agree on which stories matter this week.
+const TIER_WEIGHTS: Record<number, number> = { 1: 6, 2: 3, 3: 2, 4: 1 };
+const HALF_LIFE_DAYS = 5;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 function scoreCorpusItem(

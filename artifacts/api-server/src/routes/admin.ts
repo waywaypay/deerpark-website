@@ -5,6 +5,7 @@ import {
   headlinesTable,
   postsTable,
   smsMessagesTable,
+  subscribersTable,
 } from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { adminAuth } from "../middlewares/admin-auth";
@@ -140,11 +141,39 @@ router.get("/admin/usage/venice", async (req, res) => {
 
 router.get("/admin/leads", async (req, res) => {
   try {
-    const rows = await db
-      .select()
-      .from(leadsTable)
-      .orderBy(desc(leadsTable.createdAt));
-    return res.json({ items: rows, count: rows.length });
+    const [leadRows, subRows] = await Promise.all([
+      db.select().from(leadsTable).orderBy(desc(leadsTable.createdAt)),
+      db.select().from(subscribersTable).orderBy(desc(subscribersTable.createdAt)),
+    ]);
+
+    const items = [
+      ...leadRows.map((l) => ({
+        id: `lead-${l.id}`,
+        source: "assessment" as const,
+        sourceDetail: l.source,
+        createdAt: l.createdAt,
+        name: l.name,
+        contact: l.contact,
+        contactType: l.contactType,
+        company: l.company,
+        challenge: l.challenge,
+        unsubscribedAt: null as Date | null,
+      })),
+      ...subRows.map((s) => ({
+        id: `sub-${s.id}`,
+        source: "dispatch" as const,
+        sourceDetail: s.source,
+        createdAt: s.createdAt,
+        name: null as string | null,
+        contact: s.email,
+        contactType: "email" as const,
+        company: null as string | null,
+        challenge: null as string | null,
+        unsubscribedAt: s.unsubscribedAt,
+      })),
+    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    return res.json({ items, count: items.length });
   } catch (err) {
     req.log.error({ err }, "Failed to load leads");
     return res.status(500).json({ error: "Internal server error" });

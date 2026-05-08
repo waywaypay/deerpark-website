@@ -47,14 +47,16 @@ type AgentDetail = {
 };
 
 type Lead = {
-  id: number;
-  name: string;
+  id: string;
+  source: "assessment" | "dispatch";
+  sourceDetail: string | null;
+  createdAt: string;
+  name: string | null;
   contact: string;
   contactType: "email" | "sms";
-  company: string;
-  challenge: string;
-  source: string | null;
-  createdAt: string;
+  company: string | null;
+  challenge: string | null;
+  unsubscribedAt: string | null;
 };
 
 type IngestResult = {
@@ -415,7 +417,7 @@ const LeadsTab = ({ token }: { token: string }) => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("");
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -439,16 +441,41 @@ const LeadsTab = ({ token }: { token: string }) => {
     const q = filter.trim().toLowerCase();
     if (!q) return leads;
     return leads.filter((l) =>
-      [l.name, l.contact, l.company, l.challenge, l.source ?? ""].some((v) => v.toLowerCase().includes(q)),
+      [l.name, l.contact, l.company, l.challenge, l.source, l.sourceDetail]
+        .some((v) => (v ?? "").toLowerCase().includes(q)),
     );
   }, [leads, filter]);
 
   const exportCsv = () => {
     if (!leads || leads.length === 0) return;
     const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const header = ["id", "createdAt", "name", "contactType", "contact", "company", "source", "challenge"];
+    const header = [
+      "id",
+      "source",
+      "sourceDetail",
+      "createdAt",
+      "name",
+      "contactType",
+      "contact",
+      "company",
+      "challenge",
+      "unsubscribedAt",
+    ];
     const rows = leads.map((l) =>
-      [l.id, l.createdAt, l.name, l.contactType, l.contact, l.company, l.source ?? "", l.challenge].map((v) => escape(String(v))).join(","),
+      [
+        l.id,
+        l.source,
+        l.sourceDetail ?? "",
+        l.createdAt,
+        l.name ?? "",
+        l.contactType,
+        l.contact,
+        l.company ?? "",
+        l.challenge ?? "",
+        l.unsubscribedAt ?? "",
+      ]
+        .map((v) => escape(String(v)))
+        .join(","),
     );
     const csv = [header.join(","), ...rows].join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -470,9 +497,9 @@ const LeadsTab = ({ token }: { token: string }) => {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-2xl font-serif">Assessment inquiries</h2>
+          <h2 className="text-2xl font-serif">Leads</h2>
           <p className="text-sm text-muted-foreground font-light mt-1">
-            Submissions from the lead-capture form on the homepage.
+            Everyone who's reached out — assessment quiz submissions and Dispatch newsletter subscribers.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -520,49 +547,72 @@ const LeadsTab = ({ token }: { token: string }) => {
           <thead className="text-left bg-background/40">
             <tr className="border-b border-foreground/10">
               <th className="px-4 py-3 section-label">Submitted</th>
+              <th className="px-4 py-3 section-label">Source</th>
               <th className="px-4 py-3 section-label">Name</th>
               <th className="px-4 py-3 section-label">Contact</th>
               <th className="px-4 py-3 section-label">Company</th>
-              <th className="px-4 py-3 section-label">Source</th>
               <th className="px-4 py-3 section-label">Challenge</th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((l) => (
-              <tr
-                key={l.id}
-                className="border-b border-foreground/10 hover:bg-background/40 cursor-pointer"
-                onClick={() => setExpanded((id) => (id === l.id ? null : l.id))}
-              >
-                <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatDate(l.createdAt)}</td>
-                <td className="px-4 py-3">{l.name}</td>
-                <td className="px-4 py-3">
-                  <span className="inline-flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
-                      {l.contactType === "sms" ? "SMS" : "Email"}
+            {filtered.map((l) => {
+              const sourceLabel = l.source === "assessment" ? "Assessment" : "Dispatch";
+              const sourceClass =
+                l.source === "assessment"
+                  ? "border-primary/40 text-primary"
+                  : "border-foreground/30 text-foreground/80";
+              return (
+                <tr
+                  key={l.id}
+                  className="border-b border-foreground/10 hover:bg-background/40 cursor-pointer"
+                  onClick={() => setExpanded((id) => (id === l.id ? null : l.id))}
+                >
+                  <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatDate(l.createdAt)}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className={`text-[10px] uppercase tracking-widest border px-1.5 py-0.5 ${sourceClass}`}>
+                      {sourceLabel}
                     </span>
-                    <a
-                      href={l.contactType === "sms" ? `sms:${l.contact}` : `mailto:${l.contact}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="hover:underline underline-offset-4"
-                    >
-                      {l.contact}
-                    </a>
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{l.company}</td>
-                <td className="px-4 py-3">
-                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
-                    {l.source ?? "—"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground max-w-md">
-                  <div className={expanded === l.id ? "whitespace-pre-wrap" : "truncate"}>
-                    {l.challenge}
-                  </div>
-                </td>
-              </tr>
-            ))}
+                    {l.sourceDetail && (
+                      <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                        {l.sourceDetail}
+                      </span>
+                    )}
+                    {l.source === "dispatch" && l.unsubscribedAt && (
+                      <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                        Unsubscribed
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">{l.name ?? <span className="text-muted-foreground">—</span>}</td>
+                  <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                        {l.contactType === "sms" ? "SMS" : "Email"}
+                      </span>
+                      <a
+                        href={l.contactType === "sms" ? `sms:${l.contact}` : `mailto:${l.contact}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="hover:underline underline-offset-4"
+                      >
+                        {l.contact}
+                      </a>
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {l.company ?? <span>—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-muted-foreground max-w-md">
+                    {l.challenge ? (
+                      <div className={expanded === l.id ? "whitespace-pre-wrap" : "truncate"}>
+                        {l.challenge}
+                      </div>
+                    ) : (
+                      <span>—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
             {leads && filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
@@ -2386,8 +2436,8 @@ const HOME_TILES: Tile<"agents" | "leads">[] = [
   },
   {
     id: "leads",
-    label: "Assessment leads",
-    description: "Submissions from the homepage lead-capture form.",
+    label: "Leads",
+    description: "Assessment quiz submissions and Dispatch newsletter subscribers.",
     Icon: Mail,
   },
 ];
@@ -2569,7 +2619,7 @@ const AgentsHome = ({ onSelect }: { onSelect: (view: "dispatch") => void }) => (
 const VIEW_LABELS: Record<Exclude<View, "home">, string> = {
   agents: "Agents",
   dispatch: "Dispatch",
-  leads: "Assessment leads",
+  leads: "Leads",
 };
 
 const breadcrumbFor = (view: View): Exclude<View, "home">[] => {
