@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,6 +13,7 @@ import {
   PenLine,
   Send,
   ChevronRight,
+  ChevronDown,
   Gavel,
   Eye,
 } from "lucide-react";
@@ -659,8 +660,26 @@ type DigestRunResult = {
   results?: Array<{ recipient: string; ok: boolean; error?: string }>;
 };
 
+type ComposeDiagnostics = {
+  polishStatus: "success" | "no_api_key" | "request_failed" | "parse_failed" | "missing_subject_or_intro";
+  polishError?: string;
+  polishCommentaryCount: number;
+  fallbackCommentaryCount: number;
+  fallbackError?: string;
+  finalCommentaryCount: number;
+  headlineCount: number;
+};
+
 type DigestTestSendResult =
-  | { ok: true; recipient: string; subject: string; headlineCount: number; bannerGenerated: boolean; polishApplied: boolean }
+  | {
+      ok: true;
+      recipient: string;
+      subject: string;
+      headlineCount: number;
+      bannerGenerated: boolean;
+      polishApplied: boolean;
+      diagnostics: ComposeDiagnostics;
+    }
   | { ok: false; recipient?: string; error: string };
 
 type JudgeSpec = {
@@ -2024,11 +2043,26 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
         </div>
         {testResult && (
           <div
-            className={`mt-3 border p-3 text-xs ${testResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}
+            className={`mt-3 border p-3 text-xs space-y-1 ${testResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}
           >
-            {testResult.ok
-              ? `Sent "${testResult.subject}" to ${testResult.recipient}. Banner ${testResult.bannerGenerated ? "generated" : "skipped"}, polish ${testResult.polishApplied ? "applied" : "skipped"}.`
-              : `Test send failed${testResult.recipient ? ` for ${testResult.recipient}` : ""}: ${testResult.error}`}
+            {testResult.ok ? (
+              <>
+                <div>
+                  Sent "{testResult.subject}" to {testResult.recipient}. Banner {testResult.bannerGenerated ? "generated" : "skipped"}, polish {testResult.polishApplied ? "applied" : "skipped"}.
+                </div>
+                <div className="font-mono text-[10px] text-foreground/70">
+                  Polish: {testResult.diagnostics.polishStatus}
+                  {testResult.diagnostics.polishError ? ` (${testResult.diagnostics.polishError.slice(0, 200)})` : ""}
+                  {" · "}commentary {testResult.diagnostics.finalCommentaryCount}/{testResult.diagnostics.headlineCount}
+                  {" "}(polish {testResult.diagnostics.polishCommentaryCount}, fallback {testResult.diagnostics.fallbackCommentaryCount})
+                  {testResult.diagnostics.fallbackError ? ` · fallback err: ${testResult.diagnostics.fallbackError.slice(0, 100)}` : ""}
+                </div>
+              </>
+            ) : (
+              <div>
+                Test send failed{testResult.recipient ? ` for ${testResult.recipient}` : ""}: {testResult.error}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -2126,48 +2160,203 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
 
 type DispatchSection = "headlines" | "judge" | "writers" | "emails";
 
-const DispatchView = ({ token }: { token: string }) => {
-  const [section, setSection] = useState<DispatchSection>("headlines");
+type WorkflowNodeSpec = {
+  id: DispatchSection;
+  label: string;
+  Icon: typeof Bot;
+  description: string;
+  io: string;
+};
 
-  const sections: { id: DispatchSection; label: string; Icon: typeof Bot; description: string }[] = [
-    { id: "headlines", label: "Headline ingestion", Icon: Radio, description: "Sources that fetch AI news on a schedule" },
-    { id: "judge", label: "Headline judge", Icon: Gavel, description: "Scores headlines + picks the top-10" },
-    { id: "writers", label: "Writer agents", Icon: PenLine, description: "Turn headlines into blog posts" },
-    { id: "emails", label: "Email agents", Icon: Send, description: "Daily top-10 dispatch email" },
-  ];
+const WORKFLOW_NODES: WorkflowNodeSpec[] = [
+  {
+    id: "headlines",
+    label: "Headline ingestion",
+    Icon: Radio,
+    description: "Sources that fetch AI news on a schedule",
+    io: "RSS · APIs → headlines",
+  },
+  {
+    id: "judge",
+    label: "Headline judge",
+    Icon: Gavel,
+    description: "Scores headlines + picks the top-10",
+    io: "headlines → ranked picks",
+  },
+  {
+    id: "writers",
+    label: "Writer agents",
+    Icon: PenLine,
+    description: "Turn headlines into blog posts",
+    io: "picks → drafted posts",
+  },
+  {
+    id: "emails",
+    label: "Email agent",
+    Icon: Send,
+    description: "Daily top-10 dispatch email",
+    io: "picks + posts → inbox",
+  },
+];
+
+const WorkflowNodeCard = ({
+  node,
+  index,
+  isFirst,
+  isLast,
+  onClick,
+}: {
+  node: WorkflowNodeSpec;
+  index: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onClick: () => void;
+}) => {
+  const { Icon, label, description, io } = node;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative w-full lg:w-56 lg:shrink-0 border-2 border-foreground/25 bg-background/90 backdrop-blur p-5 text-left flex flex-col gap-4 hover:border-primary hover:shadow-[0_0_0_4px_rgba(255,255,255,0.04)] transition-all"
+    >
+      <div className="flex items-center justify-between">
+        <div className="p-2 border border-foreground/20 bg-card group-hover:border-primary/60 transition-colors">
+          <Icon className="w-4 h-4 text-foreground/80 group-hover:text-primary transition-colors" />
+        </div>
+        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
+          Step {index + 1}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        <div className="text-base font-serif leading-tight">{label}</div>
+        <p className="text-[11px] text-muted-foreground font-light leading-relaxed">
+          {description}
+        </p>
+      </div>
+      <div className="text-[10px] text-muted-foreground/80 font-mono border-t border-foreground/10 pt-2">
+        {io}
+      </div>
+      <span className="text-[10px] uppercase tracking-[0.18em] text-foreground/60 group-hover:text-primary inline-flex items-center gap-1 font-sans transition-colors">
+        Open <ChevronRight className="w-3 h-3" />
+      </span>
+      {!isFirst && (
+        <span
+          aria-hidden
+          className="hidden lg:block absolute -left-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-background border-2 border-foreground/50 group-hover:border-primary transition-colors"
+        />
+      )}
+      {!isLast && (
+        <span
+          aria-hidden
+          className="hidden lg:block absolute -right-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-foreground group-hover:bg-primary transition-colors"
+        />
+      )}
+    </button>
+  );
+};
+
+const WorkflowConnector = () => (
+  <div className="flex items-center justify-center self-center">
+    <div className="hidden lg:flex items-center w-10 xl:w-14">
+      <div className="flex-1 border-t border-dashed border-foreground/40" />
+      <ChevronRight className="w-4 h-4 text-foreground/60 -ml-1" />
+    </div>
+    <div className="lg:hidden flex flex-col items-center py-2">
+      <div className="h-6 w-px border-l border-dashed border-foreground/40" />
+      <ChevronDown className="w-4 h-4 text-foreground/60 -mt-1" />
+    </div>
+  </div>
+);
+
+const WorkflowCanvas = ({
+  onSelect,
+}: {
+  onSelect: (id: DispatchSection) => void;
+}) => (
+  <div className="relative border border-foreground/15 bg-card overflow-hidden">
+    <div
+      aria-hidden
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)",
+        backgroundSize: "22px 22px",
+      }}
+    />
+    <div className="relative px-5 py-3 border-b border-foreground/10 flex items-center justify-between">
+      <span className="section-label">Workflow canvas</span>
+      <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans hidden sm:inline">
+        Ingestion → Judge → Writers → Email
+      </span>
+    </div>
+    <div className="relative px-6 py-10 lg:px-10 lg:py-14">
+      <div className="flex flex-col lg:flex-row lg:items-stretch lg:justify-center lg:flex-wrap gap-y-2 lg:gap-y-6">
+        {WORKFLOW_NODES.map((node, i) => (
+          <Fragment key={node.id}>
+            <WorkflowNodeCard
+              node={node}
+              index={i}
+              isFirst={i === 0}
+              isLast={i === WORKFLOW_NODES.length - 1}
+              onClick={() => onSelect(node.id)}
+            />
+            {i < WORKFLOW_NODES.length - 1 && <WorkflowConnector />}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+const DispatchView = ({ token }: { token: string }) => {
+  const [section, setSection] = useState<DispatchSection | null>(null);
+
+  if (section) {
+    const active = WORKFLOW_NODES.find((n) => n.id === section)!;
+    const Icon = active.Icon;
+    return (
+      <div className="space-y-8">
+        <div>
+          <button
+            type="button"
+            onClick={() => setSection(null)}
+            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 mb-4"
+          >
+            <ArrowLeft className="w-3 h-3" /> Back to workflow
+          </button>
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 border border-foreground/20 bg-card mt-1">
+              <Icon className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <div className="section-label">Dispatch · Workflow</div>
+              <h2 className="text-3xl font-serif mt-0.5">{active.label}</h2>
+              <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
+                {active.description}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {section === "headlines" && <AgentsTab token={token} />}
+        {section === "judge" && <JudgeTab token={token} />}
+        {section === "writers" && <WriterAgentsTab token={token} />}
+        {section === "emails" && <EmailAgentsTab token={token} />}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
       <div>
         <div className="section-label">Dispatch</div>
-        <h2 className="text-3xl font-serif mt-1">News agents</h2>
+        <h2 className="text-3xl font-serif mt-1">Workflows and Agents</h2>
         <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
-          The full pipeline that ingests AI news, writes posts about it, and sends email out the door.
+          The full pipeline that ingests AI news, writes posts about it, and sends email out the door. Click any node to open it.
         </p>
       </div>
 
-      <div className="flex gap-1 border-b border-foreground/15 -mb-px">
-        {sections.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setSection(id)}
-            className={`px-4 py-2.5 text-xs uppercase tracking-widest border-b-2 inline-flex items-center gap-2 ${
-              section === id
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {section === "headlines" && <AgentsTab token={token} />}
-      {section === "judge" && <JudgeTab token={token} />}
-      {section === "writers" && <WriterAgentsTab token={token} />}
-      {section === "emails" && <EmailAgentsTab token={token} />}
+      <WorkflowCanvas onSelect={setSection} />
     </div>
   );
 };
