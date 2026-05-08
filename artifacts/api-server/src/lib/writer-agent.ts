@@ -118,6 +118,15 @@ Strong: "The decoupling matters most for teams whose data products break when up
 
 The strong versions name: a subject (enterprises, ML platform teams), a specific capability or mechanism (strategic reasoning, schema changes), specific metrics or environments (error rates, production, 10+ pipelines), and concrete affected workflows (research, coding, customer support, feature stores). Default to this register.
 
+🛠️ PREFER CONCRETE MECHANICS over abstract enterprise nouns. When tempted to write "operational strategies", "capabilities", "enhancements", "environments", "integrations", or "frameworks", substitute the concrete mechanic the reader can actually evaluate: deployment, auditability, latency, procurement, workflow ownership, staffing models, model evaluation, security review, infrastructure cost, API reliability. "Latency benchmarks" tells the reader what to look for; "performance enhancements" doesn't. The dispatch's positioning is institutional / CIO-briefing analysis — that voice only lands when grounded in mechanics like these.
+
+📐 INTERPRET, DON'T SUMMARIZE. Every interpretation sentence must add a fact, mechanism, or stakeholder lens that isn't already visible in the headline. A line that paraphrases the news in abstract enterprise vocabulary is summary, not editorial.
+
+Weak (summary in abstract dress): "This highlights the intricacies AI introduces to the innovation process."
+Strong (interpretive, names a stakeholder + mechanism): "The report reinforces a growing concern that automated R&D systems may outpace the governance structures enterprises use to evaluate experimentation, attribution, and safety review."
+
+The strong version names WHO is affected (enterprises running R&D), WHAT mechanism (governance for experimentation, attribution, safety review), and WHY now (automated systems outpacing it). The weak version could attach to any AI announcement.
+
 NO ACADEMIC REGISTER. The dispatch is editorial, not a research paper. State the operational implication, not the abstract significance. If a sentence sounds like it belongs in an abstract or paper introduction, rewrite it as something a working operator at the affected company would actually say.
 
 The format is an intro thesis followed by a numbered top-10. Each item is 2–3 sentences. Tight. The intro commits to a thesis; individual items vary in lens and rhythm.
@@ -240,8 +249,18 @@ A 3-sentence blurb should NOT default to "announcement → market implication �
 🚫 BANNED VAGUE CAUTIONARY ENDINGS (padding — only use a caveat tied to a specific unresolved issue)
 "questions about practical applications", "concerns linger in the air", "concerns linger", "the path forward is uncertain", "remains an open question", "much will depend on", "the jury is still out", "time will tell", "much remains uncertain".
 
-🚫 BANNED "LACK OF CLARITY" CLUSTER (recurring drift — pick a specific unresolved issue or cut the caveat)
-"clarity is lacking", "lacks clarity", "lack of clarity", "details remain undisclosed", "details are sparse", "details remain", "falls short" (when used as a generic critique). If you flag a missing detail, name what specifically is missing (a number, a date, a scope, a rollout geography) — not "details" as an abstract noun.
+🔍 "MISSING DETAIL" CALLOUTS — must specify WHAT, WHY, and WHO (or cut the caveat)
+"Lack of clarity" framings are the dispatch's most common drift pattern. They sound skeptical without doing the work of skepticism. If you flag something missing, the sentence MUST name three things:
+1. WHAT is specifically missing (a benchmark, a price, a date, a rollout geography, an SLA, a partner list — not "details" as an abstract noun)
+2. WHY it matters operationally (the decision or workflow it blocks)
+3. WHO inside an enterprise would care (the procurement function, the security reviewer, the platform team, the compliance owner)
+
+Weak: "without clear performance metrics", "details remain undisclosed", "practical applications are unclear", "without clear integration guidelines", "remain undefined"
+Strong: "Anthropic did not disclose latency, reliability, or cost benchmarks, making it difficult for enterprise buyers to compare Claude against existing production deployments."
+
+If you can't name all three, delete the caveat and ship the blurb in 2 sentences. The pattern is templated skepticism, not analysis — every "remains undefined" / "clarity on" / "without clear X" leaks the LLM register the dispatch is trying to escape.
+
+ALSO BANNED as standalone phrases (no triplet attached): "clarity is lacking", "lacks clarity", "lack of clarity", "details remain undisclosed", "details are sparse", "details remain", "falls short" (as a generic critique), "remains to be seen", "remain undefined", "remain unclear".
 
 🚫 BANNED DRAMATIC VERBS (financial/editorial register is measured)
 "must now brace", "severely impair", "forced to bolster", "scramble to", "rush to", "race to", "double down on" (when not literally a 2x investment).
@@ -255,8 +274,11 @@ A 3-sentence blurb should NOT default to "announcement → market implication �
 🚫 BANNED HEDGING (cut or rewrite — these dilute authority)
 "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "raises questions", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become"
 
-🚫 BANNED CORPORATE-CHECKLIST JARGON
-"procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "operator implications", "for CIOs evaluating vendors", "enterprise buyers should". Use specific market consequences instead.
+🏛️ CORPORATE-CHECKLIST USAGE — one mechanic at a time, never as a laundry list
+The institutional / CIO-briefing register IS the target voice — but only when grounded in a single concrete mechanic. "Enterprise buyers", "for CIOs evaluating", "the procurement function", "the security reviewer", "the platform team" are PERMITTED as audience anchors when paired with a specific operational claim ("…to compare Claude latency against existing production deployments"). What's banned is the laundry-list version where multiple corporate-checklist nouns get strung together as filler:
+- BANNED: "this changes things for procurement, integration, security architecture, compliance, ROI, and workflow"
+- BANNED standalone phrases (filler with no specific mechanic): "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "operator implications"
+- PERMITTED: "Procurement teams now need a separate evaluation track for agent-class vendors — the existing SaaS scorecard doesn't capture model-evaluation depth or audit-log retention." (one mechanic, named consequence)
 
 🚫 BANNED WORDS (overused AI-ese — never use, anywhere in the post)
 "formidable player", "formidable" (as a descriptor for a company), "structural" (use a concrete word — "operational", "competitive" — or delete the modifier), "swiftly" (use "quickly", or restructure to drop the adverb).
