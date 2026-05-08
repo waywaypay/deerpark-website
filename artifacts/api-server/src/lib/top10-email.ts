@@ -290,20 +290,24 @@ Given the day's top-10 headlines, produce three things in a single JSON object.
 
 1. SUBJECT — concise email subject under 70 characters referencing the strongest story by name. No emoji. No "Daily Dispatch:" prefix.
 
-2. INTRO — 1-2 sentence paragraph framing the day. Skeptical, concrete, naming actual companies. Plain prose. No list. No exclamation marks.
+2. INTRO — 1-2 sentence paragraph framing the day across MULTIPLE stories. Skeptical, concrete, naming actual companies. Plain prose. No list. No exclamation marks.
+   - Do NOT re-explain the lead headline; the subject already names it. Pull a thread that connects two or more items, or surface a tension across the day.
+   - Do NOT repeat any noun phrase from the subject verbatim (e.g. if the subject says "GPT-5.5", the intro must not also say "GPT-5.5").
 
-3. COMMENTARY for EVERY item — 2-4 sentences each. Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y." Bold the lead clause with markdown asterisks. Then 1-3 sentences of plain prose commentary that does at least one of:
+3. COMMENTARY for EVERY item — 2-4 sentences each. Lead with the publisher and what shipped, then 1-3 sentences of plain prose commentary that does at least one of:
    - Contextualize: where this fits in the market
    - Qualify: what's missing or unspecified
    - Pressure-test: what the announcement does NOT prove
+   The bolded lead must PARAPHRASE the title, not restate it. The headline title is rendered immediately above your commentary, so a lead like "OpenAI announced Scaling Trusted Access for Cyber with GPT-5.5 and GPT-5.5-Cyber" prints the title twice. Instead summarize the action in your own words: "OpenAI pitched the GPT-5.5 family as a cybersecurity-grade tier" or "OpenAI extended GPT-5.5 with a Cyber-specific variant". Bold the lead clause with markdown asterisks.
 
 HARD RULES for commentary:
 - 2-4 sentences total per item including the bolded lead. No shorter than 2, no longer than 4.
 - Use the source name as the publisher. When the source is the originator (e.g. "Anthropic" for an anthropic.com post), say "Anthropic announced..." or "Anthropic released...". When the source is press coverage (e.g. "Bloomberg Technology"), say "Bloomberg reports..." or "per Bloomberg".
+- The bolded lead must NOT contain the headline title verbatim. Reuse no more than three consecutive words from the title.
 - Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
 - No exclamation marks. No em-dash chains (more than one — per sentence).
 - Banned phrases: "what's interesting is", "in a world where", "speaks volumes", "sends a clear message", "not just X but Y", "isn't merely", "more than just", "what's striking", "in an era of".
-- If existing commentary is provided in the input you may keep it, lightly edit, or replace it — but every item MUST have commentary in the output.
+- If existing commentary is provided in the input you may keep it, lightly edit, or replace it — but every item MUST have commentary in the output, and the same anti-repetition rule applies to whatever you keep.
 
 Return ONLY this JSON, no prose outside it:
 {
@@ -434,11 +438,14 @@ async function polishWithLlm(
  */
 const COMMENTARY_FALLBACK_PROMPT = `You write 2-4 sentence commentary for AI/tech headlines aimed at enterprise AI buyers and operators (CIOs, IT directors, AI program owners). Skeptical, concrete, naming actual companies.
 
-For each input headline, produce 2-4 sentences. Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y." Bold the lead clause with markdown asterisks. Then 1-3 sentences of plain prose commentary that contextualizes, qualifies, or pressure-tests the headline.
+For each input headline, produce 2-4 sentences. Lead with the publisher and a paraphrase of what shipped, then 1-3 sentences of plain prose commentary that contextualizes, qualifies, or pressure-tests the headline. Bold the lead clause with markdown asterisks.
+
+The bolded lead must PARAPHRASE the title, not restate it — the headline is rendered immediately above your commentary, so leading with the title verbatim prints it twice. Reuse no more than three consecutive words from the title.
 
 HARD RULES
 - 2-4 sentences total per item including the bolded lead.
 - Use the source name as the publisher.
+- The bolded lead must NOT contain the headline title verbatim.
 - Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
 - No exclamation marks. No banned phrases ("what's interesting", "in a world where", "speaks volumes", "isn't merely", "more than just", "in an era of").
 
