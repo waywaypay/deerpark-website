@@ -71,6 +71,10 @@ export async function generateBannerImage(
         format: "png",
         return_binary: false,
         safe_mode: true,
+        // Suppress Venice's "Generated with Venice.ai" watermark in the
+        // bottom-right corner. Without this we ship a third-party logo
+        // in our own newsletter banner.
+        hide_watermark: true,
       }),
       signal: controller.signal,
     });
