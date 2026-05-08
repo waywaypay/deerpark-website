@@ -1962,11 +1962,10 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
   const [testEmail, setTestEmail] = useState("");
   const [testSending, setTestSending] = useState(false);
   const [testResult, setTestResult] = useState<DigestTestSendResult | null>(null);
-  const [bannerPromptOpen, setBannerPromptOpen] = useState(false);
   const [bannerPromptDraft, setBannerPromptDraft] = useState<string>("");
   const [bannerPromptIsCustom, setBannerPromptIsCustom] = useState(false);
   const [bannerPromptDefault, setBannerPromptDefault] = useState<string>("");
-  const [bannerPromptLoading, setBannerPromptLoading] = useState(false);
+  const [bannerPromptLoading, setBannerPromptLoading] = useState(true);
   const [bannerPromptSaving, setBannerPromptSaving] = useState(false);
   const [bannerPromptStatus, setBannerPromptStatus] = useState<{ ok: boolean; message: string } | null>(null);
 
@@ -2049,8 +2048,7 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
     }
   };
 
-  const openBannerPromptEditor = async () => {
-    setBannerPromptOpen(true);
+  const loadBannerPrompt = useCallback(async () => {
     setBannerPromptStatus(null);
     setBannerPromptLoading(true);
     try {
@@ -2072,7 +2070,9 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
     } finally {
       setBannerPromptLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => { void loadBannerPrompt(); }, [loadBannerPrompt]);
 
   const saveBannerPrompt = async () => {
     setBannerPromptSaving(true);
@@ -2143,13 +2143,6 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
-            onClick={() => void openBannerPromptEditor()}
-            className="rounded-none text-xs uppercase tracking-widest"
-          >
-            <PenLine className="w-3.5 h-3.5" /> Banner prompt
-          </Button>
-          <Button
-            variant="outline"
             onClick={() => void load()}
             disabled={loading}
             className="rounded-none text-xs uppercase tracking-widest"
@@ -2159,12 +2152,13 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
         </div>
       </div>
 
-      {bannerPromptOpen && (
-        <div className="border border-foreground/30 bg-card">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
+      <div className="border border-foreground/30 bg-card">
+        <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-foreground/15 flex-wrap">
+          <div className="flex items-start gap-2">
+            <PenLine className="w-3.5 h-3.5 mt-0.5 text-primary shrink-0" />
             <div>
               <div className="section-label">Banner image prompt</div>
-              <div className="text-xs text-muted-foreground font-light mt-1">
+              <div className="text-xs text-muted-foreground font-light mt-1 max-w-2xl">
                 Sent to the image model when generating the email's hero banner.{" "}
                 <span className="font-mono text-foreground">{"{{headlines}}"}</span>{" "}
                 is replaced with the day's top story titles.{" "}
@@ -2173,91 +2167,92 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
                 </span>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => setBannerPromptOpen(false)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Close
-            </button>
           </div>
-          {bannerPromptLoading ? (
-            <div className="p-6 text-xs text-muted-foreground">Loading…</div>
-          ) : (
-            <div className="p-4 space-y-3">
-              <textarea
-                value={bannerPromptDraft}
-                onChange={(e) => setBannerPromptDraft(e.target.value)}
-                spellCheck={false}
-                rows={8}
-                className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
-              />
-              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="text-muted-foreground">
-                  {bannerPromptDraft.length.toLocaleString()} chars
-                  {bannerPromptDraft.length < 40 && (
-                    <span className="text-red-400 ml-2">— too short (min 40)</span>
-                  )}
-                  {bannerPromptDraft.length > 4_000 && (
-                    <span className="text-red-400 ml-2">— too long (max 4,000)</span>
-                  )}
-                  {bannerPromptDraft.length >= 40 &&
-                    bannerPromptDraft.length <= 4_000 &&
-                    !bannerPromptDraft.includes("{{headlines}}") && (
-                      <span className="text-amber-400 ml-2">
-                        — no {"{{headlines}}"} placeholder; titles will be appended
-                      </span>
-                    )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => void resetBannerPromptToDefault()}
-                    disabled={bannerPromptSaving || !bannerPromptIsCustom}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    Reset to default
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setBannerPromptDraft(bannerPromptDefault)}
-                    disabled={bannerPromptSaving}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    Load default into editor
-                  </Button>
-                  <Button
-                    onClick={() => void saveBannerPrompt()}
-                    disabled={
-                      bannerPromptSaving ||
-                      bannerPromptDraft.length < 40 ||
-                      bannerPromptDraft.length > 4_000
-                    }
-                    className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
-                  >
-                    {bannerPromptSaving ? "Saving…" : "Save prompt"}
-                  </Button>
-                </div>
-              </div>
-              {bannerPromptStatus && (
-                <div
-                  className={`text-xs ${
-                    bannerPromptStatus.ok ? "text-primary" : "text-red-400"
-                  }`}
-                >
-                  {bannerPromptStatus.message}
-                </div>
-              )}
-              <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
-                The prompt is sent verbatim to Venice's image endpoint with{" "}
-                <span className="font-mono">{"{{headlines}}"}</span> substituted. If the placeholder
-                is missing, the day's top three titles are appended automatically so the model still
-                has subject context. Image gen failures fall back to no banner — they don't block sends.
-              </p>
-            </div>
-          )}
+          <button
+            type="button"
+            onClick={() => void loadBannerPrompt()}
+            disabled={bannerPromptLoading}
+            className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5"
+          >
+            <RefreshCw className={`w-3 h-3 ${bannerPromptLoading ? "animate-spin" : ""}`} /> Reload
+          </button>
         </div>
-      )}
+        {bannerPromptLoading && bannerPromptDraft === "" ? (
+          <div className="p-6 text-xs text-muted-foreground">Loading…</div>
+        ) : (
+          <div className="p-4 space-y-3">
+            <textarea
+              value={bannerPromptDraft}
+              onChange={(e) => setBannerPromptDraft(e.target.value)}
+              spellCheck={false}
+              rows={6}
+              className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="text-muted-foreground">
+                {bannerPromptDraft.length.toLocaleString()} chars
+                {bannerPromptDraft.length < 40 && (
+                  <span className="text-red-400 ml-2">— too short (min 40)</span>
+                )}
+                {bannerPromptDraft.length > 4_000 && (
+                  <span className="text-red-400 ml-2">— too long (max 4,000)</span>
+                )}
+                {bannerPromptDraft.length >= 40 &&
+                  bannerPromptDraft.length <= 4_000 &&
+                  !bannerPromptDraft.includes("{{headlines}}") && (
+                    <span className="text-amber-400 ml-2">
+                      — no {"{{headlines}}"} placeholder; titles will be appended
+                    </span>
+                  )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => void resetBannerPromptToDefault()}
+                  disabled={bannerPromptSaving || !bannerPromptIsCustom}
+                  className="rounded-none text-[10px] uppercase tracking-widest"
+                >
+                  Reset to default
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setBannerPromptDraft(bannerPromptDefault)}
+                  disabled={bannerPromptSaving || bannerPromptDefault === ""}
+                  className="rounded-none text-[10px] uppercase tracking-widest"
+                >
+                  Load default into editor
+                </Button>
+                <Button
+                  onClick={() => void saveBannerPrompt()}
+                  disabled={
+                    bannerPromptSaving ||
+                    bannerPromptDraft.length < 40 ||
+                    bannerPromptDraft.length > 4_000
+                  }
+                  className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
+                >
+                  {bannerPromptSaving ? "Saving…" : "Save prompt"}
+                </Button>
+              </div>
+            </div>
+            {bannerPromptStatus && (
+              <div
+                className={`text-xs ${
+                  bannerPromptStatus.ok ? "text-primary" : "text-red-400"
+                }`}
+              >
+                {bannerPromptStatus.message}
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
+              The prompt is sent verbatim to Venice's image endpoint with{" "}
+              <span className="font-mono">{"{{headlines}}"}</span> substituted. If the placeholder
+              is missing, the day's top three titles are appended automatically so the model still
+              has subject context. Image gen failures fall back to no banner — they don't block sends.
+            </p>
+          </div>
+        )}
+      </div>
 
       {error && <p className="text-xs text-red-400">{error}</p>}
 
