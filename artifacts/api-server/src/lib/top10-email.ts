@@ -42,6 +42,26 @@ const LOGO_URL = `${PUBLIC_SITE_URL}/logo-icon.png`;
 // HTML <img src="cid:..."> and the Resend attachments[].content_id.
 export const BANNER_CID = "banner.png";
 
+export type ComposeDiagnostics = {
+  /** What happened on the polish call. */
+  polishStatus:
+    | "success"
+    | "no_api_key"
+    | "request_failed"
+    | "parse_failed"
+    | "missing_subject_or_intro";
+  polishError?: string;
+  /** Items polish returned commentary for. */
+  polishCommentaryCount: number;
+  /** Items the fallback commentary call rescued. 0 if fallback didn't run. */
+  fallbackCommentaryCount: number;
+  fallbackError?: string;
+  /** Items in the final email that have any commentary at all. */
+  finalCommentaryCount: number;
+  /** Total headlines in the email. */
+  headlineCount: number;
+};
+
 export type ComposedEmail = {
   subject: string;
   html: string;
@@ -59,6 +79,8 @@ export type ComposedEmail = {
    * on its own and hides the entire top-10 behind "View entire message."
    */
   bannerImage: GeneratedImage | null;
+  /** What happened during compose — surfaced in admin/test-send responses. */
+  diagnostics: ComposeDiagnostics;
 };
 
 export type ComposeOptions = {
@@ -243,6 +265,23 @@ type PolishResult = {
   commentary: Map<number, string>;
 };
 
+/**
+ * Outcome envelope so the composer can surface *why* polish failed in
+ * test-send diagnostics. Without this we just see "no commentary" and
+ * have to guess between rate-limits, parse errors, missing keys, etc.
+ */
+type PolishOutcome =
+  | { ok: true; result: PolishResult }
+  | {
+      ok: false;
+      reason:
+        | "no_api_key"
+        | "request_failed"
+        | "parse_failed"
+        | "missing_subject_or_intro";
+      error?: string;
+    };
+
 const POLISH_SYSTEM_PROMPT = `You are the editor of DeerPark's daily dispatch — a top-10 newsletter of AI and tech headlines for enterprise AI buyers and operators (CIOs, IT directors, AI program owners).
 
 Given the day's top-10 headlines, produce three things in a single JSON object.
@@ -320,9 +359,9 @@ function parsePolishJson(text: string): {
 
 async function polishWithLlm(
   headlines: HeadlineRow[],
-): Promise<PolishResult | null> {
+): Promise<PolishOutcome> {
   const setup = getPolishClient();
-  if (!setup) return null;
+  if (!setup) return { ok: false, reason: "no_api_key" };
 
   const corpus = headlines
     .map((h) => {
@@ -331,6 +370,7 @@ async function polishWithLlm(
     })
     .join("\n---\n");
 
+  let text = "";
   try {
     const response = await setup.client.chat.completions.create({
       model: setup.model,
@@ -344,38 +384,113 @@ async function polishWithLlm(
       ],
       response_format: { type: "json_object" },
     });
+    text = response.choices[0]?.message?.content ?? "";
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn({ err: msg }, "Email polish: request failed");
+    return { ok: false, reason: "request_failed", error: msg };
+  }
+
+  const parsed = parsePolishJson(text);
+  if (!parsed) {
+    logger.warn(
+      { textPreview: text.slice(0, 300) },
+      "Email polish: parse failed",
+    );
+    return { ok: false, reason: "parse_failed", error: text.slice(0, 200) };
+  }
+  const subject =
+    typeof parsed.subject === "string" && parsed.subject.trim()
+      ? parsed.subject.trim().slice(0, 100)
+      : "";
+  const introMd =
+    typeof parsed.intro === "string" ? parsed.intro.trim() : "";
+  if (!subject || !introMd) {
+    return { ok: false, reason: "missing_subject_or_intro" };
+  }
+  const introHtml = marked.parse(introMd, { async: false }) as string;
+  const commentary = new Map<number, string>();
+  if (Array.isArray(parsed.items)) {
+    const validIds = new Set(headlines.map((h) => h.id));
+    for (const e of parsed.items) {
+      const id = Number(e.id);
+      const itemText =
+        typeof e.commentary === "string" ? e.commentary.trim() : "";
+      if (!Number.isFinite(id) || !validIds.has(id)) continue;
+      if (!itemText || itemText.length > 800) continue;
+      commentary.set(id, itemText);
+    }
+  }
+  return { ok: true, result: { subject, introHtml, commentary } };
+}
+
+/**
+ * Last-resort commentary call. Fires only when the main polish step
+ * leaves some items without commentary. Smaller prompt + smaller output
+ * — less context for the model to drop, less likely to trip whatever
+ * 429 pattern hit polish.
+ */
+const COMMENTARY_FALLBACK_PROMPT = `You write 2-4 sentence commentary for AI/tech headlines aimed at enterprise AI buyers and operators (CIOs, IT directors, AI program owners). Skeptical, concrete, naming actual companies.
+
+For each input headline, produce 2-4 sentences. Lead with the publisher and what shipped: "Anthropic released X." or "OpenAI announced Y." Bold the lead clause with markdown asterisks. Then 1-3 sentences of plain prose commentary that contextualizes, qualifies, or pressure-tests the headline.
+
+HARD RULES
+- 2-4 sentences total per item including the bolded lead.
+- Use the source name as the publisher.
+- Every claim must be implied by the headline title or general knowledge of the named company. Do not invent metrics, dates, prices, or quotes.
+- No exclamation marks. No banned phrases ("what's interesting", "in a world where", "speaks volumes", "isn't merely", "more than just", "in an era of").
+
+Return ONLY this JSON:
+{ "items": [{ "id": <number>, "commentary": "<2-4 sentences>" }, ...] }
+
+One entry per input id.`;
+
+async function backfillCommentaryViaLlm(
+  missing: HeadlineRow[],
+): Promise<{ commentary: Map<number, string>; error?: string }> {
+  const result: Map<number, string> = new Map();
+  if (missing.length === 0) return { commentary: result };
+  const setup = getPolishClient();
+  if (!setup) return { commentary: result, error: "no_api_key" };
+
+  const corpus = missing
+    .map(
+      (h) => `id=${h.id}\nSource: ${h.source}\nTitle: ${h.title}`,
+    )
+    .join("\n---\n");
+
+  try {
+    const response = await setup.client.chat.completions.create({
+      model: setup.model,
+      max_tokens: 4096,
+      messages: [
+        { role: "system", content: COMMENTARY_FALLBACK_PROMPT },
+        {
+          role: "user",
+          content: `Write commentary for these ${missing.length} headlines:\n\n${corpus}`,
+        },
+      ],
+      response_format: { type: "json_object" },
+    });
     const text = response.choices[0]?.message?.content ?? "";
     const parsed = parsePolishJson(text);
-    if (!parsed) return null;
-    const subject =
-      typeof parsed.subject === "string" && parsed.subject.trim()
-        ? parsed.subject.trim().slice(0, 100)
-        : "";
-    const introMd =
-      typeof parsed.intro === "string" ? parsed.intro.trim() : "";
-    if (!subject || !introMd) return null;
-    const introHtml = marked.parse(introMd, { async: false }) as string;
-    const commentary = new Map<number, string>();
-    if (Array.isArray(parsed.items)) {
-      const validIds = new Set(headlines.map((h) => h.id));
-      for (const e of parsed.items) {
-        const id = Number(e.id);
-        const text =
-          typeof e.commentary === "string" ? e.commentary.trim() : "";
-        if (!Number.isFinite(id) || !validIds.has(id)) continue;
-        // Same 800-char ceiling as the standalone commentator — drops
-        // wall-of-text padding while leaving room for 4 long sentences.
-        if (!text || text.length > 800) continue;
-        commentary.set(id, text);
-      }
+    if (!parsed?.items || !Array.isArray(parsed.items)) {
+      return { commentary: result, error: "parse_failed" };
     }
-    return { subject, introHtml, commentary };
+    const validIds = new Set(missing.map((h) => h.id));
+    for (const e of parsed.items) {
+      const id = Number(e.id);
+      const itemText =
+        typeof e.commentary === "string" ? e.commentary.trim() : "";
+      if (!Number.isFinite(id) || !validIds.has(id)) continue;
+      if (!itemText || itemText.length > 800) continue;
+      result.set(id, itemText);
+    }
+    return { commentary: result };
   } catch (err) {
-    logger.warn(
-      { err: err instanceof Error ? err.message : String(err) },
-      "Email polish: request failed",
-    );
-    return null;
+    const msg = err instanceof Error ? err.message : String(err);
+    logger.warn({ err: msg }, "Email commentary fallback: request failed");
+    return { commentary: result, error: msg };
   }
 }
 
@@ -433,25 +548,51 @@ export async function composeDailyEmail(
 
   // Image gen + polish run in parallel — both are independent calls and the
   // total wall-clock cost is dominated by whichever is slower.
-  const [bannerImage, polished] = await Promise.all([
+  const [bannerImage, polishOutcome] = await Promise.all([
     generateBannerImage(buildPromptFromHeadlines(headlines)),
     polishWithLlm(headlines),
   ]);
   const bannerSrc = bannerImage ? `cid:${BANNER_CID}` : null;
 
-  // Use polished commentary as canonical when available — the polish step
-  // writes 2-4 sentences for every item in one LLM call. Fall back to DB
-  // commentary (populated by the standalone commentator pipeline) if
-  // polish failed or skipped an id. Last resort is the empty string,
-  // which renders the headline without a write-up rather than crashing.
-  const finalHeadlines = headlines.map((h) => {
-    const polishedText = polished?.commentary.get(h.id);
+  // Merge sources of truth for commentary:
+  //   1. Polish result (the main LLM call)
+  //   2. DB commentary (whatever the standalone commentator wrote)
+  // Track which items still have nothing so we can fire the fallback call.
+  const polishedMap = polishOutcome.ok
+    ? polishOutcome.result.commentary
+    : new Map<number, string>();
+  let mergedHeadlines = headlines.map((h) => {
+    const polishedText = polishedMap.get(h.id);
     if (polishedText) return { ...h, commentary: polishedText };
     return h;
   });
 
-  const subject = polished?.subject ?? fallbackSubject(finalHeadlines);
-  const introHtml = polished?.introHtml ?? fallbackIntroHtml(finalHeadlines);
+  // Last-resort: if any items still have empty commentary, ask the LLM
+  // again — but ONLY for those items, with a smaller prompt. Catches
+  // the case where polish succeeded structurally but dropped items, AND
+  // the case where polish failed entirely.
+  let fallbackCommentaryCount = 0;
+  let fallbackError: string | undefined;
+  const stillMissing = mergedHeadlines.filter((h) => !h.commentary);
+  if (stillMissing.length > 0) {
+    const { commentary: fallbackMap, error } = await backfillCommentaryViaLlm(stillMissing);
+    fallbackCommentaryCount = fallbackMap.size;
+    fallbackError = error;
+    if (fallbackMap.size > 0) {
+      mergedHeadlines = mergedHeadlines.map((h) => {
+        const fb = fallbackMap.get(h.id);
+        return fb ? { ...h, commentary: fb } : h;
+      });
+    }
+  }
+
+  const finalHeadlines = mergedHeadlines;
+  const subject = polishOutcome.ok
+    ? polishOutcome.result.subject
+    : fallbackSubject(finalHeadlines);
+  const introHtml = polishOutcome.ok
+    ? polishOutcome.result.introHtml
+    : fallbackIntroHtml(finalHeadlines);
 
   const items = renderItems(finalHeadlines);
   const itemsHtml = renderItemsHtml(items);
@@ -471,14 +612,27 @@ export async function composeDailyEmail(
   const introText = introHtml.replace(/<[^>]+>/g, "").trim();
   const text = renderText(subject, introText, finalHeadlines, opts.unsubscribeUrl);
 
+  const diagnostics: ComposeDiagnostics = {
+    polishStatus: polishOutcome.ok ? "success" : polishOutcome.reason,
+    polishError: polishOutcome.ok ? undefined : polishOutcome.error,
+    polishCommentaryCount: polishedMap.size,
+    fallbackCommentaryCount,
+    fallbackError,
+    finalCommentaryCount: finalHeadlines.filter((h) => h.commentary).length,
+    headlineCount: finalHeadlines.length,
+  };
+
+  logger.info({ diagnostics }, "Email compose: complete");
+
   return {
     subject,
     html,
     text,
     headlineCount: finalHeadlines.length,
     bannerGenerated: bannerImage !== null,
-    polishApplied: polished !== null,
+    polishApplied: polishOutcome.ok,
     headlines: finalHeadlines,
     bannerImage,
+    diagnostics,
   };
 }
