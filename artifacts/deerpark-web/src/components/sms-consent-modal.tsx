@@ -79,9 +79,8 @@ export function SmsConsentModal({ open, onClose, smsUrl, number }: Props) {
           <p>
             You'll text{" "}
             <span className="text-foreground">{formatSmsNumber(number)}</span>.
-            We reply to help you talk through what's actually slowing your team
-            down — finding the real pain before anyone talks solutions. A
-            DeerPark strategist follows up when there's something to dig into.
+            We first diagnose where AI fits your workflow, not pitch tools that
+            won't stick. A strategist takes it from there.
           </p>
           <ul className="list-disc pl-5 space-y-1.5">
             <li>
