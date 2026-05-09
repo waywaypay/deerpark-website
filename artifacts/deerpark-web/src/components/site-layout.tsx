@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDown, Menu, MessageSquare, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
 import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
+import { SmsConsentModal } from "@/components/sms-consent-modal";
 
 /** Site-wide: product destinations shown under “Products” in the header. */
 export const PRODUCT_LINKS = [
@@ -270,21 +271,33 @@ export const Footer = () => (
 );
 
 export const AssessmentFAB = () => {
+  const [smsOpen, setSmsOpen] = useState(false);
   // When SMS is live, the "Text" pill replaces the "Get Free Assessment" pill
   // on mobile entirely — texting converts higher than the form for the
   // top-of-funnel "I'm curious" cohort, and stacking two FABs ate too much
   // viewport. The Lead Capture section still has the form CTA inline for
-  // anyone who scrolls down.
+  // anyone who scrolls down. Tapping "Text" opens a Twilio-compliant consent
+  // modal before deep-linking to the user's Messages app.
   if (SMS_ENABLED && SMS_NUMBER_E164) {
     return (
-      <a
-        href={smsHref(SMS_NUMBER_E164)}
-        aria-label="Text our concierge"
-        className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
-      >
-        <MessageSquare className="w-3.5 h-3.5" />
-        Text
-      </a>
+      <>
+        <button
+          type="button"
+          onClick={() => setSmsOpen(true)}
+          aria-label="Text our concierge"
+          aria-haspopup="dialog"
+          className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
+        >
+          <MessageSquare className="w-3.5 h-3.5" />
+          Text
+        </button>
+        <SmsConsentModal
+          open={smsOpen}
+          onClose={() => setSmsOpen(false)}
+          smsUrl={smsHref(SMS_NUMBER_E164)}
+          number={SMS_NUMBER_E164}
+        />
+      </>
     );
   }
   return (

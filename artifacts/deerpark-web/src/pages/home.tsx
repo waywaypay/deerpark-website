@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files, RotateCcw } from "lucide-react";
 import { FadeIn, Navbar, Footer, AssessmentFAB } from "@/components/site-layout";
 import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
+import { SmsConsentModal } from "@/components/sms-consent-modal";
 
 const TICKER_ITEMS = [
   "AI Readiness Assessment",
@@ -20,6 +21,7 @@ const TICKER_ITEMS = [
 const Hero = () => {
   const { scrollYProgress } = useScroll();
   const panelY = useTransform(scrollYProgress, [0, 1], [0, 40]);
+  const [smsOpen, setSmsOpen] = useState(false);
 
   return (
     <section className="relative min-h-[100dvh] flex flex-col justify-between pt-24 overflow-hidden">
@@ -68,13 +70,23 @@ const Hero = () => {
             {SMS_ENABLED && SMS_NUMBER_E164 && (
               <p className="mt-5 text-sm text-muted-foreground font-light md:hidden">
                 Or text our concierge:{" "}
-                <a
-                  href={smsHref(SMS_NUMBER_E164)}
+                <button
+                  type="button"
+                  onClick={() => setSmsOpen(true)}
+                  aria-haspopup="dialog"
                   className="text-foreground underline underline-offset-4 hover:text-foreground/70"
                 >
                   {formatSmsNumber(SMS_NUMBER_E164)}
-                </a>
+                </button>
               </p>
+            )}
+            {SMS_ENABLED && SMS_NUMBER_E164 && (
+              <SmsConsentModal
+                open={smsOpen}
+                onClose={() => setSmsOpen(false)}
+                smsUrl={smsHref(SMS_NUMBER_E164)}
+                number={SMS_NUMBER_E164}
+              />
             )}
             <p className="mt-5 text-sm text-muted-foreground font-light hidden md:block">
               Or email us:{" "}
@@ -1224,6 +1236,7 @@ const LeadCapture = () => {
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<FormStatus>({ state: "idle" });
   const [smsConsent, setSmsConsent] = useState(false);
+  const [smsModalOpen, setSmsModalOpen] = useState(false);
   const isMobile = useIsMobile();
   const contactType: "sms" | "email" = isMobile ? "sms" : "email";
   // Capture once at mount so a hash navigation later doesn't overwrite the
@@ -1379,14 +1392,24 @@ const LeadCapture = () => {
               {SMS_ENABLED && SMS_NUMBER_E164 && (
                 <p className="text-sm text-muted-foreground font-light mt-3 md:hidden">
                   Or text our concierge bot at{" "}
-                  <a
-                    href={smsHref(SMS_NUMBER_E164)}
+                  <button
+                    type="button"
+                    onClick={() => setSmsModalOpen(true)}
+                    aria-haspopup="dialog"
                     className="text-foreground underline underline-offset-4 hover:text-foreground/70"
                   >
                     {formatSmsNumber(SMS_NUMBER_E164)}
-                  </a>
+                  </button>
                   {" — "}quick back-and-forth, assessment in two messages.
                 </p>
+              )}
+              {SMS_ENABLED && SMS_NUMBER_E164 && (
+                <SmsConsentModal
+                  open={smsModalOpen}
+                  onClose={() => setSmsModalOpen(false)}
+                  smsUrl={smsHref(SMS_NUMBER_E164)}
+                  number={SMS_NUMBER_E164}
+                />
               )}
               <p className="text-xs text-muted-foreground font-light mt-3 hidden md:block">
                 Or email <a href="mailto:contact@deerpark.io" className="underline underline-offset-2 hover:text-foreground">contact@deerpark.io</a>.
