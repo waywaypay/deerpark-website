@@ -28,7 +28,7 @@ export function formatSmsNumber(e164: string): string {
  * `?body=` — the `?` form works on both modern stacks; iOS quietly accepts
  * either. We keep it simple and use `?body=`.
  */
-export function smsHref(e164: string, body = "Hi — wanted to text DeerPark."): string {
+export function smsHref(e164: string, body = "Hi 👋 wanted to text deerpark"): string {
   return `sms:${e164}?body=${encodeURIComponent(body)}`;
 }
 
