@@ -14,7 +14,8 @@ type Props = {
 
 // Twilio A2P 10DLC and toll-free verification require these disclosures to
 // appear at the opt-in surface — not just buried in /privacy. Keep the copy
-// here in sync with the SMS sections of /privacy and /terms.
+// here in sync with the SMS sections of /privacy and /terms. Voice mirrors
+// the bot's own system prompt: discovery, not a sales pitch.
 export function SmsConsentModal({ open, onClose, smsUrl, number }: Props) {
   const cancelRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -68,7 +69,7 @@ export function SmsConsentModal({ open, onClose, smsUrl, number }: Props) {
           id="sms-consent-title"
           className="text-2xl sm:text-3xl font-serif leading-tight mb-4"
         >
-          Text DeerPark's discovery concierge.
+          Text DeerPark's discovery line.
         </h2>
 
         <div
@@ -78,14 +79,11 @@ export function SmsConsentModal({ open, onClose, smsUrl, number }: Props) {
           <p>
             You'll text{" "}
             <span className="text-foreground">{formatSmsNumber(number)}</span>.
-            A concierge bot replies to help you describe a workflow; a real
-            DeerPark strategist follows up if you want one.
+            We reply to help you talk through what's actually slowing your team
+            down — finding the real pain before anyone talks solutions. A
+            DeerPark strategist follows up when there's something to dig into.
           </p>
           <ul className="list-disc pl-5 space-y-1.5">
-            <li>
-              <span className="text-foreground">Frequency:</span> varies;
-              typically fewer than 6 messages per month.
-            </li>
             <li>
               <span className="text-foreground">Cost:</span> message and data
               rates may apply, depending on your mobile plan.
@@ -102,7 +100,7 @@ export function SmsConsentModal({ open, onClose, smsUrl, number }: Props) {
           </ul>
           <p className="pt-1">
             By tapping "Continue to Messages" you consent to receive SMS replies
-            from DeerPark's concierge. See our{" "}
+            from DeerPark. See our{" "}
             <Link
               href="/privacy"
               className="text-foreground underline underline-offset-2 hover:text-foreground/70"
