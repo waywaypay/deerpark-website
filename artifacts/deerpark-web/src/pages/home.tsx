@@ -1391,7 +1391,7 @@ const LeadCapture = () => {
               </a>
               {SMS_ENABLED && SMS_NUMBER_E164 && (
                 <p className="text-sm text-muted-foreground font-light mt-3 md:hidden">
-                  Or text our concierge bot at{" "}
+                  Or text us at{" "}
                   <button
                     type="button"
                     onClick={() => setSmsModalOpen(true)}
@@ -1400,7 +1400,7 @@ const LeadCapture = () => {
                   >
                     {formatSmsNumber(SMS_NUMBER_E164)}
                   </button>
-                  {" — "}quick back-and-forth, assessment in two messages.
+                  {" — "}a few back-and-forth questions to find out what's actually slowing your team down.
                 </p>
               )}
               {SMS_ENABLED && SMS_NUMBER_E164 && (
