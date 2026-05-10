@@ -134,7 +134,7 @@ router.get("/admin/leads", async (req, res) => {
     const items = [
       ...leadRows.map((l) => ({
         id: `lead-${l.id}`,
-        source: "assessment" as const,
+        source: "consultation" as const,
         sourceDetail: l.source,
         createdAt: l.createdAt,
         name: l.name,

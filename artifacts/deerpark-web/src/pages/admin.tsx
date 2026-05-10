@@ -48,7 +48,7 @@ type AgentDetail = {
 
 type Lead = {
   id: string;
-  source: "assessment" | "dispatch";
+  source: "consultation" | "dispatch";
   sourceDetail: string | null;
   createdAt: string;
   name: string | null;
@@ -499,7 +499,7 @@ const LeadsTab = ({ token }: { token: string }) => {
         <div>
           <h2 className="text-2xl font-serif">Leads</h2>
           <p className="text-sm text-muted-foreground font-light mt-1">
-            Everyone who's reached out — assessment quiz submissions and Dispatch newsletter subscribers.
+            Everyone who's reached out — free consultation requests and Dispatch newsletter subscribers.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -556,9 +556,9 @@ const LeadsTab = ({ token }: { token: string }) => {
           </thead>
           <tbody>
             {filtered.map((l) => {
-              const sourceLabel = l.source === "assessment" ? "Assessment" : "Dispatch";
+              const sourceLabel = l.source === "consultation" ? "Consultation" : "Dispatch";
               const sourceClass =
-                l.source === "assessment"
+                l.source === "consultation"
                   ? "border-primary/40 text-primary"
                   : "border-foreground/30 text-foreground/80";
               return (
@@ -2541,7 +2541,7 @@ const HOME_TILES: Tile<"agents" | "leads">[] = [
   {
     id: "leads",
     label: "Leads",
-    description: "Assessment quiz submissions and Dispatch newsletter subscribers.",
+    description: "Free consultation requests and Dispatch newsletter subscribers.",
     Icon: Mail,
   },
 ];

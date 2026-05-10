@@ -34,17 +34,17 @@ export default function Terms() {
                   <h2 className="text-2xl font-serif mb-3 text-foreground">2. The service</h2>
                   <p>
                     DeerPark.io is the marketing site for DeerPark, an AI consulting practice. The
-                    site provides information about our services, an assessment quiz, and ways to
-                    contact us. Anything you submit through the site (forms, quiz answers) is used
-                    to follow up on your inquiry.
+                    site provides information about our services, a free consultation request
+                    form, and ways to contact us. Anything you submit through the site is used to
+                    follow up on your inquiry.
                   </p>
                 </section>
 
                 <section>
                   <h2 className="text-2xl font-serif mb-3 text-foreground">3. SMS / text messaging</h2>
                   <p className="mb-3">
-                    If you provide a mobile number on our assessment form and check the SMS consent
-                    box, you agree to receive text messages from DeerPark related to your
+                    If you provide a mobile number on our consultation form and check the SMS
+                    consent box, you agree to receive text messages from DeerPark related to your
                     submission. By opting in:
                   </p>
                   <ul className="list-disc pl-6 space-y-2">
@@ -76,17 +76,17 @@ export default function Terms() {
                   <h2 className="text-2xl font-serif mb-3 text-foreground">5. Intellectual property</h2>
                   <p>
                     Content on the site, including the DeerPark name, logo, and written material,
-                    is owned by DeerPark.io. The model-fit assessment and the deployment plan we
-                    send you are for your internal use; please don't republish or resell them
-                    without our written permission.
+                    is owned by DeerPark.io. Any consultation notes and deployment plan we send
+                    you are for your internal use; please don't republish or resell them without
+                    our written permission.
                   </p>
                 </section>
 
                 <section>
                   <h2 className="text-2xl font-serif mb-3 text-foreground">6. No warranty</h2>
                   <p>
-                    The site and any free assessment are provided "as is" without warranties of any
-                    kind. Recommendations and content are informational and don't constitute
+                    The site and any free consultation are provided "as is" without warranties of
+                    any kind. Recommendations and content are informational and don't constitute
                     professional advice for your specific situation.
                   </p>
                 </section>

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import { ArrowRight, Check, ExternalLink, Rss } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { FadeIn, Footer, Navbar, AssessmentFAB } from "@/components/site-layout";
+import { FadeIn, Footer, Navbar, ConsultationFAB } from "@/components/site-layout";
 
 type Headline = {
   source: string;
@@ -334,7 +334,7 @@ export default function Dispatch() {
         <SubscribeHero />
         <HeadlineFeed />
       </main>
-      <AssessmentFAB />
+      <ConsultationFAB />
       <Footer />
     </div>
   );

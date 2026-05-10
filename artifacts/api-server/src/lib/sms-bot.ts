@@ -3,7 +3,7 @@ import { logger } from "./logger";
 import { logUsage } from "./llm-usage";
 
 /**
- * SMS assessment concierge for DeerPark. Voice and scope are deliberately
+ * SMS consultation concierge for DeerPark. Voice and scope are deliberately
  * narrow — the bot is a lead-qualification surface, not a general-purpose
  * AI. Edits here change every reply, so treat this prompt as production
  * copy and review changes the same way you would homepage copy.

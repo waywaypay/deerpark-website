@@ -21,8 +21,8 @@ export const insertLeadSchema = createInsertSchema(leadsTable, {
   name: (schema) => schema.min(1).max(200),
   contact: (schema) => schema.min(1).max(320),
   contactType: z.enum(["email", "sms"]),
-  company: (schema) => schema.min(1).max(200),
-  challenge: (schema) => schema.min(1).max(5000),
+  company: (schema) => schema.max(200).optional(),
+  challenge: (schema) => schema.max(5000).optional(),
   source: (schema) => schema.max(100).optional(),
 })
   .omit({ id: true, createdAt: true })
