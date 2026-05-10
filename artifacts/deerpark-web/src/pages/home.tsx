@@ -1,5 +1,5 @@
 import React, { FormEvent, useEffect, useRef, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
 import { FadeIn, Navbar, Footer, ConsultationFAB } from "@/components/site-layout";
@@ -19,8 +19,6 @@ const TICKER_ITEMS = [
 ];
 
 const Hero = () => {
-  const { scrollYProgress } = useScroll();
-  const panelY = useTransform(scrollYProgress, [0, 1], [0, 40]);
   const [smsOpen, setSmsOpen] = useState(false);
 
   return (
@@ -33,8 +31,7 @@ const Hero = () => {
       }} />
 
       <div className="max-w-7xl relative z-10 mx-auto px-6 flex-1 flex items-center">
-        <div className="grid lg:grid-cols-2 gap-12 items-center w-full pt-16 pb-12">
-          <div>
+        <div className="w-full max-w-3xl pt-16 pb-12">
           <FadeIn>
             <div className="flex items-center gap-3 mb-12">
               <div className="h-[1px] w-10 bg-foreground/30" />
@@ -114,30 +111,6 @@ const Hero = () => {
               ))}
             </div>
           </FadeIn>
-          </div>
-
-          <FadeIn delay={0.25}>
-            <motion.div style={{ y: panelY }} className="border border-foreground/20 bg-background/60 backdrop-blur p-8 lg:p-10">
-              <div className="section-label mb-4">Engagement Scope</div>
-              <h2 className="text-3xl md:text-4xl font-serif mb-6">From readiness review to a team that runs it.</h2>
-              <div className="space-y-4 text-sm font-light text-muted-foreground">
-                {[
-                  "Week 1-2: AI readiness review and priority workflows.",
-                  "Week 3-8: the custom application, integrations, and automations.",
-                  "Week 9-13: live rollout — your team running the system in production.",
-                  "Throughout: executive briefings, role-based workshops, and hands-on training alongside the build.",
-                ].map((item) => (
-                  <div key={item} className="flex items-start gap-3">
-                    <Check className="w-4 h-4 mt-0.5 text-primary shrink-0" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-              <a href="#services" className="inline-flex items-center mt-8 text-xs uppercase tracking-widest text-foreground/80 hover:text-foreground">
-                View detailed scope <ArrowRight className="ml-2 w-3.5 h-3.5" />
-              </a>
-            </motion.div>
-          </FadeIn>
         </div>
       </div>
 
@@ -166,7 +139,7 @@ const Problem = () => (
               Licenses don't replace workflows. A year in, the Friday report still gets stitched by hand. Data still lives in five tabs. Staff aren't sure what the tools are for, and managers still approve tasks that could run themselves.
             </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
-              Deer Park does the part that's actually hard: find where AI changes throughput, build the applications around it, and train the team until the new way is the way.
+              Deer Park runs that work end-to-end: <span className="text-foreground">assess</span> where AI changes throughput, <span className="text-foreground">build</span> the applications around it, <span className="text-foreground">deploy</span> with your team, and <span className="text-foreground">train</span> them until the new way is the way.
             </p>
           </FadeIn>
         </div>
@@ -245,12 +218,12 @@ const TIMELINE_PHASES: { phase: string; title: string; icon: typeof ScanSearch; 
 ];
 
 const Services = () => (
-  <section id="services" className="py-32 border-t border-foreground/10">
+  <section id="approach" className="py-32 border-t border-foreground/10">
     <div className="max-w-7xl mx-auto px-6">
       <FadeIn>
         <div className="flex items-center gap-3 mb-16">
           <div className="h-[1px] w-12 bg-primary"></div>
-          <span className="section-label">Practice Areas</span>
+          <span className="section-label">Our Approach</span>
         </div>
         <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">Four pillars. One continuous engagement.</h2>
         <p className="text-lg text-muted-foreground font-light max-w-2xl mb-12">
@@ -1332,8 +1305,8 @@ export default function Home() {
         <Problem />
         <Services />
         <CaseStudy />
-        <LeadCapture />
         <FAQ />
+        <LeadCapture />
       </main>
       <ConsultationFAB />
       <Footer />

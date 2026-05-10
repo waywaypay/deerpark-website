@@ -35,7 +35,7 @@ export const FadeIn = ({
 type HashLink = { href: string; label: string };
 
 const NAV_HASH_LINKS_BEFORE_PRODUCTS: HashLink[] = [
-  { href: "/#services", label: "Services" },
+  { href: "/#approach", label: "Approach" },
 ];
 
 const NAV_HASH_LINKS_AFTER_PRODUCTS: HashLink[] = [
@@ -229,12 +229,12 @@ export const Footer = () => (
           </p>
         </div>
         <div>
-          <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Practice</h4>
+          <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Approach</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
-            <li><a href="/#services" className="hover:text-foreground transition-colors">Assess</a></li>
-            <li><a href="/#services" className="hover:text-foreground transition-colors">Build</a></li>
-            <li><a href="/#services" className="hover:text-foreground transition-colors">Deploy</a></li>
-            <li><a href="/#services" className="hover:text-foreground transition-colors">Train</a></li>
+            <li><a href="/#approach" className="hover:text-foreground transition-colors">Assess</a></li>
+            <li><a href="/#approach" className="hover:text-foreground transition-colors">Build</a></li>
+            <li><a href="/#approach" className="hover:text-foreground transition-colors">Deploy</a></li>
+            <li><a href="/#approach" className="hover:text-foreground transition-colors">Train</a></li>
           </ul>
         </div>
         <div>
