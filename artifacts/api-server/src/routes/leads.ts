@@ -54,10 +54,19 @@ router.post("/leads", async (req, res) => {
     });
   }
 
+  // The free-consultation flow only collects name + mobile. The leads table
+  // still has NOT NULL constraints on company/challenge, so default them when
+  // the client omits them.
+  const values = {
+    ...parsed.data,
+    company: parsed.data.company ?? "",
+    challenge: parsed.data.challenge ?? "Free consultation request",
+  };
+
   try {
     const [lead] = await db
       .insert(leadsTable)
-      .values(parsed.data)
+      .values(values)
       .returning();
 
     req.log.info({ leadId: lead.id }, "Lead captured");

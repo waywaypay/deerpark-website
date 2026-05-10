@@ -1,6 +1,6 @@
 import { Link } from "wouter";
 import { ArrowRight, Mail, Sparkles } from "lucide-react";
-import { AssessmentFAB, FadeIn, Footer, Navbar } from "@/components/site-layout";
+import { ConsultationFAB, FadeIn, Footer, Navbar } from "@/components/site-layout";
 
 type ProductCard = {
   href: string;
@@ -95,16 +95,16 @@ const ProductGrid = () => (
           <div className="max-w-xl">
             <h4 className="text-2xl font-serif mb-2">Want a custom agent?</h4>
             <p className="text-sm text-muted-foreground font-light">
-              Most engagements start with a free assessment — we map the workflow, scope the
+              Most engagements start with a free consultation — we map the workflow, scope the
               agent, and give you a fixed plan before any build work begins.
             </p>
           </div>
           <a
-            href="/?ref=products#assessment"
+            href="/?ref=products#consultation"
             className="inline-flex items-center gap-2 bg-foreground text-background px-6 py-3 font-sans text-xs uppercase tracking-widest hover:bg-foreground/90"
           >
             <Mail className="w-3.5 h-3.5" />
-            Get free assessment
+            Get free consultation
           </a>
         </div>
       </FadeIn>
@@ -120,7 +120,7 @@ export default function Products() {
         <ProductsHero />
         <ProductGrid />
       </main>
-      <AssessmentFAB />
+      <ConsultationFAB />
       <Footer />
     </div>
   );

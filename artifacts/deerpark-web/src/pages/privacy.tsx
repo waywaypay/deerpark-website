@@ -39,8 +39,7 @@ export default function Privacy() {
                   <h2 className="text-2xl font-serif mb-3 text-foreground">2. Information we collect</h2>
                   <p className="mb-3">We collect only what you give us directly:</p>
                   <ul className="list-disc pl-6 space-y-2">
-                    <li>Name, company, work email, and (if you opt in) mobile number you submit through our assessment or contact forms.</li>
-                    <li>Quiz answers from our model-fit assessment.</li>
+                    <li>Name and mobile number you submit through our free consultation or contact forms.</li>
                     <li>Standard server logs (IP address, user agent, request timestamps) for security and abuse prevention.</li>
                   </ul>
                   <p className="mt-3">
@@ -62,14 +61,14 @@ export default function Privacy() {
                   <h2 className="text-2xl font-serif mb-3 text-foreground">4. SMS / text messaging</h2>
                   <p className="mb-3">
                     If you provide your mobile number and check the SMS consent box on our
-                    assessment form, you consent to receive text messages from DeerPark related to
-                    your assessment and follow-up. Specifically:
+                    consultation form, you consent to receive text messages from DeerPark related
+                    to your consultation request and follow-up. Specifically:
                   </p>
                   <ul className="list-disc pl-6 space-y-2">
                     <li>
                       <span className="text-foreground">Message types:</span> a confirmation that we
-                      received your assessment, and short follow-ups from a DeerPark strategist
-                      about scheduling and your tailored deployment plan.
+                      received your request, and short follow-ups from a DeerPark strategist about
+                      scheduling and any tailored deployment plan that follows.
                     </li>
                     <li>
                       <span className="text-foreground">Frequency:</span> message frequency varies;
@@ -111,7 +110,7 @@ export default function Privacy() {
                 <section>
                   <h2 className="text-2xl font-serif mb-3 text-foreground">6. Retention</h2>
                   <p>
-                    We retain assessment responses and contact records for as long as needed to
+                    We retain consultation requests and contact records for as long as needed to
                     follow up on the engagement and meet our legal obligations. You can request
                     deletion at any time by emailing{" "}
                     <a href="mailto:contact@deerpark.io" className="underline underline-offset-2 hover:text-foreground/70">

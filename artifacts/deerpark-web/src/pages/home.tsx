@@ -1,8 +1,8 @@
-import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files, RotateCcw } from "lucide-react";
-import { FadeIn, Navbar, Footer, AssessmentFAB } from "@/components/site-layout";
+import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
+import { FadeIn, Navbar, Footer, ConsultationFAB } from "@/components/site-layout";
 import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
 import { SmsConsentModal } from "@/components/sms-consent-modal";
 
@@ -56,9 +56,9 @@ const Hero = () => {
 
           <FadeIn delay={0.3} className="mb-14">
             <div className="flex flex-col sm:flex-row gap-4">
-              <a href="#assessment">
+              <a href="#consultation">
                 <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90">
-                  Get Free Assessment <ArrowRight className="ml-2 w-4 h-4" />
+                  Get Free Consultation <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </a>
               <a href="#case-study">
@@ -1022,187 +1022,6 @@ const normalizePhone = (raw: string): string | null => {
   return null;
 };
 
-type ModelKey = "claude" | "gpt" | "gemini" | "openSource";
-
-const MODELS: Record<ModelKey, { name: string; vendor: string; oneLiner: string; rationale: string }> = {
-  claude: {
-    name: "Claude",
-    vendor: "Anthropic",
-    oneLiner: "Best fit for nuanced writing, careful reasoning, and long, sensitive documents.",
-    rationale:
-      "Your answers point to work where tone, judgment, and depth matter — drafting client-grade material, reasoning over long context, and handling sensitive data with care.",
-  },
-  gpt: {
-    name: "ChatGPT",
-    vendor: "OpenAI",
-    oneLiner: "Best fit for a daily-driver assistant with the broadest tool and integration ecosystem.",
-    rationale:
-      "Your team wants one assistant connected to many systems — a deep ecosystem of plugins, image generation, and tight Microsoft 365 / Copilot integration is the shortest path.",
-  },
-  gemini: {
-    name: "Gemini",
-    vendor: "Google",
-    oneLiner: "Best fit for Google Workspace teams that need fresh information and multimodal input.",
-    rationale:
-      "You live inside Google's stack, want grounded answers from current web data, and routinely work across mixed media — docs, sheets, audio, and video.",
-  },
-  openSource: {
-    name: "Open-source",
-    vendor: "Self-hosted (Llama, Mistral, or similar)",
-    oneLiner: "Best fit for regulated workloads and data that cannot leave your network.",
-    rationale:
-      "Your data sensitivity and infrastructure posture make a self-hosted, fine-tunable model the safest match — full control over routing, training data, and audit trails.",
-  },
-};
-
-type Choice = { label: string; weights: Partial<Record<ModelKey, number>> };
-type Question = { id: string; prompt: string; choices: Choice[] };
-
-const QUESTIONS: Question[] = [
-  {
-    id: "primary-use",
-    prompt: "Which best describes the work you'd want AI to take on first?",
-    choices: [
-      { label: "Drafting client-grade writing — proposals, reports, briefs", weights: { claude: 3, gpt: 1 } },
-      { label: "Building internal tools and automations faster", weights: { claude: 2, gpt: 2 } },
-      { label: "Pulling insight out of long documents and transcripts", weights: { claude: 3, gemini: 1 } },
-      { label: "Producing creative assets — images, marketing, social", weights: { gpt: 3, gemini: 1 } },
-      { label: "Surfacing real-time information from the open web", weights: { gemini: 3, gpt: 1 } },
-    ],
-  },
-  {
-    id: "stack",
-    prompt: "Where does your team already do most of its work?",
-    choices: [
-      { label: "Microsoft 365 — Outlook, Teams, Word, Excel, SharePoint", weights: { gpt: 3 } },
-      { label: "Google Workspace — Gmail, Drive, Docs, Sheets, Meet", weights: { gemini: 3 } },
-      { label: "Slack and a mix of best-of-breed SaaS tools", weights: { claude: 2, gpt: 2 } },
-      { label: "Mostly inside our own apps and infrastructure", weights: { openSource: 3, claude: 1 } },
-      { label: "Honestly, it's still pretty fragmented", weights: { gpt: 2, claude: 1 } },
-    ],
-  },
-  {
-    id: "concern",
-    prompt: "When AI gets something wrong, what bothers you most?",
-    choices: [
-      { label: "It sounds confident, but the facts or judgment are off", weights: { claude: 3 } },
-      { label: "It hedges or refuses when I just need an answer", weights: { gpt: 3 } },
-      { label: "It's working from stale information", weights: { gemini: 3 } },
-      { label: "I have no idea where my data went to produce that answer", weights: { openSource: 3, claude: 1 } },
-    ],
-  },
-  {
-    id: "data",
-    prompt: "What kind of data will the AI typically see?",
-    choices: [
-      { label: "Public-ish business content — emails, marketing, meeting notes", weights: { gpt: 2, gemini: 1 } },
-      { label: "Sensitive client work — contracts, financials, PII or PHI", weights: { claude: 3, openSource: 1 } },
-      { label: "Massive archives — codebases, full meeting libraries, video", weights: { claude: 2, gemini: 2 } },
-      { label: "Regulated data that cannot leave our network", weights: { openSource: 4 } },
-    ],
-  },
-  {
-    id: "outcome",
-    prompt: "Picture the ideal first win in 60 days. It looks like:",
-    choices: [
-      { label: "A drafting partner that nails our voice and judgment", weights: { claude: 3 } },
-      { label: "A power-user assistant inside our existing email and docs", weights: { gpt: 2, gemini: 2 } },
-      { label: "A research engine that summarizes hundreds of pages on demand", weights: { claude: 3, gemini: 1 } },
-      { label: "A privacy-safe internal copilot trained on our own data", weights: { openSource: 4 } },
-      { label: "A creative co-pilot for marketing and content", weights: { gpt: 3 } },
-    ],
-  },
-  {
-    id: "build",
-    prompt: "How much custom building do you expect in the first year?",
-    choices: [
-      { label: "Heavy — internal apps, agents, and workflow automation", weights: { claude: 3, gpt: 1 } },
-      { label: "Some — light scripting, integrations, and prompt tooling", weights: { claude: 2, gpt: 2 } },
-      { label: "Almost none — we just want a great chat assistant", weights: { gpt: 3, gemini: 1 } },
-      { label: "We need full control of the model, weights, and pipeline", weights: { openSource: 4 } },
-    ],
-  },
-  {
-    id: "governance",
-    prompt: "How strict are your data governance and compliance requirements?",
-    choices: [
-      { label: "Strict — regulated industry, audit trails, data residency rules", weights: { openSource: 3, claude: 2 } },
-      { label: "Moderate — vendor DPAs and zero-retention agreements are enough", weights: { claude: 3, gpt: 1 } },
-      { label: "Light — standard enterprise terms cover us", weights: { gpt: 2, gemini: 2 } },
-      { label: "We haven't really nailed this down yet", weights: { gpt: 2, claude: 1 } },
-    ],
-  },
-  {
-    id: "multimodal",
-    prompt: "How often will the team work with images, audio, or video?",
-    choices: [
-      { label: "Constantly — it's core to what we do", weights: { gemini: 3, gpt: 2 } },
-      { label: "Often — marketing assets, screenshots, recorded meetings", weights: { gpt: 3, gemini: 1 } },
-      { label: "Occasionally — mostly text with the odd image", weights: { claude: 1, gpt: 1, gemini: 1 } },
-      { label: "Rarely — we live in documents and prose", weights: { claude: 3 } },
-    ],
-  },
-  {
-    id: "answer-style",
-    prompt: "What does a great answer look like to you?",
-    choices: [
-      { label: "Careful, well-reasoned, willing to say 'I'm not sure'", weights: { claude: 3 } },
-      { label: "Fast, confident, and happy to take a strong first pass", weights: { gpt: 3 } },
-      { label: "Grounded in current sources I can click through and verify", weights: { gemini: 3, claude: 1 } },
-      { label: "One I'm certain never left our network", weights: { openSource: 3, claude: 1 } },
-    ],
-  },
-  {
-    id: "rollout",
-    prompt: "How would you ideally roll this out across the team?",
-    choices: [
-      { label: "One vendor seat for everyone — simplest possible footprint", weights: { gpt: 3 } },
-      { label: "Bake it into the productivity suite we already pay for", weights: { gpt: 1, gemini: 2 } },
-      { label: "Mix-and-match — pick the best tool per workflow", weights: { claude: 2, gpt: 1, gemini: 1 } },
-      { label: "Self-host it behind our own access controls", weights: { openSource: 4 } },
-    ],
-  },
-];
-
-type Recommendation = { primary: ModelKey; runnerUp: ModelKey; tally: Record<ModelKey, number> };
-
-const scoreAnswers = (answers: Record<string, number>): Recommendation => {
-  const tally: Record<ModelKey, number> = { claude: 0, gpt: 0, gemini: 0, openSource: 0 };
-  for (const q of QUESTIONS) {
-    const idx = answers[q.id];
-    if (idx === undefined) continue;
-    const weights = q.choices[idx]?.weights ?? {};
-    (Object.keys(weights) as ModelKey[]).forEach((k) => {
-      tally[k] += weights[k] ?? 0;
-    });
-  }
-  const ranked = (Object.keys(tally) as ModelKey[]).sort((a, b) => tally[b] - tally[a]);
-  return { primary: ranked[0], runnerUp: ranked[1], tally };
-};
-
-const formatAssessmentForAdmin = (
-  answers: Record<string, number>,
-  recommendation: Recommendation,
-): string => {
-  const primary = MODELS[recommendation.primary];
-  const runnerUp = MODELS[recommendation.runnerUp];
-  const lines: string[] = [
-    "AI Model Fit Assessment",
-    `Recommended: ${primary.name} (${primary.vendor})`,
-    `Runner-up: ${runnerUp.name} (${runnerUp.vendor})`,
-    `Scores — Claude: ${recommendation.tally.claude}, ChatGPT: ${recommendation.tally.gpt}, Gemini: ${recommendation.tally.gemini}, Open-source: ${recommendation.tally.openSource}`,
-    "",
-  ];
-  QUESTIONS.forEach((q, i) => {
-    const idx = answers[q.id];
-    const choice = idx !== undefined ? q.choices[idx]?.label : "(no answer)";
-    lines.push(`Q${i + 1}. ${q.prompt}`);
-    lines.push(`A: ${choice}`);
-    lines.push("");
-  });
-  return lines.join("\n").trim();
-};
-
 // Surface the lead came in from. Resolves `?ref=` first (set by every CTA
 // across the site), then known internal referrers (e.g. from /dispatch or
 // /products), then falls back to "homepage" for organic scrollers.
@@ -1231,14 +1050,13 @@ const resolveLeadSource = (): string => {
   return "homepage";
 };
 
+// Lead capture for the "Free Consultation" CTA. Captures first name, last
+// name, and a mobile number, posts to /api/leads, then deep-links to the SMS
+// app with a pre-filled message so the conversation starts in their thread.
 const LeadCapture = () => {
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
   const [status, setStatus] = useState<FormStatus>({ state: "idle" });
   const [smsConsent, setSmsConsent] = useState(false);
-  const [smsModalOpen, setSmsModalOpen] = useState(false);
   const isMobile = useIsMobile();
-  const contactType: "sms" | "email" = isMobile ? "sms" : "email";
   // Capture once at mount so a hash navigation later doesn't overwrite the
   // original entry signal.
   const sourceRef = useRef<string>("homepage");
@@ -1246,58 +1064,23 @@ const LeadCapture = () => {
     sourceRef.current = resolveLeadSource();
   }, []);
 
-  const totalQuestions = QUESTIONS.length;
-  const onResultStep = step >= totalQuestions;
-  const currentQuestion = onResultStep ? null : QUESTIONS[step];
-  const currentAnswerIdx = currentQuestion ? answers[currentQuestion.id] : undefined;
-
-  const recommendation = useMemo(() => scoreAnswers(answers), [answers]);
-  const recommended = MODELS[recommendation.primary];
-  const runnerUp = MODELS[recommendation.runnerUp];
-
-  const advanceTimerRef = useRef<number | null>(null);
-  const clearAdvanceTimer = () => {
-    if (advanceTimerRef.current !== null) {
-      window.clearTimeout(advanceTimerRef.current);
-      advanceTimerRef.current = null;
-    }
-  };
-  useEffect(() => clearAdvanceTimer, []);
-
-  const handleSelect = (choiceIdx: number) => {
-    if (!currentQuestion) return;
-    const qid = currentQuestion.id;
-    setAnswers((prev) => ({ ...prev, [qid]: choiceIdx }));
-    // Auto-advance feels right for a quiz; tiny delay so the selected state is visible.
-    // Cancel any in-flight advance so a fast double-tap can't skip a question.
-    clearAdvanceTimer();
-    advanceTimerRef.current = window.setTimeout(() => {
-      advanceTimerRef.current = null;
-      setStep((s) => Math.min(s + 1, totalQuestions));
-    }, 180);
-  };
-
-  const handleBack = () => {
-    clearAdvanceTimer();
-    setStep((s) => Math.max(s - 1, 0));
-  };
-
-  const handleRetake = () => {
-    clearAdvanceTimer();
-    setAnswers({});
-    setStep(0);
-    setStatus({ state: "idle" });
-  };
+  const consultationSmsUrl =
+    SMS_NUMBER_E164
+      ? smsHref(
+          SMS_NUMBER_E164,
+          "Hi 👋 I'd like to book a free DeerPark consultation.",
+        )
+      : null;
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const rawContact = String(formData.get("contact") || "").trim();
-    const contact =
-      contactType === "sms" ? normalizePhone(rawContact) : rawContact;
+    const firstName = String(formData.get("firstName") || "").trim();
+    const lastName = String(formData.get("lastName") || "").trim();
+    const phone = normalizePhone(String(formData.get("phone") || ""));
 
-    if (contactType === "sms" && !contact) {
+    if (!phone) {
       setStatus({
         state: "error",
         message: "Please enter a valid mobile number, e.g. (555) 123-4567.",
@@ -1305,7 +1088,7 @@ const LeadCapture = () => {
       return;
     }
 
-    if (contactType === "sms" && !smsConsent) {
+    if (!smsConsent) {
       setStatus({
         state: "error",
         message:
@@ -1315,11 +1098,9 @@ const LeadCapture = () => {
     }
 
     const payload = {
-      name: String(formData.get("name") || "").trim(),
-      contact: contact ?? "",
-      contactType,
-      company: String(formData.get("company") || "").trim(),
-      challenge: formatAssessmentForAdmin(answers, recommendation),
+      name: `${firstName} ${lastName}`.trim(),
+      contact: phone,
+      contactType: "sms" as const,
       source: sourceRef.current,
     };
 
@@ -1353,32 +1134,31 @@ const LeadCapture = () => {
   };
 
   const submitting = status.state === "submitting";
-  const progress = onResultStep
-    ? 100
-    : Math.round((step / totalQuestions) * 100);
 
   return (
-    <section id="assessment" className="py-32 border-t border-foreground/15 bg-card">
+    <section id="consultation" className="py-32 border-t border-foreground/15 bg-card">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-12 items-start">
           <FadeIn className="min-w-0">
             <div className="flex items-center gap-3 mb-8">
               <div className="h-[1px] w-12 bg-primary"></div>
-              <span className="section-label">Free Model-Fit Assessment</span>
+              <span className="section-label">Free Consultation</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-serif mb-6">
-              Find your AI model fit in 2 minutes.
+              Text us. Start your AI consultation in two minutes.
             </h2>
             <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6 max-w-xl">
-              Ten blind questions, no labels on the answers. We score how you actually work and recommend the model that fits — then send a tailored deployment plan within two business days.
+              Drop your name and number. A DeerPark strategist will text you
+              back to talk through your workflow and where AI fits — no pitch,
+              no slides.
             </p>
             <div className="space-y-3 text-sm text-muted-foreground font-light">
-              <p>&bull; Ten questions. ~2 minutes.</p>
-              <p>&bull; Scored across Claude, ChatGPT, Gemini, and open-source.</p>
-              <p>&bull; No software purchase required.</p>
+              <p>&bull; Replies from a real DeerPark strategist, not a chatbot.</p>
+              <p>&bull; We diagnose first, then recommend.</p>
+              <p>&bull; Free. No software purchase required.</p>
             </div>
             <div className="mt-10 pt-8 border-t border-foreground/15">
-              <div className="section-label mb-3">Prefer to skip the quiz?</div>
+              <div className="section-label mb-3">Prefer to book a call?</div>
               <a
                 href="https://calendar.app.google/5PAVU7Ron83HShxi9"
                 target="_blank"
@@ -1389,29 +1169,7 @@ const LeadCapture = () => {
                 <span className="underline underline-offset-4">Book a 15-min intro call</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
-              {SMS_ENABLED && SMS_NUMBER_E164 && (
-                <p className="text-sm text-muted-foreground font-light mt-3 md:hidden">
-                  Or text us at{" "}
-                  <button
-                    type="button"
-                    onClick={() => setSmsModalOpen(true)}
-                    aria-haspopup="dialog"
-                    className="text-foreground underline underline-offset-4 hover:text-foreground/70"
-                  >
-                    {formatSmsNumber(SMS_NUMBER_E164)}
-                  </button>
-                  {" — "}a few back-and-forth questions to find out what's actually slowing your team down.
-                </p>
-              )}
-              {SMS_ENABLED && SMS_NUMBER_E164 && (
-                <SmsConsentModal
-                  open={smsModalOpen}
-                  onClose={() => setSmsModalOpen(false)}
-                  smsUrl={smsHref(SMS_NUMBER_E164)}
-                  number={SMS_NUMBER_E164}
-                />
-              )}
-              <p className="text-xs text-muted-foreground font-light mt-3 hidden md:block">
+              <p className="text-xs text-muted-foreground font-light mt-3">
                 Or email <a href="mailto:contact@deerpark.io" className="underline underline-offset-2 hover:text-foreground">contact@deerpark.io</a>.
               </p>
             </div>
@@ -1419,215 +1177,144 @@ const LeadCapture = () => {
 
           <FadeIn delay={0.1} className="min-w-0">
             {status.state === "success" ? (
-              <div className="border border-primary/40 bg-background p-10 text-center">
+              <div className="border border-primary/40 bg-background p-8 md:p-10 text-center">
                 <div className="inline-block p-3 border border-primary/40 bg-primary/10 mb-6">
                   <Check className="w-6 h-6 text-primary" />
                 </div>
-                <h3 className="text-2xl font-serif mb-4">Assessment received.</h3>
-                <p className="text-muted-foreground font-light leading-relaxed max-w-sm mx-auto mb-2">
-                  We logged your model fit as{" "}
-                  <span className="text-foreground">{recommended.name}</span>.
-                  A DeerPark strategist will follow up within two business days with a tailored deployment plan.
+                <h3 className="text-2xl font-serif mb-4">Got it — we'll text you.</h3>
+                <p className="text-muted-foreground font-light leading-relaxed max-w-sm mx-auto mb-6">
+                  A DeerPark strategist will reach out
+                  {SMS_NUMBER_E164 ? (
+                    <>
+                      {" "}from{" "}
+                      <span className="text-foreground">
+                        {formatSmsNumber(SMS_NUMBER_E164)}
+                      </span>
+                    </>
+                  ) : null}
+                  {" "}within one business day. Want to start the conversation now?
                 </p>
-                <p className="text-xs text-muted-foreground font-light">
-                  Check your inbox — including spam — for a confirmation.
-                </p>
-              </div>
-            ) : currentQuestion ? (
-              <div className="border border-foreground/15 bg-background p-6 md:p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <span className="section-label">
-                    Question {step + 1} of {totalQuestions}
-                  </span>
-                  <span className="text-xs text-muted-foreground font-light tabular-nums">
-                    {progress}%
-                  </span>
-                </div>
-                <div className="h-[2px] bg-foreground/10 mb-8">
-                  <div
-                    className="h-full bg-primary transition-[width] duration-300"
-                    style={{ width: `${progress}%` }}
-                  />
-                </div>
-                <h3 className="text-xl md:text-2xl font-serif leading-snug mb-6">
-                  {currentQuestion.prompt}
-                </h3>
-                <div className="space-y-3">
-                  {currentQuestion.choices.map((choice, i) => {
-                    const selected = currentAnswerIdx === i;
-                    return (
-                      <button
-                        key={choice.label}
-                        type="button"
-                        onClick={() => handleSelect(i)}
-                        aria-pressed={selected}
-                        className={`group w-full text-left border px-4 py-4 transition-colors flex items-start gap-3 ${
-                          selected
-                            ? "border-primary bg-primary/10"
-                            : "border-foreground/15 bg-card hover:border-foreground/40"
-                        }`}
-                      >
-                        <span
-                          className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center border ${
-                            selected
-                              ? "border-primary bg-primary text-background"
-                              : "border-foreground/30 bg-transparent"
-                          }`}
-                        >
-                          {selected && <Check className="w-3 h-3" />}
-                        </span>
-                        <span className="text-sm md:text-base font-light leading-relaxed">
-                          {choice.label}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                {step > 0 && (
-                  <div className="mt-6 flex items-center justify-between text-xs text-muted-foreground font-light">
-                    <button
-                      type="button"
-                      onClick={handleBack}
-                      className="inline-flex items-center gap-2 hover:text-foreground transition-colors"
-                    >
-                      <ChevronLeft className="w-3.5 h-3.5" />
-                      Back
-                    </button>
-                    <span>Pick the closest match — no perfect answer.</span>
-                  </div>
-                )}
+                {isMobile && consultationSmsUrl ? (
+                  <a
+                    href={consultationSmsUrl}
+                    className="inline-flex items-center gap-2 rounded-none bg-foreground text-background px-6 py-3 text-xs uppercase tracking-widest hover:bg-foreground/90"
+                  >
+                    Text us now <ArrowRight className="w-4 h-4" />
+                  </a>
+                ) : SMS_NUMBER_E164 ? (
+                  <p className="text-xs text-muted-foreground font-light">
+                    From your phone, text{" "}
+                    <span className="text-foreground">
+                      {formatSmsNumber(SMS_NUMBER_E164)}
+                    </span>
+                    {" "}to skip the queue.
+                  </p>
+                ) : null}
               </div>
             ) : (
-              <div className="space-y-5">
-                <div className="border border-primary/40 bg-background p-6 md:p-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="section-label">Your model fit</span>
-                    <button
-                      type="button"
-                      onClick={handleRetake}
-                      className="inline-flex items-center gap-2 text-xs text-muted-foreground font-light hover:text-foreground transition-colors"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      Retake
-                    </button>
+              <form
+                onSubmit={handleSubmit}
+                className="border border-foreground/15 bg-background p-6 md:p-8 space-y-5"
+              >
+                <div>
+                  <h3 className="text-2xl font-serif mb-1">Get your free consultation</h3>
+                  <p className="text-xs text-muted-foreground font-light">
+                    We'll text you back within one business day.
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="firstName" className="section-label block mb-2">First name</label>
+                    <input
+                      id="firstName"
+                      name="firstName"
+                      autoComplete="given-name"
+                      required
+                      disabled={submitting}
+                      className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
+                    />
                   </div>
-                  <h3 className="text-3xl md:text-4xl font-serif mb-2">
-                    {recommended.name}
-                  </h3>
-                  <p className="text-xs uppercase tracking-widest text-muted-foreground mb-5">
-                    {recommended.vendor}
-                  </p>
-                  <p className="text-base md:text-lg text-foreground/90 font-light leading-relaxed mb-4">
-                    {recommended.oneLiner}
-                  </p>
-                  <p className="text-sm text-muted-foreground font-light leading-relaxed mb-6">
-                    {recommended.rationale}
-                  </p>
-                  <div className="pt-4 border-t border-foreground/10 text-xs text-muted-foreground font-light">
-                    Close runner-up: <span className="text-foreground">{runnerUp.name}</span>{" "}
-                    <span className="opacity-70">({runnerUp.vendor})</span>. We benchmark both against your evals before recommending a deployment.
+                  <div>
+                    <label htmlFor="lastName" className="section-label block mb-2">Last name</label>
+                    <input
+                      id="lastName"
+                      name="lastName"
+                      autoComplete="family-name"
+                      required
+                      disabled={submitting}
+                      className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
+                    />
                   </div>
                 </div>
-
-                <form
-                  onSubmit={handleSubmit}
-                  className="border border-foreground/15 bg-background p-6 md:p-8 space-y-5"
+                <div>
+                  <label htmlFor="phone" className="section-label block mb-2">Mobile Number</label>
+                  <input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    inputMode="tel"
+                    autoComplete="tel"
+                    placeholder="(555) 123-4567"
+                    required
+                    disabled={submitting}
+                    className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
+                  />
+                </div>
+                <div className="flex items-start gap-3 pt-1">
+                  <input
+                    id="sms-consent"
+                    name="sms-consent"
+                    type="checkbox"
+                    checked={smsConsent}
+                    onChange={(e) => setSmsConsent(e.target.checked)}
+                    disabled={submitting}
+                    required
+                    className="mt-1 h-4 w-4 shrink-0 accent-primary border border-foreground/30 disabled:opacity-50"
+                  />
+                  <label htmlFor="sms-consent" className="text-xs text-muted-foreground font-light leading-relaxed">
+                    I agree to receive SMS messages from DeerPark at the number provided,
+                    including a confirmation and short follow-ups about my consultation.
+                    Message frequency varies. Message and data rates may apply. Reply{" "}
+                    <span className="text-foreground">STOP</span> to opt out,{" "}
+                    <span className="text-foreground">HELP</span> for help. See our{" "}
+                    <a
+                      href="/privacy"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      Privacy Policy
+                    </a>{" "}
+                    and{" "}
+                    <a
+                      href="/terms"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2 hover:text-foreground"
+                    >
+                      Terms
+                    </a>
+                    .
+                  </label>
+                </div>
+                <Button
+                  type="submit"
+                  size="lg"
+                  disabled={submitting || !smsConsent}
+                  className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60"
                 >
-                  <div>
-                    <h4 className="text-lg font-serif mb-1">Send my deployment plan</h4>
-                    <p className="text-xs text-muted-foreground font-light">
-                      We'll send a tailored plan based on your answers within two business days.
-                    </p>
-                  </div>
-                  <div>
-                    <label htmlFor="name" className="section-label block mb-2">Name</label>
-                    <input id="name" name="name" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
-                  </div>
-                  <div>
-                    <label htmlFor="contact" className="section-label block mb-2">
-                      {contactType === "sms" ? "Mobile Number" : "Work Email"}
-                    </label>
-                    {contactType === "sms" ? (
-                      <input
-                        id="contact"
-                        name="contact"
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="tel"
-                        placeholder="(555) 123-4567"
-                        required
-                        disabled={submitting}
-                        className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
-                      />
-                    ) : (
-                      <input
-                        id="contact"
-                        name="contact"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        disabled={submitting}
-                        className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50"
-                      />
-                    )}
-                  </div>
-                  <div>
-                    <label htmlFor="company" className="section-label block mb-2">Company</label>
-                    <input id="company" name="company" required disabled={submitting} className="w-full h-12 bg-card border border-foreground/15 px-4 text-sm outline-none focus:border-primary/80 disabled:opacity-50" />
-                  </div>
-                  {contactType === "sms" && (
-                    <div className="flex items-start gap-3 pt-1">
-                      <input
-                        id="sms-consent"
-                        name="sms-consent"
-                        type="checkbox"
-                        checked={smsConsent}
-                        onChange={(e) => setSmsConsent(e.target.checked)}
-                        disabled={submitting}
-                        required
-                        className="mt-1 h-4 w-4 shrink-0 accent-primary border border-foreground/30 disabled:opacity-50"
-                      />
-                      <label htmlFor="sms-consent" className="text-xs text-muted-foreground font-light leading-relaxed">
-                        I agree to receive SMS messages from DeerPark at the number provided,
-                        including a confirmation and short follow-ups about my assessment.
-                        Message frequency varies. Message and data rates may apply. Reply{" "}
-                        <span className="text-foreground">STOP</span> to opt out,{" "}
-                        <span className="text-foreground">HELP</span> for help. See our{" "}
-                        <a
-                          href="/privacy"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2 hover:text-foreground"
-                        >
-                          Privacy Policy
-                        </a>{" "}
-                        and{" "}
-                        <a
-                          href="/terms"
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2 hover:text-foreground"
-                        >
-                          Terms
-                        </a>
-                        .
-                      </label>
-                    </div>
+                  {submitting ? "Submitting…" : (
+                    <>
+                      Send My Free Consultation Request <ArrowRight className="ml-2 w-4 h-4" />
+                    </>
                   )}
-                  <Button type="submit" size="lg" disabled={submitting || (contactType === "sms" && !smsConsent)} className="w-full rounded-none h-14 px-3 md:px-8 text-xs md:text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60">
-                    {submitting ? "Submitting…" : (
-                      <>
-                        Send My Deployment Plan <ArrowRight className="ml-2 w-4 h-4" />
-                      </>
-                    )}
-                  </Button>
-                  {status.state === "error" && (
-                    <p role="alert" className="text-xs text-red-400">
-                      {status.message}
-                    </p>
-                  )}
-                </form>
-              </div>
+                </Button>
+                {status.state === "error" && (
+                  <p role="alert" className="text-xs text-red-400">
+                    {status.message}
+                  </p>
+                )}
+              </form>
             )}
           </FadeIn>
         </div>
@@ -1648,7 +1335,7 @@ export default function Home() {
         <LeadCapture />
         <FAQ />
       </main>
-      <AssessmentFAB />
+      <ConsultationFAB />
       <Footer />
     </div>
   );

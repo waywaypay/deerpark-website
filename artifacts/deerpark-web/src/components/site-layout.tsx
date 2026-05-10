@@ -168,9 +168,9 @@ export const Navbar = () => {
           <a href="/#faq" className="hover:text-foreground transition-colors">
             FAQ
           </a>
-          <a href="/?ref=nav#assessment">
+          <a href="/?ref=nav#consultation">
             <Button className="font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-              Free Assessment
+              Free Consultation
             </Button>
           </a>
         </nav>
@@ -197,9 +197,9 @@ export const Navbar = () => {
             <a href="/#faq" onClick={() => setOpen(false)} className="hover:text-foreground transition-colors">
               FAQ
             </a>
-            <a href="/?ref=nav_mobile#assessment" onClick={() => setOpen(false)}>
+            <a href="/?ref=nav_mobile#consultation" onClick={() => setOpen(false)}>
               <Button className="w-full font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-                Free Assessment
+                Free Consultation
               </Button>
             </a>
           </nav>
@@ -254,7 +254,7 @@ export const Footer = () => (
               </li>
             ))}
             <li><a href="/#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
-            <li><a href="/?ref=footer#assessment" className="hover:text-foreground transition-colors">Free Assessment</a></li>
+            <li><a href="/?ref=footer#consultation" className="hover:text-foreground transition-colors">Free Consultation</a></li>
             <li><a href="mailto:contact@deerpark.io" className="hover:text-foreground transition-colors">Contact</a></li>
           </ul>
         </div>
@@ -270,10 +270,10 @@ export const Footer = () => (
   </footer>
 );
 
-export const AssessmentFAB = () => {
+export const ConsultationFAB = () => {
   const [smsOpen, setSmsOpen] = useState(false);
-  // When SMS is live, the "Text" pill replaces the "Get Free Assessment" pill
-  // on mobile entirely — texting converts higher than the form for the
+  // When SMS is live, the "Text" pill replaces the "Get Free Consultation"
+  // pill on mobile entirely — texting converts higher than the form for the
   // top-of-funnel "I'm curious" cohort, and stacking two FABs ate too much
   // viewport. The Lead Capture section still has the form CTA inline for
   // anyone who scrolls down. Tapping "Text" opens a Twilio-compliant consent
@@ -302,10 +302,10 @@ export const AssessmentFAB = () => {
   }
   return (
     <a
-      href="/?ref=fab#assessment"
+      href="/?ref=fab#consultation"
       className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
     >
-      Get Free Assessment
+      Get Free Consultation
     </a>
   );
 };

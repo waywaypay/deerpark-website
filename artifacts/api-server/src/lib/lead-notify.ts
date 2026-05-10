@@ -33,7 +33,7 @@ function contactLink(lead: Pick<Lead, "contact" | "contactType">): string {
 function renderHtml(lead: Lead): string {
   const rows: Array<[string, string]> = [
     ["Name", escapeHtml(lead.name)],
-    ["Company", escapeHtml(lead.company)],
+    ...(lead.company ? ([["Company", escapeHtml(lead.company)]] as Array<[string, string]>) : []),
     [lead.contactType === "sms" ? "Mobile" : "Email", contactLink(lead)],
     ["Source", escapeHtml(lead.source ?? "unknown")],
     ["Submitted", escapeHtml(lead.createdAt.toISOString())],
@@ -44,34 +44,40 @@ function renderHtml(lead: Lead): string {
         `<tr><td style="padding:4px 12px 4px 0;color:#666;font-size:13px;vertical-align:top;">${k}</td><td style="padding:4px 0;font-size:14px;">${v}</td></tr>`,
     )
     .join("");
-  const challenge = escapeHtml(lead.challenge).replace(/\n/g, "<br>");
-  return `<h2 style="margin:0 0 16px 0;font-family:Georgia,serif;">New AI Workflow Assessment request</h2>
+  const challenge = lead.challenge ? escapeHtml(lead.challenge).replace(/\n/g, "<br>") : "";
+  const challengeBlock = challenge
+    ? `<h3 style="margin:0 0 8px 0;font-size:14px;color:#666;text-transform:uppercase;letter-spacing:0.05em;">Notes</h3>
+<p style="margin:0;font-size:15px;line-height:1.6;white-space:pre-wrap;">${challenge}</p>`
+    : "";
+  return `<h2 style="margin:0 0 16px 0;font-family:Georgia,serif;">New free consultation request</h2>
 <table style="border-collapse:collapse;margin-bottom:20px;">${table}</table>
-<h3 style="margin:0 0 8px 0;font-size:14px;color:#666;text-transform:uppercase;letter-spacing:0.05em;">Challenge</h3>
-<p style="margin:0;font-size:15px;line-height:1.6;white-space:pre-wrap;">${challenge}</p>`;
+${challengeBlock}`;
 }
 
 function renderText(lead: Lead): string {
   const contactLabel = lead.contactType === "sms" ? "Mobile" : "Email";
-  return [
-    "New AI Workflow Assessment request",
+  const lines = [
+    "New free consultation request",
     "",
     `Name: ${lead.name}`,
-    `Company: ${lead.company}`,
+  ];
+  if (lead.company) lines.push(`Company: ${lead.company}`);
+  lines.push(
     `${contactLabel}: ${lead.contact}`,
     `Source: ${lead.source ?? "unknown"}`,
     `Submitted: ${lead.createdAt.toISOString()}`,
-    "",
-    "Challenge:",
-    lead.challenge,
-  ].join("\n");
+  );
+  if (lead.challenge) {
+    lines.push("", "Notes:", lead.challenge);
+  }
+  return lines.join("\n");
 }
 
 /**
- * Email contact@deerpark.io that a new assessment request came in. Best effort:
- * resolves to true on a 2xx Resend response, false otherwise. Never throws —
- * the caller has already persisted the lead and should not fail the HTTP
- * request just because the notification didn't go out.
+ * Email contact@deerpark.io that a new consultation request came in. Best
+ * effort: resolves to true on a 2xx Resend response, false otherwise. Never
+ * throws — the caller has already persisted the lead and should not fail the
+ * HTTP request just because the notification didn't go out.
  */
 export async function sendLeadNotificationEmail(lead: Lead): Promise<boolean> {
   const apiKey = sanitizeEnv(process.env["RESEND_API_KEY"]);
@@ -88,7 +94,9 @@ export async function sendLeadNotificationEmail(lead: Lead): Promise<boolean> {
     return false;
   }
 
-  const subject = `New assessment request — ${lead.name} (${lead.company})`;
+  const subject = `New consultation request — ${lead.name}${
+    lead.company ? ` (${lead.company})` : ""
+  }`;
   const replyTo = lead.contactType === "email" ? lead.contact : undefined;
 
   try {
