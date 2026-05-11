@@ -1,4 +1,5 @@
 import React, { FormEvent, useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
@@ -55,18 +56,18 @@ const Hero = () => {
             <div className="flex flex-col sm:flex-row gap-4">
               <a href="#consultation">
                 <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90">
-                  Get Free Consultation <ArrowRight className="ml-2 w-4 h-4" />
+                  Free Consult <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </a>
-              <a href="#case-study">
+              <a href="#engagements">
                 <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-foreground/25 hover:bg-foreground/5">
-                  See Case Studies
+                  See Our Work
                 </Button>
               </a>
             </div>
             {SMS_ENABLED && SMS_NUMBER_E164 && (
               <p className="mt-5 text-sm text-muted-foreground font-light md:hidden">
-                Or text our concierge:{" "}
+                Or text us for a free consult:{" "}
                 <button
                   type="button"
                   onClick={() => setSmsOpen(true)}
@@ -223,11 +224,14 @@ const Services = () => (
       <FadeIn>
         <div className="flex items-center gap-3 mb-16">
           <div className="h-[1px] w-12 bg-primary"></div>
-          <span className="section-label">Our Approach</span>
+          <span className="section-label">Services · Our Approach</span>
         </div>
         <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">Four pillars. One continuous engagement.</h2>
-        <p className="text-lg text-muted-foreground font-light max-w-2xl mb-12">
+        <p className="text-lg text-muted-foreground font-light max-w-2xl mb-4">
           Every engagement moves through assessment, build, deployment, and training — each pillar rolls up specific practice areas your organization will see on the plan.
+        </p>
+        <p className="text-sm text-muted-foreground/80 font-light max-w-2xl mb-12 italic">
+          <span className="text-foreground/80 not-italic font-medium">Services</span> are how we work with your team end-to-end. <span className="text-foreground/80 not-italic font-medium">Products</span> (below) are AI agents you can subscribe to or buy outright.
         </p>
       </FadeIn>
 
@@ -272,12 +276,12 @@ const Services = () => (
                   <pillar.icon className="w-5 h-5 text-primary" />
                 </div>
               </div>
-              <h3 className="text-3xl font-serif mb-4">{pillar.title}</h3>
+              <h3 className="text-3xl md:text-4xl font-serif mb-4">{pillar.title}</h3>
               <p className="text-muted-foreground font-light leading-relaxed text-sm mb-8">
                 {pillar.summary}
               </p>
               <div className="mt-auto pt-6 border-t border-foreground/10">
-                <p className="section-label mb-4 text-muted-foreground/60">Includes</p>
+                <p className="section-label mb-4">Practice areas</p>
                 <ul className="space-y-3">
                   {pillar.services.map((service) => (
                     <li key={service} className="flex items-start gap-3 text-sm font-light text-foreground/80">
@@ -699,7 +703,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
           <div className="min-w-0 lg:col-span-6">
             <div className="flex items-center gap-3 mb-8">
               <div className="h-[1px] w-12 bg-background/40"></div>
-              <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
+              <span className="section-label !text-background/85">Sample Engagement · {data.eyebrow}</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
               {data.headline}
@@ -733,7 +737,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
       <div className={`min-w-0 ${hasMockup ? "lg:col-span-7" : "lg:col-span-4"}`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-background/40"></div>
-          <span className="section-label !text-background/60">Case Studies · {data.eyebrow}</span>
+          <span className="section-label !text-background/85">Sample Engagement · {data.eyebrow}</span>
         </div>
         <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
           {data.headline}
@@ -812,15 +816,23 @@ const CaseStudy = () => {
   const next = () => goTo(activeIndex + 1);
 
   return (
-    <section id="case-study" className="py-32 border-t border-foreground/15 bg-foreground text-background overflow-hidden">
+    <section id="engagements" className="py-32 border-t border-foreground/15 bg-foreground text-background overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between mb-12 pb-6 border-b border-background/15">
-          <div className="flex items-center gap-3">
+        <div className="mb-12 pb-10 border-b border-background/15">
+          <div className="flex items-center gap-3 mb-6">
             <div className="h-[1px] w-12 bg-background/40" />
-            <span className="section-label !text-background/60">Case Studies</span>
+            <span className="section-label !text-background/85">Sample Engagements</span>
           </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-2xl">
+              <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-4">
+                What an engagement can look like.
+              </h2>
+              <p className="text-background/65 font-light leading-relaxed">
+                Representative builds — not fixed templates. Your scope, stack, and timeline will vary; we use these as blueprints for the kind of outcome you can expect.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
             {CASE_STUDIES.map((cs, i) => (
               <button
                 key={cs.id}
@@ -858,6 +870,7 @@ const CaseStudy = () => {
               </button>
             </div>
           </div>
+          </div>
         </div>
 
         <motion.div
@@ -873,6 +886,155 @@ const CaseStudy = () => {
   );
 };
 
+
+type ProductCard = {
+  href: string;
+  name: string;
+  status: "Live" | "In development";
+  tagline: string;
+  description: string;
+  bullets: string[];
+};
+
+const PRODUCTS: ProductCard[] = [
+  {
+    href: "/dispatch",
+    name: "Dispatch",
+    status: "Live",
+    tagline: "Daily AI brief for operators.",
+    description:
+      "An always-on agent that reads the public AI landscape — labs, clouds, model releases, community signal — and ships a single curated brief every weekday at 3:30 PM PT.",
+    bullets: [
+      "Filters for enterprise-relevant releases and research",
+      "Cites every claim — no hallucinated coverage",
+      "Email + on-site archive",
+    ],
+  },
+];
+
+const Products = () => (
+  <section id="products" className="py-32 border-t border-foreground/10 bg-card">
+    <div className="max-w-7xl mx-auto px-6">
+      <FadeIn>
+        <div className="flex items-center gap-3 mb-8">
+          <div className="h-[1px] w-12 bg-primary" />
+          <span className="section-label">Products</span>
+        </div>
+        <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">
+          Agents we build, host, and keep running.
+        </h2>
+        <p className="text-lg text-muted-foreground font-light max-w-2xl mb-4">
+          Production AI agents from our practice — each solves a specific operator workflow,
+          runs on our infrastructure, and improves as we tune it.
+        </p>
+        <p className="text-sm text-muted-foreground/80 font-light max-w-2xl mb-12 italic">
+          Subscribe to one that's live, or have us build the one your team actually needs as part of an engagement.
+        </p>
+      </FadeIn>
+
+      <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto md:max-w-none md:mx-0">
+        {PRODUCTS.map((product, i) => (
+          <FadeIn key={product.href} delay={i * 0.1}>
+            <Link
+              href={product.href}
+              className="group block h-full border border-foreground/15 bg-background p-8 hover:bg-foreground/[0.03] transition-colors"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <span className="section-label">{product.status}</span>
+                <div className="p-3 border border-foreground/15 bg-foreground/5 group-hover:bg-foreground/15 transition-colors">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                </div>
+              </div>
+              <h3 className="text-3xl md:text-4xl font-serif mb-3">{product.name}</h3>
+              <p className="text-base text-foreground/80 font-light mb-4">{product.tagline}</p>
+              <p className="text-sm text-muted-foreground font-light leading-relaxed mb-8">
+                {product.description}
+              </p>
+              <ul className="space-y-3 mb-8">
+                {product.bullets.map((b) => (
+                  <li
+                    key={b}
+                    className="flex items-start gap-3 text-sm font-light text-foreground/80"
+                  >
+                    <ArrowRight className="w-3.5 h-3.5 mt-1 text-primary shrink-0" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <span className="inline-flex items-center text-xs uppercase tracking-widest text-foreground/80 group-hover:text-foreground">
+                Open {product.name} <ArrowRight className="ml-2 w-3.5 h-3.5" />
+              </span>
+            </Link>
+          </FadeIn>
+        ))}
+      </div>
+    </div>
+  </section>
+);
+
+const ABOUT_BELIEFS: { title: string; body: string }[] = [
+  {
+    title: "Operators, not vendors",
+    body: "Every engagement is led by people who have shipped AI in production environments — not consultants flipping decks. We sit in your repo and your standup until the system runs.",
+  },
+  {
+    title: "You own everything",
+    body: "Code, prompts, evals, and data live in your accounts. We don't lock you into a runtime, a license, or a per-seat tax. The day we leave, your team is the system's owner.",
+  },
+  {
+    title: "Outcomes, not output",
+    body: "We measure ourselves on the metric that matters to you — cycle time, throughput, quality, cost — and tune the build until it moves. Activity is not the goal.",
+  },
+];
+
+const About = () => (
+  <section id="about" className="py-32 border-t border-foreground/10">
+    <div className="max-w-7xl mx-auto px-6">
+      <div className="grid lg:grid-cols-12 gap-12">
+        <FadeIn className="lg:col-span-5">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="h-[1px] w-12 bg-primary" />
+            <span className="section-label">About DeerPark</span>
+          </div>
+          <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-6">
+            We were the AI team inside operating companies before we were a firm.
+          </h2>
+          <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6">
+            DeerPark builds AI inside organizations the way an internal team would — close to the workflow, accountable to the metric, transparent on cost. We started this firm to do that work end-to-end for teams who don't have a frontier-AI bench in-house.
+          </p>
+          <p className="text-base text-muted-foreground font-light leading-relaxed mb-8">
+            <span className="text-foreground/80 italic">[Founders / team bio paragraph — TBD]</span>
+          </p>
+          <a
+            href="mailto:contact@deerpark.io"
+            className="inline-flex items-center gap-2 text-sm text-foreground hover:text-foreground/70 transition-colors"
+          >
+            <span className="underline underline-offset-4">Get in touch</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </a>
+        </FadeIn>
+
+        <FadeIn delay={0.1} className="lg:col-span-7">
+          <div className="border border-foreground/15 bg-card divide-y divide-foreground/10">
+            {ABOUT_BELIEFS.map((b, i) => (
+              <div key={b.title} className="p-8 md:p-10 grid grid-cols-[auto_1fr] gap-6">
+                <span className="font-sans text-xs font-semibold tabular-nums text-muted-foreground tracking-[0.18em] pt-2">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <div>
+                  <h3 className="text-xl md:text-2xl font-serif mb-3">{b.title}</h3>
+                  <p className="text-muted-foreground font-light leading-relaxed">
+                    {b.body}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </FadeIn>
+      </div>
+    </div>
+  </section>
+);
 
 const FAQ_ITEMS = [
   {
@@ -1118,7 +1280,7 @@ const LeadCapture = () => {
               <span className="section-label">Free Consultation</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-serif mb-6">
-              Text us. Start your AI consultation in two minutes.
+              Text us. Free consult in two minutes.
             </h2>
             <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6 max-w-xl">
               Drop your name and number. A DeerPark strategist will text you
@@ -1278,7 +1440,7 @@ const LeadCapture = () => {
                 >
                   {submitting ? "Submitting…" : (
                     <>
-                      Send My Free Consultation Request <ArrowRight className="ml-2 w-4 h-4" />
+                      Text Me Back <ArrowRight className="ml-2 w-4 h-4" />
                     </>
                   )}
                 </Button>
@@ -1304,7 +1466,9 @@ export default function Home() {
         <Hero />
         <Problem />
         <Services />
+        <Products />
         <CaseStudy />
+        <About />
         <FAQ />
         <LeadCapture />
       </main>
