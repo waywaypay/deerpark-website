@@ -110,7 +110,9 @@ const Problem = () => (
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
-            <h2 className="text-4xl md:text-5xl font-serif font-bold mb-6">AI rollouts often stall</h2>
+            <h2 className="text-5xl md:text-[4.75rem] font-serif leading-[1.1] mb-8 text-gradient pb-1">
+              <em className="not-italic font-light">AI rollouts often stall</em>
+            </h2>
             <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
               because models like those offered by ChatGPT and Claude are too general and need to be customized. Small teams lack the time or expertise to integrate them into daily work.
             </p>
