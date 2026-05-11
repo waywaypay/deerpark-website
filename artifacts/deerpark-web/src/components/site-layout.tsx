@@ -3,8 +3,8 @@ import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { Menu, MessageSquare, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
-import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
-import { SmsConsentModal } from "@/components/sms-consent-modal";
+import { SMS_ENABLED, SMS_NUMBER_E164 } from "@/lib/sms";
+import { useConsultModals } from "@/components/consult-modal-provider";
 
 /** Site-wide: product destinations linked from the home Products section + footer. */
 export const PRODUCT_LINKS = [
@@ -53,11 +53,16 @@ const NavHashLink = ({
   </a>
 );
 
-// Mobile uses the SMS consent modal (text-first conversion); desktop scrolls
-// to the LeadCapture form section, which is hidden on mobile so the only
-// mobile path is the modal. A single anchor handles both: the click handler
-// intercepts on mobile to open the modal, and falls through to the href on
-// desktop.
+// Mobile (with SMS configured) opens the Twilio consent modal then
+// deep-links to Messages. Every other path — desktop, or mobile with SMS
+// disabled — opens the email-capture modal, which POSTs to /api/leads and
+// triggers a PM-style discovery brief from the server. A single anchor
+// drives all paths so the link is still crawlable and copy/paste-able.
+//
+// Modals are mounted by ConsultModalProvider at the app root, NOT here:
+// when the mobile menu collapses on tap, the parent's onClick runs
+// `setOpen(false)` and unmounts this CTA along with anything nested under
+// it. A locally-mounted modal would die before it ever rendered.
 type ConsultCTAProps = {
   source: string;
   className?: string;
@@ -66,40 +71,31 @@ type ConsultCTAProps = {
 };
 
 export const ConsultCTA = ({ source, className = "", onClick, children }: ConsultCTAProps) => {
-  const [smsOpen, setSmsOpen] = useState(false);
-  const sms = SMS_ENABLED && SMS_NUMBER_E164 ? SMS_NUMBER_E164 : null;
-  const href = `/?ref=${source}#consultation`;
-
-  if (!sms) {
-    return (
-      <a href={href} onClick={onClick} className={className}>
-        {children}
-      </a>
-    );
-  }
+  const { openConsult, openSms } = useConsultModals();
+  const smsAvailable = SMS_ENABLED && SMS_NUMBER_E164 !== null;
+  const href = `/?ref=${source}`;
 
   return (
-    <>
-      <a
-        href={href}
-        onClick={(e) => {
-          onClick?.();
-          if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
-            e.preventDefault();
-            setSmsOpen(true);
-          }
-        }}
-        className={className}
-      >
-        {children}
-      </a>
-      <SmsConsentModal
-        open={smsOpen}
-        onClose={() => setSmsOpen(false)}
-        smsUrl={smsHref(sms)}
-        number={sms}
-      />
-    </>
+    <a
+      href={href}
+      onClick={(e) => {
+        if (typeof window === "undefined") return;
+        e.preventDefault();
+        const isMobile = window.matchMedia("(max-width: 767px)").matches;
+        if (isMobile && smsAvailable) {
+          openSms();
+        } else {
+          openConsult(source);
+        }
+        // Call parent onClick LAST. The provider lives above us, so its
+        // state updates survive even when the parent immediately unmounts
+        // this CTA (e.g. mobile menu collapse).
+        onClick?.();
+      }}
+      className={className}
+    >
+      {children}
+    </a>
   );
 };
 
@@ -225,42 +221,36 @@ export const Footer = () => (
   </footer>
 );
 
+// Mobile-only floating CTA. When SMS is configured, it opens the Twilio
+// consent modal then deep-links to Messages — texting converts higher than
+// a form for the top-of-funnel "I'm curious" cohort. When SMS isn't
+// configured, it falls back to the email-capture modal so the FAB always
+// has somewhere to send people. Both modals live on the provider so the
+// FAB just dispatches; it doesn't own any modal state.
 export const ConsultationFAB = () => {
-  const [smsOpen, setSmsOpen] = useState(false);
-  // When SMS is live, the "Text" pill replaces the "Get Free Consultation"
-  // pill on mobile entirely — texting converts higher than the form for the
-  // top-of-funnel "I'm curious" cohort, and stacking two FABs ate too much
-  // viewport. The Lead Capture section still has the form CTA inline for
-  // anyone who scrolls down. Tapping "Text" opens a Twilio-compliant consent
-  // modal before deep-linking to the user's Messages app.
+  const { openConsult, openSms } = useConsultModals();
   if (SMS_ENABLED && SMS_NUMBER_E164) {
     return (
-      <>
-        <button
-          type="button"
-          onClick={() => setSmsOpen(true)}
-          aria-label="Text us for a free consultation"
-          aria-haspopup="dialog"
-          className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
-        >
-          <MessageSquare className="w-3.5 h-3.5" />
-          Text Us
-        </button>
-        <SmsConsentModal
-          open={smsOpen}
-          onClose={() => setSmsOpen(false)}
-          smsUrl={smsHref(SMS_NUMBER_E164)}
-          number={SMS_NUMBER_E164}
-        />
-      </>
+      <button
+        type="button"
+        onClick={openSms}
+        aria-label="Text us for a free consultation"
+        aria-haspopup="dialog"
+        className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
+      >
+        <MessageSquare className="w-3.5 h-3.5" />
+        Text Us
+      </button>
     );
   }
   return (
-    <a
-      href="/?ref=fab#consultation"
+    <button
+      type="button"
+      onClick={() => openConsult("fab")}
+      aria-haspopup="dialog"
       className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
     >
       Get Free Consultation
-    </a>
+    </button>
   );
 };
