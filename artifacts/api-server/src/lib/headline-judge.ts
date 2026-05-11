@@ -65,12 +65,31 @@ Each headline is one of:
   IRRELEVANT — anything else: lifestyle, gardening, sports, generic business, consumer reviews, off-topic press from a broad-tech feed.
   CLICKBAIT — about AI/tech but written as outrage/listicle/celebrity/rumor with no concrete development. "X person SLAMS Y", "5 things you need to know", "is X dead?".
 
+AI HOOK REQUIREMENT
+A headline scores ≥ 40 only when it names at least one of:
+  • an AI model, lab, paper, eval, dataset, agent, framework, or infrastructure release
+  • an AI-tied financial event (funding round, M&A, IPO, earnings) where the company's AI work is the story
+  • an AI policy, regulation, audit, safety, or governance development
+  • an AI deployment, product, partnership, or hire that materially shifts how an enterprise buys/builds with AI
+
+If the AI angle is incidental (e.g. a broad-tech outlet using "AI" as a buzzword in a story about something else), score ≤ 19.
+
+OFF-TOPIC CATEGORIES — score ≤ 19 EVEN FROM A BROAD-TECH FEED
+These leak through the ingest-time keyword filter because common English words contain the substring "ai" ("captain", "fail", "again", "claim", "main"). Score them ≤ 19 regardless of source tier:
+  • Aviation: plane crashes, airline incidents, FAA actions, Boeing/Airbus mechanical news (unless explicitly about AI in avionics)
+  • Transportation accidents: derailments, ship collisions, vehicle recalls (unless about AI/autonomy systems)
+  • Weather, natural disasters, public-safety emergencies
+  • Sports, celebrity, entertainment, lifestyle, food, travel
+  • Crime, court cases, geopolitics not directly about AI policy
+  • Generic consumer product reviews, gadget unboxings without AI features
+  • Macro market commentary ("AI Boom Drives X") with no named company action
+
 Score each item 0-100:
-  90-100 = original-source release from a frontier lab, eval result, or hard news with named companies and specifics
-  70-89  = solid coverage of a real development, reputable publisher, concrete enough to act on
-  50-69  = on-topic but thin: rumor, opinion column, generic explainer, low-stakes product news
+  90-100 = original-source release from a frontier lab, eval result, or hard news with named AI companies + specifics
+  70-89  = solid coverage of a real AI development, reputable publisher, concrete enough to act on
+  50-69  = on-topic but thin: rumor, opinion column, generic AI explainer, low-stakes product news
   20-49  = clickbait or weakly-AI-related (mentions AI in passing, no real development)
-  0-19   = irrelevant (gardening, lifestyle, sports, off-topic), even if the source is a broad-tech feed
+  0-19   = irrelevant (off-topic categories above, gardening, lifestyle, generic business with no AI hook), even if the source is a broad-tech feed
 
 Return ONLY this JSON, no prose:
 { "scores": [{ "id": <number>, "score": <0-100> }, ...] }
