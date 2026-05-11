@@ -638,19 +638,19 @@ const CASE_STUDIES: CaseStudyData[] = [
   {
     id: "workflow-automation",
     eyebrow: "Workflow Automation",
-    headline: "Quarterly reporting, from a full day to under an hour.",
+    headline: "Quarterly reporting, from 3 hours to 20 minutes.",
     narrativeOnly: true,
     diagram: <PRWorkflowDiagram />,
     intro: [
-      "A team was producing recurring quarterly reports for clients — pulling from kick-off call notes, internal data, and prior-cycle context, then iterating through multiple review rounds. Each cycle consumed a full day of senior time before the report went out the door.",
-      "We rebuilt the reporting pipeline as an AI workflow with Skills integrated end-to-end across source ingestion, structured analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, and time-to-completion dropped by over 90% — a full day became under an hour. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
+      "A team was producing recurring quarterly reports for clients — pulling from kick-off call notes, internal data, and prior-cycle context, then iterating through multiple review rounds. Each cycle consumed roughly 3 hours of senior time before the report went out the door.",
+      "We rebuilt the reporting pipeline as an AI workflow with Skills integrated end-to-end across source ingestion, structured analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, and manual effort dropped by ~90% — 3 hours of hands-on work became 20 minutes of review. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
     ],
     before:
       "Hours per cycle of source review, structured note-taking, and drafting from scratch. Same shape every time — no leverage.",
     after:
       "Minutes per cycle of review on a polished, structured draft. Same quality bar, dramatically less time.",
     metrics: [
-      { label: "Cycle time", value: "hrs → mins" },
+      { label: "Cycle time", value: "3h → 20min" },
       { label: "Manual effort", value: "−90%" },
       { label: "Quality bar", value: "held" },
     ],
@@ -663,7 +663,7 @@ const CASE_STUDIES: CaseStudyData[] = [
     ],
     outcome: (
       <>
-        What used to be a full day of reporting work is now <span className="text-background font-medium">under an hour, end to end</span>. The team kept full editorial control; the freed time went into deeper analysis and faster client turnaround.
+        What used to take <span className="text-background font-medium">3 hours of hands-on work is now 20 minutes of review</span>. The team kept full editorial control; the freed time went into deeper analysis and faster client turnaround.
       </>
     ),
   },
