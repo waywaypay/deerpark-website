@@ -115,7 +115,7 @@ const Problem = () => (
               because models like those offered by ChatGPT and Claude are too general and need to be customized. Small teams lack the time or expertise to integrate them into daily work.
             </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
-              Deer Park runs that work end-to-end: <span className="text-foreground">assess</span> where AI changes throughput, <span className="text-foreground">build</span> the applications around it, <span className="text-foreground">deploy</span> with your team, and <span className="text-foreground">train</span> them until the new way is the way.
+              Deer Park provides the hands-on partnership. We run the work end-to-end: we <span className="text-foreground">assess</span> where AI can drive the biggest gains, <span className="text-foreground">build</span> custom applications and integrations, <span className="text-foreground">deploy</span> with your team, and provide <span className="text-foreground">training</span> until the new, efficient way is your standard.
             </p>
           </FadeIn>
         </div>
