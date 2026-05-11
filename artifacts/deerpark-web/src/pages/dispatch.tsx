@@ -139,7 +139,7 @@ const DispatchSubscribe = () => {
 
   const submitting = status.state === "loading";
   const inputClass =
-    "flex-1 h-12 px-4 bg-foreground/[0.04] border border-foreground/30 text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors disabled:opacity-60";
+    "flex-1 h-12 px-4 appearance-none rounded-none bg-foreground/[0.04] border border-foreground/30 text-base sm:text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors disabled:opacity-60";
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
