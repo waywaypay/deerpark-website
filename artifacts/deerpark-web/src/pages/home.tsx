@@ -879,11 +879,12 @@ const PRODUCTS: ProductCard[] = [
     status: "Live",
     tagline: "Daily AI brief for operators.",
     description:
-      "An always-on agent that reads the public AI landscape — labs, clouds, model releases, community signal — and ships a single curated brief every weekday at 3:30 PM PT.",
+      "An always-on agent that reads the public AI landscape — labs, clouds, model releases, community signal — and ships a single curated brief every weekday at 3:30 PM PT. The same agent can be tuned to any vertical your team needs to track.",
     bullets: [
       "Filters for enterprise-relevant releases and research",
       "Cites every claim — no hallucinated coverage",
       "Email + on-site archive",
+      "Configurable for any industry — finance, biotech, logistics, defense",
     ],
   },
 ];
