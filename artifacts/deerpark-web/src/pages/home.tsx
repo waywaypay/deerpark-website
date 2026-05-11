@@ -3,9 +3,8 @@ import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, Calendar, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
-import { FadeIn, Navbar, Footer, ConsultationFAB } from "@/components/site-layout";
+import { ConsultCTA, FadeIn, Navbar, Footer, ConsultationFAB } from "@/components/site-layout";
 import { SMS_ENABLED, SMS_NUMBER_E164, formatSmsNumber, smsHref } from "@/lib/sms";
-import { SmsConsentModal } from "@/components/sms-consent-modal";
 
 const TICKER_ITEMS = [
   "AI Readiness Assessment",
@@ -20,8 +19,6 @@ const TICKER_ITEMS = [
 ];
 
 const Hero = () => {
-  const [smsOpen, setSmsOpen] = useState(false);
-
   return (
     <section className="relative min-h-[100dvh] flex flex-col justify-between pt-24 overflow-hidden">
       <div className="absolute inset-0 z-0" style={{
@@ -54,38 +51,18 @@ const Hero = () => {
 
           <FadeIn delay={0.3} className="mb-14">
             <div className="flex flex-col sm:flex-row gap-4">
-              <a href="#consultation">
-                <Button size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90">
-                  Free Consult <ArrowRight className="ml-2 w-4 h-4" />
-                </Button>
-              </a>
+              <ConsultCTA
+                source="hero"
+                className="inline-flex items-center justify-center gap-2 rounded-none h-14 px-8 text-sm font-medium uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 transition-colors"
+              >
+                Free Consult <ArrowRight className="ml-2 w-4 h-4" />
+              </ConsultCTA>
               <a href="#engagements">
                 <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-foreground/25 hover:bg-foreground/5">
                   See Our Work
                 </Button>
               </a>
             </div>
-            {SMS_ENABLED && SMS_NUMBER_E164 && (
-              <p className="mt-5 text-sm text-muted-foreground font-light md:hidden">
-                Or text us for a free consult:{" "}
-                <button
-                  type="button"
-                  onClick={() => setSmsOpen(true)}
-                  aria-haspopup="dialog"
-                  className="text-foreground underline underline-offset-4 hover:text-foreground/70"
-                >
-                  {formatSmsNumber(SMS_NUMBER_E164)}
-                </button>
-              </p>
-            )}
-            {SMS_ENABLED && SMS_NUMBER_E164 && (
-              <SmsConsentModal
-                open={smsOpen}
-                onClose={() => setSmsOpen(false)}
-                smsUrl={smsHref(SMS_NUMBER_E164)}
-                number={SMS_NUMBER_E164}
-              />
-            )}
             <p className="mt-5 text-sm text-muted-foreground font-light hidden md:block">
               Or email us:{" "}
               <a
@@ -1271,7 +1248,7 @@ const LeadCapture = () => {
   const submitting = status.state === "submitting";
 
   return (
-    <section id="consultation" className="py-32 border-t border-foreground/15 bg-card">
+    <section id="consultation" className="hidden md:block py-32 border-t border-foreground/15 bg-card">
       <div className="max-w-7xl mx-auto px-6">
         <div className="grid lg:grid-cols-2 gap-12 items-start">
           <FadeIn className="min-w-0">

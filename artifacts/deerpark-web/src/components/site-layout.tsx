@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
 import { Menu, MessageSquare, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
 import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
@@ -54,6 +53,60 @@ const NavHashLink = ({
   </a>
 );
 
+// Mobile uses the SMS consent modal (text-first conversion); desktop scrolls
+// to the LeadCapture form section, which is hidden on mobile so the only
+// mobile path is the modal. Renders both children with responsive visibility
+// so we don't depend on a JS-side viewport check (avoids a hydration flash).
+type ConsultCTAProps = {
+  source: string;
+  className?: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+};
+
+export const ConsultCTA = ({ source, className = "", onClick, children }: ConsultCTAProps) => {
+  const [smsOpen, setSmsOpen] = useState(false);
+  const sms = SMS_ENABLED && SMS_NUMBER_E164 ? SMS_NUMBER_E164 : null;
+  const href = `/?ref=${source}#consultation`;
+
+  if (!sms) {
+    return (
+      <a href={href} onClick={onClick} className={className}>
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          onClick?.();
+          setSmsOpen(true);
+        }}
+        aria-haspopup="dialog"
+        className={`md:hidden ${className}`}
+      >
+        {children}
+      </button>
+      <a
+        href={href}
+        onClick={onClick}
+        className={`hidden md:inline-flex ${className}`}
+      >
+        {children}
+      </a>
+      <SmsConsentModal
+        open={smsOpen}
+        onClose={() => setSmsOpen(false)}
+        smsUrl={smsHref(sms)}
+        number={sms}
+      />
+    </>
+  );
+};
+
 export const Navbar = () => {
   const [open, setOpen] = useState(false);
   return (
@@ -73,11 +126,12 @@ export const Navbar = () => {
           {NAV_HASH_LINKS.map((l) => (
             <NavHashLink key={l.href} link={l} />
           ))}
-          <a href="/?ref=nav#consultation">
-            <Button className="font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-              Free Consult
-            </Button>
-          </a>
+          <ConsultCTA
+            source="nav"
+            className="font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90 inline-flex items-center justify-center px-4 h-9 font-medium transition-colors"
+          >
+            Free Consult
+          </ConsultCTA>
         </nav>
         <button
           type="button"
@@ -95,11 +149,13 @@ export const Navbar = () => {
             {NAV_HASH_LINKS.map((l) => (
               <NavHashLink key={l.href} link={l} onClick={() => setOpen(false)} />
             ))}
-            <a href="/?ref=nav_mobile#consultation" onClick={() => setOpen(false)}>
-              <Button className="w-full font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-                Free Consult
-              </Button>
-            </a>
+            <ConsultCTA
+              source="nav_mobile"
+              onClick={() => setOpen(false)}
+              className="w-full font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90 inline-flex items-center justify-center px-4 h-10 font-medium transition-colors"
+            >
+              Free Consult
+            </ConsultCTA>
           </nav>
         </div>
       )}
@@ -153,7 +209,11 @@ export const Footer = () => (
               </li>
             ))}
             <li><a href="/#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
-            <li><a href="/?ref=footer#consultation" className="hover:text-foreground transition-colors">Free Consultation</a></li>
+            <li>
+              <ConsultCTA source="footer" className="text-left hover:text-foreground transition-colors">
+                Free Consultation
+              </ConsultCTA>
+            </li>
             <li><a href="mailto:contact@deerpark.io" className="hover:text-foreground transition-colors">Contact</a></li>
           </ul>
         </div>
