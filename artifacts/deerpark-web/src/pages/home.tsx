@@ -78,7 +78,6 @@ const Hero = () => {
             <div className="flex gap-8 border-t border-foreground/15 pt-8">
                 {[
                 { stat: "90 days", label: "from readiness review to live rollout" },
-                { stat: "100%", label: "code, prompts, and data stay in your accounts" },
                 { stat: "−90%", label: "manual effort on shipped workflows" },
                 { stat: "+25%", label: "lift in output quality vs baseline LLM workflows" },
               ].map(({ stat, label }) => (
