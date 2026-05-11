@@ -55,8 +55,9 @@ const NavHashLink = ({
 
 // Mobile uses the SMS consent modal (text-first conversion); desktop scrolls
 // to the LeadCapture form section, which is hidden on mobile so the only
-// mobile path is the modal. Renders both children with responsive visibility
-// so we don't depend on a JS-side viewport check (avoids a hydration flash).
+// mobile path is the modal. A single anchor handles both: the click handler
+// intercepts on mobile to open the modal, and falls through to the href on
+// desktop.
 type ConsultCTAProps = {
   source: string;
   className?: string;
@@ -79,21 +80,16 @@ export const ConsultCTA = ({ source, className = "", onClick, children }: Consul
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => {
-          onClick?.();
-          setSmsOpen(true);
-        }}
-        aria-haspopup="dialog"
-        className={`md:hidden ${className}`}
-      >
-        {children}
-      </button>
       <a
         href={href}
-        onClick={onClick}
-        className={`hidden md:inline-flex ${className}`}
+        onClick={(e) => {
+          onClick?.();
+          if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+            e.preventDefault();
+            setSmsOpen(true);
+          }
+        }}
+        className={className}
       >
         {children}
       </a>
