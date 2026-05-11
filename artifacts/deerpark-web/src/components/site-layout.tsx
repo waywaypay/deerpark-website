@@ -5,6 +5,7 @@ import { Menu, MessageSquare, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
 import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
 import { SmsConsentModal } from "@/components/sms-consent-modal";
+import { ConsultModal } from "@/components/consult-modal";
 
 /** Site-wide: product destinations linked from the home Products section + footer. */
 export const PRODUCT_LINKS = [
@@ -53,11 +54,11 @@ const NavHashLink = ({
   </a>
 );
 
-// Mobile uses the SMS consent modal (text-first conversion); desktop scrolls
-// to the LeadCapture form section, which is hidden on mobile so the only
-// mobile path is the modal. A single anchor handles both: the click handler
-// intercepts on mobile to open the modal, and falls through to the href on
-// desktop.
+// Mobile (with SMS configured) opens the Twilio consent modal then
+// deep-links to Messages. Every other path — desktop, or mobile with SMS
+// disabled — opens the email-capture modal, which POSTs to /api/leads and
+// triggers a PM-style discovery brief from the server. A single anchor
+// drives all paths so the link is still crawlable and copy/paste-able.
 type ConsultCTAProps = {
   source: string;
   className?: string;
@@ -67,16 +68,9 @@ type ConsultCTAProps = {
 
 export const ConsultCTA = ({ source, className = "", onClick, children }: ConsultCTAProps) => {
   const [smsOpen, setSmsOpen] = useState(false);
+  const [consultOpen, setConsultOpen] = useState(false);
   const sms = SMS_ENABLED && SMS_NUMBER_E164 ? SMS_NUMBER_E164 : null;
-  const href = `/?ref=${source}#consultation`;
-
-  if (!sms) {
-    return (
-      <a href={href} onClick={onClick} className={className}>
-        {children}
-      </a>
-    );
-  }
+  const href = `/?ref=${source}`;
 
   return (
     <>
@@ -84,21 +78,32 @@ export const ConsultCTA = ({ source, className = "", onClick, children }: Consul
         href={href}
         onClick={(e) => {
           onClick?.();
-          if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
-            e.preventDefault();
+          if (typeof window === "undefined") return;
+          e.preventDefault();
+          const isMobile = window.matchMedia("(max-width: 767px)").matches;
+          if (isMobile && sms) {
             setSmsOpen(true);
+            return;
           }
+          setConsultOpen(true);
         }}
         className={className}
       >
         {children}
       </a>
-      <SmsConsentModal
-        open={smsOpen}
-        onClose={() => setSmsOpen(false)}
-        smsUrl={smsHref(sms)}
-        number={sms}
+      <ConsultModal
+        open={consultOpen}
+        onClose={() => setConsultOpen(false)}
+        source={source}
       />
+      {sms ? (
+        <SmsConsentModal
+          open={smsOpen}
+          onClose={() => setSmsOpen(false)}
+          smsUrl={smsHref(sms)}
+          number={sms}
+        />
+      ) : null}
     </>
   );
 };
@@ -225,14 +230,14 @@ export const Footer = () => (
   </footer>
 );
 
+// Mobile-only floating CTA. When SMS is configured, it opens the Twilio
+// consent modal then deep-links to Messages — texting converts higher than
+// a form for the top-of-funnel "I'm curious" cohort. When SMS isn't
+// configured, it falls back to the email-capture modal so the FAB always
+// has somewhere to send people.
 export const ConsultationFAB = () => {
   const [smsOpen, setSmsOpen] = useState(false);
-  // When SMS is live, the "Text" pill replaces the "Get Free Consultation"
-  // pill on mobile entirely — texting converts higher than the form for the
-  // top-of-funnel "I'm curious" cohort, and stacking two FABs ate too much
-  // viewport. The Lead Capture section still has the form CTA inline for
-  // anyone who scrolls down. Tapping "Text" opens a Twilio-compliant consent
-  // modal before deep-linking to the user's Messages app.
+  const [consultOpen, setConsultOpen] = useState(false);
   if (SMS_ENABLED && SMS_NUMBER_E164) {
     return (
       <>
@@ -256,11 +261,16 @@ export const ConsultationFAB = () => {
     );
   }
   return (
-    <a
-      href="/?ref=fab#consultation"
-      className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
-    >
-      Get Free Consultation
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={() => setConsultOpen(true)}
+        aria-haspopup="dialog"
+        className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg"
+      >
+        Get Free Consultation
+      </button>
+      <ConsultModal open={consultOpen} onClose={() => setConsultOpen(false)} source="fab" />
+    </>
   );
 };

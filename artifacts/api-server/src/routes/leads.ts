@@ -3,6 +3,7 @@ import { db, leadsTable, insertLeadSchema } from "@workspace/db";
 import { sql } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { sendLeadNotificationEmail } from "../lib/lead-notify";
+import { sendLeadWelcomeEmail } from "../lib/lead-welcome";
 
 const router: IRouter = Router();
 
@@ -77,6 +78,15 @@ router.post("/leads", async (req, res) => {
     void sendLeadNotificationEmail(lead).catch((err) => {
       req.log.error({ err, leadId: lead.id }, "Lead notify: unexpected throw");
     });
+
+    // Email-typed leads (desktop Free Consult modal) also get an auto-reply
+    // with a short PM-style discovery brief. Same best-effort contract: a
+    // delivery failure must not affect the lead-capture response.
+    if (lead.contactType === "email") {
+      void sendLeadWelcomeEmail(lead).catch((err) => {
+        req.log.error({ err, leadId: lead.id }, "Lead welcome: unexpected throw");
+      });
+    }
 
     return res.status(201).json({ id: lead.id });
   } catch (err) {
