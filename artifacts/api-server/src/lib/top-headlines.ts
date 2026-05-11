@@ -109,6 +109,12 @@ export async function selectTopHeadlines(
   const days = opts.days ?? 7;
   const limit = opts.limit ?? 10;
 
+  // Per-source cap is doubled here so the commentary-required filter below
+  // has more headroom — we still emit at most PER_SOURCE_CAP_TOP per source,
+  // but the SQL needs spare candidates to swap in when the freshest item
+  // from a source hasn't been commented on yet.
+  const sqlPerSourceCap = PER_SOURCE_CAP_TOP * 2;
+
   const result = await db.execute(sql`
     WITH ranked AS (
       SELECT
@@ -120,20 +126,33 @@ export async function selectTopHeadlines(
     )
     SELECT id, source, category, title, url, published_at, relevance_score, commentary
     FROM ranked
-    WHERE rn <= ${PER_SOURCE_CAP_TOP}
+    WHERE rn <= ${sqlPerSourceCap}
   `);
 
   const rawCandidates: HeadlineRow[] = result.rows.map((r) =>
     mapSqlRowToHeadline(r as Record<string, unknown>),
   );
 
-  // Structural guard: drop unjudged broad-press items with no named-entity
-  // anchor (keeps macro-trend clickbait out of the top until the judge
-  // catches up to score it).
+  // Structural guards applied before ranking:
+  //  1. Broad-press items (Bloomberg, Axios, etc.) must always have a named
+  //     AI-org anchor. The ingest-time keyword filter is too coarse — it
+  //     matches the substring "ai" inside common words ("captain", "fail",
+  //     "again"), so plane-crash / sports / weather stories occasionally
+  //     leak through. Requiring an org anchor at top-selection blocks them
+  //     even when the LLM judge mis-scored the row.
+  //  2. Drop items without commentary — the /dispatch page renders each
+  //     headline with its 2-3 sentence brief, and a card with a bare title
+  //     reads as broken. Commentator runs every ingest tick on the same
+  //     relevance gate, so the only items here are mid-cycle / failed
+  //     batches; the dropped slots are filled by the next-best candidate.
   const candidates = rawCandidates.filter((c) => {
-    if (c.relevanceScore !== null) return true;
-    if (!BROAD_PRESS_SOURCES.has(c.source)) return true;
-    return extractOrgs(c).size > 0;
+    if (BROAD_PRESS_SOURCES.has(c.source) && extractOrgs(c).size === 0) {
+      return false;
+    }
+    if (c.commentary === null || c.commentary.trim().length === 0) {
+      return false;
+    }
+    return true;
   });
 
   const now = Date.now();
@@ -142,7 +161,19 @@ export async function selectTopHeadlines(
     (a, b) => scoreItem(b, now, earningsDay) - scoreItem(a, now, earningsDay),
   );
 
-  const deduped = dedupeNearDuplicates(candidates);
+  // Re-apply the per-source cap after the SQL pull-2x: we asked for extra
+  // candidates so the commentary filter has fallback options, but the public
+  // top view should still hold to PER_SOURCE_CAP_TOP per outlet so a single
+  // active feed can't dominate.
+  const perSourceSeen = new Map<string, number>();
+  const capped = candidates.filter((c) => {
+    const seen = perSourceSeen.get(c.source) ?? 0;
+    if (seen >= PER_SOURCE_CAP_TOP) return false;
+    perSourceSeen.set(c.source, seen + 1);
+    return true;
+  });
+
+  const deduped = dedupeNearDuplicates(capped);
   const initialTop = deduped.slice(0, limit);
   const items = ensurePapersInSelection(
     initialTop,
@@ -163,7 +194,8 @@ export function getTopSelectionSpec(): {
   dedupeThreshold: number;
   minPapers: number;
   broadPressSources: string[];
-  broadPressRequiresOrgWhenUnjudged: boolean;
+  broadPressRequiresOrg: boolean;
+  requiresCommentary: boolean;
 } {
   return {
     tierWeights: { ...TIER_WEIGHTS },
@@ -174,6 +206,7 @@ export function getTopSelectionSpec(): {
     dedupeThreshold: DEFAULT_DEDUP_THRESHOLD,
     minPapers: MIN_PAPERS_IN_SELECTION,
     broadPressSources: Array.from(BROAD_PRESS_SOURCES),
-    broadPressRequiresOrgWhenUnjudged: true,
+    broadPressRequiresOrg: true,
+    requiresCommentary: true,
   };
 }

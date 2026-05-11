@@ -758,7 +758,8 @@ type JudgeSpec = {
     dedupeThreshold: number;
     minPapers: number;
     broadPressSources: string[];
-    broadPressRequiresOrgWhenUnjudged: boolean;
+    broadPressRequiresOrg: boolean;
+    requiresCommentary: boolean;
   };
   lastRun: {
     finishedAt: string;
@@ -1709,8 +1710,14 @@ const JudgeTab = ({ token }: { token: string }) => {
                 <dd>min {spec.topSelection.minPapers} slots</dd>
                 <dt className="text-muted-foreground">Broad-press filter</dt>
                 <dd>
-                  {spec.topSelection.broadPressRequiresOrgWhenUnjudged
-                    ? "Unjudged broad-press items dropped unless they anchor on an org entity"
+                  {spec.topSelection.broadPressRequiresOrg
+                    ? "Broad-press items dropped unless they anchor on an org entity (judged or not)"
+                    : "Disabled"}
+                </dd>
+                <dt className="text-muted-foreground">Commentary required</dt>
+                <dd>
+                  {spec.topSelection.requiresCommentary
+                    ? "Top items must have a generated brief; uncommented rows are skipped"
                     : "Disabled"}
                 </dd>
               </dl>
