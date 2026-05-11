@@ -110,7 +110,10 @@ const Problem = () => (
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
-            <h2 className="text-4xl md:text-5xl font-serif mb-8">AI rollouts often stall because models like those offered by ChatGPT and Claude are too general and need to be customized. Small teams lack the time or expertise to integrate them into daily work.</h2>
+            <h2 className="text-4xl md:text-5xl font-serif font-bold mb-6">AI rollouts often stall</h2>
+            <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
+              because models like those offered by ChatGPT and Claude are too general and need to be customized. Small teams lack the time or expertise to integrate them into daily work.
+            </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
               Deer Park provides the hands-on partnership. We run the work end-to-end: we <span className="text-foreground">assess</span> where AI can drive the biggest gains, <span className="text-foreground">build</span> custom applications and integrations, <span className="text-foreground">deploy</span> with your team, and provide <span className="text-foreground">training</span> until the new, efficient way is your standard.
             </p>
