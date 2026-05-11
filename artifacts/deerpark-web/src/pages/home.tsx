@@ -37,7 +37,7 @@ const Hero = () => {
           </FadeIn>
 
           <FadeIn delay={0.1}>
-            <h1 className="text-5xl md:text-[4.75rem] font-serif leading-[1.1] mb-8 text-gradient pb-1">
+            <h1 className="text-5xl md:text-[4.75rem] font-serif leading-[1.1] mb-8 pb-1">
               <em className="not-italic font-light">From AI curious to AI capable.</em>
             </h1>
           </FadeIn>
@@ -110,7 +110,7 @@ const Problem = () => (
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
-            <h2 className="text-5xl md:text-[4.75rem] font-serif leading-[1.1] mb-8 text-gradient pb-1">
+            <h2 className="text-5xl md:text-[4.75rem] font-serif leading-[1.1] mb-8 pb-1">
               <em className="not-italic font-light">AI rollouts often stall</em>
             </h2>
             <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
