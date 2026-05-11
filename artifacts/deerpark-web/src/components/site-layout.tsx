@@ -2,12 +2,12 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Menu, MessageSquare, X } from "lucide-react";
+import { Menu, MessageSquare, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
 import { SMS_ENABLED, SMS_NUMBER_E164, smsHref } from "@/lib/sms";
 import { SmsConsentModal } from "@/components/sms-consent-modal";
 
-/** Site-wide: product destinations shown under “Products” in the header. */
+/** Site-wide: product destinations linked from the home Products section + footer. */
 export const PRODUCT_LINKS = [
   { href: "/dispatch", label: "Dispatch" },
 ] as const;
@@ -34,12 +34,12 @@ export const FadeIn = ({
 
 type HashLink = { href: string; label: string };
 
-const NAV_HASH_LINKS_BEFORE_PRODUCTS: HashLink[] = [
-  { href: "/#approach", label: "Approach" },
-];
-
-const NAV_HASH_LINKS_AFTER_PRODUCTS: HashLink[] = [
-  { href: "/#case-study", label: "Case Studies" },
+const NAV_HASH_LINKS: HashLink[] = [
+  { href: "/#approach", label: "Services" },
+  { href: "/#products", label: "Products" },
+  { href: "/#engagements", label: "Engagements" },
+  { href: "/#about", label: "About" },
+  { href: "/#faq", label: "FAQ" },
 ];
 
 const NavHashLink = ({
@@ -53,94 +53,6 @@ const NavHashLink = ({
     {link.label}
   </a>
 );
-
-const ProductsNavDesktop = () => {
-  const [open, setOpen] = useState(false);
-  return (
-    <div
-      className="relative hidden md:block"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <Link
-        href="/products"
-        className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        Products
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </Link>
-      {open && (
-        <div
-          role="menu"
-          className="absolute left-0 top-full z-50 min-w-[13rem] pt-2"
-        >
-          <div className="border border-foreground/15 bg-background py-2 shadow-lg">
-            {PRODUCT_LINKS.map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                role="menuitem"
-                className="block px-4 py-2.5 text-left text-sm hover:bg-foreground/[0.04] hover:text-foreground"
-                onClick={() => setOpen(false)}
-              >
-                {label}
-              </Link>
-            ))}
-            <div className="my-1 border-t border-foreground/10" />
-            <Link
-              href="/products"
-              role="menuitem"
-              className="block px-4 py-2.5 text-left text-xs uppercase tracking-widest text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
-              onClick={() => setOpen(false)}
-            >
-              View all products →
-            </Link>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const ProductsNavMobile = ({ onNavigate }: { onNavigate: () => void }) => {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <div className="flex flex-col gap-1">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-2 py-0.5 text-left text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((v) => !v)}
-      >
-        <span>Products</span>
-        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
-      </button>
-      {expanded && (
-        <div className="ml-3 flex flex-col gap-3 border-l border-foreground/15 pl-4">
-          {PRODUCT_LINKS.map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              onClick={onNavigate}
-            >
-              {label}
-            </Link>
-          ))}
-          <Link
-            href="/products"
-            className="text-xs uppercase tracking-widest text-muted-foreground/80 hover:text-foreground transition-colors"
-            onClick={onNavigate}
-          >
-            View all products →
-          </Link>
-        </div>
-      )}
-    </div>
-  );
-};
 
 export const Navbar = () => {
   const [open, setOpen] = useState(false);
@@ -157,20 +69,13 @@ export const Navbar = () => {
             <span className="text-foreground/50 font-light">.io</span>
           </span>
         </Link>
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
-          {NAV_HASH_LINKS_BEFORE_PRODUCTS.map((l) => (
+        <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-muted-foreground">
+          {NAV_HASH_LINKS.map((l) => (
             <NavHashLink key={l.href} link={l} />
           ))}
-          <ProductsNavDesktop />
-          {NAV_HASH_LINKS_AFTER_PRODUCTS.map((l) => (
-            <NavHashLink key={l.href} link={l} />
-          ))}
-          <a href="/#faq" className="hover:text-foreground transition-colors">
-            FAQ
-          </a>
           <a href="/?ref=nav#consultation">
             <Button className="font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-              Free Consultation
+              Free Consult
             </Button>
           </a>
         </nav>
@@ -187,19 +92,12 @@ export const Navbar = () => {
       {open && (
         <div className="md:hidden border-t border-foreground/10 bg-background">
           <nav className="max-w-7xl mx-auto px-6 py-6 flex flex-col gap-5 text-sm font-medium text-muted-foreground">
-            {NAV_HASH_LINKS_BEFORE_PRODUCTS.map((l) => (
+            {NAV_HASH_LINKS.map((l) => (
               <NavHashLink key={l.href} link={l} onClick={() => setOpen(false)} />
             ))}
-            <ProductsNavMobile onNavigate={() => setOpen(false)} />
-            {NAV_HASH_LINKS_AFTER_PRODUCTS.map((l) => (
-              <NavHashLink key={l.href} link={l} onClick={() => setOpen(false)} />
-            ))}
-            <a href="/#faq" onClick={() => setOpen(false)} className="hover:text-foreground transition-colors">
-              FAQ
-            </a>
             <a href="/?ref=nav_mobile#consultation" onClick={() => setOpen(false)}>
               <Button className="w-full font-sans text-xs uppercase tracking-widest rounded-none bg-foreground text-background hover:bg-foreground/90">
-                Free Consultation
+                Free Consult
               </Button>
             </a>
           </nav>
@@ -240,11 +138,12 @@ export const Footer = () => (
         <div>
           <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Company</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
-            <li><a href="/#case-study" className="hover:text-foreground transition-colors">Case Studies</a></li>
+            <li><a href="/#engagements" className="hover:text-foreground transition-colors">Sample Engagements</a></li>
+            <li><a href="/#about" className="hover:text-foreground transition-colors">About</a></li>
             <li className="pt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground">
-              <Link href="/products" className="hover:text-foreground/70 transition-colors">
+              <a href="/#products" className="hover:text-foreground/70 transition-colors">
                 Products
-              </Link>
+              </a>
             </li>
             {PRODUCT_LINKS.map(({ href, label }) => (
               <li key={href} className="pl-2">
@@ -284,12 +183,12 @@ export const ConsultationFAB = () => {
         <button
           type="button"
           onClick={() => setSmsOpen(true)}
-          aria-label="Text our concierge"
+          aria-label="Text us for a free consultation"
           aria-haspopup="dialog"
           className="fixed bottom-4 right-4 z-50 md:hidden rounded-none bg-foreground text-background px-5 py-3 text-[11px] font-semibold uppercase tracking-widest shadow-lg flex items-center gap-2"
         >
           <MessageSquare className="w-3.5 h-3.5" />
-          Text
+          Text Us
         </button>
         <SmsConsentModal
           open={smsOpen}
