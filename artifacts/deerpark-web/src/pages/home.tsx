@@ -110,12 +110,9 @@ const Problem = () => (
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div>
           <FadeIn>
-            <h2 className="text-4xl md:text-5xl font-serif mb-8">AI rollouts don't fail because the models can't do the work. They fail because nobody changed the work.</h2>
-            <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
-              Licenses don't replace workflows. A year in, the Friday report still gets stitched by hand. Data still lives in five tabs. Staff aren't sure what the tools are for, and managers still approve tasks that could run themselves.
-            </p>
+            <h2 className="text-4xl md:text-5xl font-serif mb-8">AI rollouts often stall because models like those offered by ChatGPT and Claude are too general and need to be customized. Small teams lack the time or expertise to integrate them into daily work.</h2>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
-              Deer Park runs that work end-to-end: <span className="text-foreground">assess</span> where AI changes throughput, <span className="text-foreground">build</span> the applications around it, <span className="text-foreground">deploy</span> with your team, and <span className="text-foreground">train</span> them until the new way is the way.
+              Deer Park provides the hands-on partnership. We run the work end-to-end: we <span className="text-foreground">assess</span> where AI can drive the biggest gains, <span className="text-foreground">build</span> custom applications and integrations, <span className="text-foreground">deploy</span> with your team, and provide <span className="text-foreground">training</span> until the new, efficient way is your standard.
             </p>
           </FadeIn>
         </div>
