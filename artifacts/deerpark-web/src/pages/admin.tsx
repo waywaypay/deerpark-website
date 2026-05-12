@@ -3422,7 +3422,7 @@ const DispatchView = ({ token }: { token: string }) => {
   );
 };
 
-type View = "home" | "agents" | "dispatch" | "leads";
+type View = "home" | "products" | "dispatch" | "leads";
 
 type Tile<T extends string> = {
   id: T;
@@ -3431,11 +3431,11 @@ type Tile<T extends string> = {
   Icon: typeof Bot;
 };
 
-const HOME_TILES: Tile<"agents" | "leads">[] = [
+const HOME_TILES: Tile<"products" | "leads">[] = [
   {
-    id: "agents",
-    label: "Agents",
-    description: "All autonomous agents — Dispatch news pipeline and more to come.",
+    id: "products",
+    label: "Products",
+    description: "All products — Dispatch news pipeline and more to come.",
     Icon: Bot,
   },
   {
@@ -3446,7 +3446,7 @@ const HOME_TILES: Tile<"agents" | "leads">[] = [
   },
 ];
 
-const AGENT_TILES: Tile<"dispatch">[] = [
+const PRODUCT_TILES: Tile<"dispatch">[] = [
   {
     id: "dispatch",
     label: "Dispatch",
@@ -3622,7 +3622,7 @@ const VeniceUsageCard = ({ token }: { token: string }) => {
   );
 };
 
-const Home = ({ token, onSelect }: { token: string; onSelect: (view: "agents" | "leads") => void }) => (
+const Home = ({ token, onSelect }: { token: string; onSelect: (view: "products" | "leads") => void }) => (
   <div className="space-y-8">
     <div>
       <div className="section-label">Admin</div>
@@ -3636,33 +3636,33 @@ const Home = ({ token, onSelect }: { token: string; onSelect: (view: "agents" | 
   </div>
 );
 
-const AgentsHome = ({ onSelect }: { onSelect: (view: "dispatch") => void }) => (
+const ProductsHome = ({ onSelect }: { onSelect: (view: "dispatch") => void }) => (
   <div className="space-y-8">
     <div>
-      <div className="section-label">Agents</div>
-      <h1 className="text-3xl font-serif mt-1">Agent groups</h1>
+      <div className="section-label">Products</div>
+      <h1 className="text-3xl font-serif mt-1">Product lineup</h1>
       <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
-        Each tile is a family of agents working toward one outcome.
+        Each tile is a product — the autonomous agents that power it live inside.
       </p>
     </div>
-    <TileGrid tiles={AGENT_TILES} onSelect={onSelect} />
+    <TileGrid tiles={PRODUCT_TILES} onSelect={onSelect} />
   </div>
 );
 
 const VIEW_LABELS: Record<Exclude<View, "home">, string> = {
-  agents: "Agents",
+  products: "Products",
   dispatch: "Dispatch",
   leads: "Leads",
 };
 
 const breadcrumbFor = (view: View): Exclude<View, "home">[] => {
   if (view === "home") return [];
-  if (view === "dispatch") return ["agents", "dispatch"];
+  if (view === "dispatch") return ["products", "dispatch"];
   return [view];
 };
 
 const parentOf = (view: View): View => {
-  if (view === "dispatch") return "agents";
+  if (view === "dispatch") return "products";
   return "home";
 };
 
@@ -3752,7 +3752,7 @@ const Admin = () => {
 
       <main className="max-w-7xl mx-auto px-6 py-10">
         {view === "home" && <Home token={token} onSelect={setView} />}
-        {view === "agents" && <AgentsHome onSelect={setView} />}
+        {view === "products" && <ProductsHome onSelect={setView} />}
         {view === "dispatch" && <DispatchView token={token} />}
         {view === "leads" && <LeadsTab token={token} />}
       </main>
