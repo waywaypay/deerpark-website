@@ -74,6 +74,18 @@ const formatDate = (value: string | null | undefined) => {
   return d.toLocaleString();
 };
 
+// Strip HTML tags safely. DOMParser with "text/html" does NOT execute scripts
+// or fetch resources during parsing, so extracting textContent is XSS-safe
+// even for LLM-produced HTML (which is what we have in dispatch_archive —
+// intro text is rendered from polished markdown, an untrusted source from a
+// security perspective). Use this anywhere archived intro/commentary is
+// surfaced in the authenticated admin UI.
+const htmlToText = (html: string): string => {
+  if (typeof window === "undefined" || !html) return html ?? "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return (doc.body.textContent ?? "").trim();
+};
+
 const apiFetch = async (token: string, path: string, init?: RequestInit) => {
   const res = await fetch(`/api${path}`, {
     ...init,
@@ -2747,10 +2759,9 @@ const FeedbackTab = ({ token }: { token: string }) => {
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
                             Intro
                           </div>
-                          <div
-                            className="text-sm font-light mt-1 leading-relaxed prose prose-invert prose-sm max-w-none"
-                            dangerouslySetInnerHTML={{ __html: detail.introHtml }}
-                          />
+                          <div className="text-sm font-light mt-1 leading-relaxed whitespace-pre-line">
+                            {htmlToText(detail.introHtml)}
+                          </div>
                         </div>
                         <div>
                           <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">

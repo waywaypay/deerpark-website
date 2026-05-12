@@ -733,10 +733,11 @@ router.delete("/admin/email/banner-prompt", async (req, res) => {
 // dispatch prompt.
 router.get("/admin/dispatch-archive", async (req, res) => {
   try {
-    const limit = Math.min(
-      Math.max(Number(req.query["limit"] ?? 50), 1),
-      200,
-    );
+    // Parse defensively — `?limit=abc` produces NaN which Math.min/max
+    // propagate, and Drizzle's `.limit(NaN)` would 500. Fall back to the
+    // default when the input isn't a finite integer.
+    const raw = Number(req.query["limit"] ?? 50);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 200) : 50;
     const items = await listDispatchArchive(limit);
     return res.json({ items });
   } catch (err) {
