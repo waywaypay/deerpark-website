@@ -62,6 +62,7 @@ import {
   listDispatchPrompts,
   type DispatchPromptSlot,
 } from "../lib/dispatch-prompts";
+import { listDispatchLlmCalls } from "../lib/dispatch-llm-calls";
 
 const router: IRouter = Router();
 
@@ -819,6 +820,21 @@ router.post("/admin/dispatch-archive/:id/eval", async (req, res) => {
 // Dispatch prompt versions — every prompt that has ever driven a
 // composition. Joins to dispatch_archive via the prompt_versions jsonb
 // on each archived row.
+// Per-dispatch LLM trace. Returns every captured polish/fallback call
+// for one archived dispatch with the raw user message + response and
+// timing/token info.
+router.get("/admin/dispatch-archive/:id/llm-calls", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  try {
+    const items = await listDispatchLlmCalls(id);
+    return res.json({ items });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to load dispatch LLM calls");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/admin/dispatch-prompts", async (req, res) => {
   const slotParam = typeof req.query["slot"] === "string" ? req.query["slot"] : "";
   const allowed: DispatchPromptSlot[] = ["polish", "fallback", "commentator", "banner"];

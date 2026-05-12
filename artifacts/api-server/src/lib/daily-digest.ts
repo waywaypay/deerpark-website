@@ -22,6 +22,7 @@ import {
 } from "./dispatch-archive";
 import { ensureDispatchEvalSchema } from "./dispatch-eval";
 import { ensureDispatchPromptsSchema } from "./dispatch-prompts";
+import { ensureDispatchLlmCallsSchema } from "./dispatch-llm-calls";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -546,6 +547,7 @@ export async function ensureSchema(): Promise<void> {
   await ensureDispatchArchiveSchema();
   await ensureDispatchEvalSchema();
   await ensureDispatchPromptsSchema();
+  await ensureDispatchLlmCallsSchema();
 }
 
 let digestHandle: NodeJS.Timeout | null = null;
