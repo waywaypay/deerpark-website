@@ -18,10 +18,13 @@ import { selectTopHeadlines, type HeadlineRow } from "./top-headlines";
 import {
   buildPromptFromHeadlinesAsync,
   generateBannerImage,
+  getBannerPromptTemplate,
   type GeneratedImage,
 } from "./image-gen";
 import { logger } from "./logger";
 import { logUsage } from "./llm-usage";
+import { recordActivePromptVersions } from "./dispatch-prompts";
+import type { DispatchPromptVersionMap } from "@workspace/db";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 // See headline-commentator.ts for the rationale — Venice no longer carries
@@ -86,6 +89,9 @@ export type ComposedEmail = {
   bannerImage: GeneratedImage | null;
   /** What happened during compose — surfaced in admin/test-send responses. */
   diagnostics: ComposeDiagnostics;
+  /** Per-slot prompt hashes captured at compose time. Slots that didn't
+   *  run (e.g. fallback only fires when polish drops items) are absent. */
+  promptVersions: DispatchPromptVersionMap;
 };
 
 // Match the website's /api/headlines?mode=top default so the dispatch
@@ -292,7 +298,7 @@ type PolishOutcome =
       error?: string;
     };
 
-const POLISH_SYSTEM_PROMPT = `You are the editor of DeerPark's daily dispatch — a top-10 AI/tech newsletter for an informed reader. Voice: sharp, varied, written like a human editor. Some items strategic, some observational, some skeptical, some informational. The piece reads as a portfolio of perspectives, not 10 paraphrased press releases with the same competitive-pressure note tacked on each.
+export const POLISH_SYSTEM_PROMPT = `You are the editor of DeerPark's daily dispatch — a top-10 AI/tech newsletter for an informed reader. Voice: sharp, varied, written like a human editor. Some items strategic, some observational, some skeptical, some informational. The piece reads as a portfolio of perspectives, not 10 paraphrased press releases with the same competitive-pressure note tacked on each.
 
 CORE PRINCIPLE: Stop trying to sound authoritative. Focus on being precise. Authority follows precision; precision is what makes prose editorial. The strongest lines describe operational consequences plainly. The weakest lines reach for cinematic language to imply weight that the underlying news doesn't carry.
 
@@ -585,7 +591,7 @@ async function polishWithLlm(
  * — less context for the model to drop, less likely to trip whatever
  * 429 pattern hit polish.
  */
-const COMMENTARY_FALLBACK_PROMPT = `You write 2-3 sentence editorial briefs for AI/tech headlines. Sharp, varied, written like a human editor — not a market-commentary template.
+export const COMMENTARY_FALLBACK_PROMPT = `You write 2-3 sentence editorial briefs for AI/tech headlines. Sharp, varied, written like a human editor — not a market-commentary template.
 
 CORE PRINCIPLE: Stop trying to sound authoritative. Focus on being precise. The strongest lines name a subject, a capability, a metric, and an environment. Narrow until specific enough to be falsifiable.
 
@@ -767,8 +773,10 @@ export async function composeDailyEmail(
   // the case where polish failed entirely.
   let fallbackCommentaryCount = 0;
   let fallbackError: string | undefined;
+  let fallbackInvoked = false;
   const stillMissing = mergedHeadlines.filter((h) => !h.commentary);
   if (stillMissing.length > 0) {
+    fallbackInvoked = true;
     const { commentary: fallbackMap, error } = await backfillCommentaryViaLlm(stillMissing);
     fallbackCommentaryCount = fallbackMap.size;
     fallbackError = error;
@@ -779,6 +787,19 @@ export async function composeDailyEmail(
       });
     }
   }
+
+  // Capture the prompt versions that actually drove this composition.
+  // Polish ran (or attempted to run) every time. Fallback only ran if
+  // polish dropped items. Banner template is current at compose time.
+  // Commentator's per-item history isn't tracked here — different items
+  // may have been written under different commentator versions; that's
+  // PR B (raw LLM I/O capture) territory.
+  const bannerTemplate = await getBannerPromptTemplate().catch(() => null);
+  const promptVersions = await recordActivePromptVersions({
+    polish: POLISH_SYSTEM_PROMPT,
+    fallback: fallbackInvoked ? COMMENTARY_FALLBACK_PROMPT : null,
+    banner: bannerTemplate?.template ?? null,
+  });
 
   const finalHeadlines = mergedHeadlines;
   const subject = polishOutcome.ok
@@ -829,5 +850,6 @@ export async function composeDailyEmail(
     headlines: finalHeadlines,
     bannerImage,
     diagnostics,
+    promptVersions,
   };
 }

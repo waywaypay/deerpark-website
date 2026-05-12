@@ -42,7 +42,7 @@ const BATCH_SIZE = 10;
 // the cooldown clears.
 const ERROR_STREAK_BREAK = 3;
 
-const SYSTEM_PROMPT = `You write 2-3 sentence plain-English briefs for AI/tech headlines. The brief sits directly under the headline on the website, so a smart non-specialist reader should be able to read it once and walk away knowing what shipped and why it matters.
+export const SYSTEM_PROMPT = `You write 2-3 sentence plain-English briefs for AI/tech headlines. The brief sits directly under the headline on the website, so a smart non-specialist reader should be able to read it once and walk away knowing what shipped and why it matters.
 
 WRITE FOR A SMART NON-EXPERT
 Every reader knows tech but doesn't live in it. They want plain language, short sentences, and concrete details — not B2B copywriter prose. Write the way you'd explain it to a sharp friend over coffee. If a sentence has more than 22 words, break it up. If it uses a noun a normal person wouldn't say out loud ("verticalization", "GTM motion", "operational specialization", "deployment surface"), rewrite it.

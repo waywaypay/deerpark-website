@@ -81,6 +81,10 @@ export async function archiveDispatch(params: ArchiveParams): Promise<void> {
         recipientCount: recipientCount ?? null,
         polishApplied: composed.polishApplied,
         bannerGenerated: composed.bannerGenerated,
+        promptVersions:
+          composed.promptVersions && Object.keys(composed.promptVersions).length > 0
+            ? composed.promptVersions
+            : null,
       })
       .returning({ id: dispatchArchiveTable.id });
     if (row) {
@@ -118,6 +122,7 @@ export async function listDispatchArchive(limit = 50): Promise<DispatchArchiveSu
       evalBannedPhrases: dispatchArchiveTable.evalBannedPhrases,
       evalModel: dispatchArchiveTable.evalModel,
       evalRunAt: dispatchArchiveTable.evalRunAt,
+      promptVersions: dispatchArchiveTable.promptVersions,
       createdAt: dispatchArchiveTable.createdAt,
       itemCount: sql<number>`coalesce(jsonb_array_length(${dispatchArchiveTable.headlinesSnapshot}), 0)::int`,
     })

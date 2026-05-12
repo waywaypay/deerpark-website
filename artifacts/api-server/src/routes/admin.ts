@@ -57,6 +57,11 @@ import {
   updateDispatchFeedback,
 } from "../lib/dispatch-archive";
 import { evaluateDispatch } from "../lib/dispatch-eval";
+import {
+  getDispatchPrompt,
+  listDispatchPrompts,
+  type DispatchPromptSlot,
+} from "../lib/dispatch-prompts";
 
 const router: IRouter = Router();
 
@@ -808,6 +813,39 @@ router.post("/admin/dispatch-archive/:id/eval", async (req, res) => {
       ok: false,
       error: err instanceof Error ? err.message : "Internal server error",
     });
+  }
+});
+
+// Dispatch prompt versions — every prompt that has ever driven a
+// composition. Joins to dispatch_archive via the prompt_versions jsonb
+// on each archived row.
+router.get("/admin/dispatch-prompts", async (req, res) => {
+  const slotParam = typeof req.query["slot"] === "string" ? req.query["slot"] : "";
+  const allowed: DispatchPromptSlot[] = ["polish", "fallback", "commentator", "banner"];
+  const slot = (allowed as string[]).includes(slotParam)
+    ? (slotParam as DispatchPromptSlot)
+    : undefined;
+  try {
+    const items = await listDispatchPrompts(slot ? { slot } : {});
+    return res.json({ items });
+  } catch (err) {
+    req.log.error({ err }, "Failed to list dispatch prompts");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/admin/dispatch-prompts/:hash", async (req, res) => {
+  const hash = String(req.params["hash"] ?? "").trim();
+  if (!/^[0-9a-f]{8,64}$/i.test(hash)) {
+    return res.status(400).json({ error: "Invalid hash" });
+  }
+  try {
+    const row = await getDispatchPrompt(hash);
+    if (!row) return res.status(404).json({ error: "Not found" });
+    return res.json({ item: row });
+  } catch (err) {
+    req.log.error({ err, hash }, "Failed to load dispatch prompt");
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
