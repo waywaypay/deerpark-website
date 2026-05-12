@@ -476,6 +476,13 @@ export async function previewDailyDigest(): Promise<
       )
     : composed.html;
 
+  // Archive the preview so it lands in the Eval & feedback dataset — the
+  // operator typically reviews quality via Preview, so capturing those
+  // compositions is how the eval log fills up between real sends.
+  // Persist the cid-referencing canonical html (not the data-url preview
+  // variant) so the body matches what an actual send would deliver.
+  await archiveDispatch({ kind: "preview", composed });
+
   return {
     subject: composed.subject,
     html: previewHtml,

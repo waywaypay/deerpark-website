@@ -41,7 +41,7 @@ export async function ensureDispatchArchiveSchema(): Promise<void> {
   `);
 }
 
-export type DispatchArchiveKind = "send" | "test";
+export type DispatchArchiveKind = "send" | "test" | "preview";
 
 type ArchiveParams = {
   kind: DispatchArchiveKind;

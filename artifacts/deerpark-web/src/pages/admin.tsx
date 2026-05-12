@@ -2697,7 +2697,11 @@ const FeedbackTab = ({ token }: { token: string }) => {
                 className="w-full px-4 py-3 flex items-center gap-4 text-left hover:bg-background/40"
               >
                 <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-16">
-                  {it.kind === "test" ? "Test" : "Send"}
+                  {it.kind === "test"
+                    ? "Test"
+                    : it.kind === "preview"
+                      ? "Preview"
+                      : "Send"}
                 </span>
                 <span className="text-xs text-muted-foreground font-mono w-44 shrink-0">
                   {formatDate(it.createdAt)}
