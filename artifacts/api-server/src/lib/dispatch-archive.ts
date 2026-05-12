@@ -12,6 +12,7 @@ import type { DispatchArchive, DispatchArchiveItem } from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import type { ComposedEmail } from "./top10-email";
+import { evaluateDispatchInBackground } from "./dispatch-eval";
 
 /**
  * Idempotent self-heal. Mirrors the lib/db/migrations/0003 migration so the
@@ -69,16 +70,24 @@ export async function archiveDispatch(params: ArchiveParams): Promise<void> {
   }));
 
   try {
-    await db.insert(dispatchArchiveTable).values({
-      kind,
-      subject: composed.subject,
-      introHtml: composed.introHtml,
-      bodyHtml: bodyHtml ?? composed.html,
-      headlinesSnapshot: snapshot,
-      recipientCount: recipientCount ?? null,
-      polishApplied: composed.polishApplied,
-      bannerGenerated: composed.bannerGenerated,
-    });
+    const [row] = await db
+      .insert(dispatchArchiveTable)
+      .values({
+        kind,
+        subject: composed.subject,
+        introHtml: composed.introHtml,
+        bodyHtml: bodyHtml ?? composed.html,
+        headlinesSnapshot: snapshot,
+        recipientCount: recipientCount ?? null,
+        polishApplied: composed.polishApplied,
+        bannerGenerated: composed.bannerGenerated,
+      })
+      .returning({ id: dispatchArchiveTable.id });
+    if (row) {
+      // Kick off the regex sweep + LLM rubric in the background. Eval
+      // failures never block the send / test flow.
+      evaluateDispatchInBackground(row.id);
+    }
   } catch (err) {
     logger.warn(
       { err: err instanceof Error ? err.message : String(err), kind },
@@ -103,6 +112,12 @@ export async function listDispatchArchive(limit = 50): Promise<DispatchArchiveSu
       bannerGenerated: dispatchArchiveTable.bannerGenerated,
       feedback: dispatchArchiveTable.feedback,
       feedbackUpdatedAt: dispatchArchiveTable.feedbackUpdatedAt,
+      evalScores: dispatchArchiveTable.evalScores,
+      evalCompositeScore: dispatchArchiveTable.evalCompositeScore,
+      evalBannedPhrasesCount: dispatchArchiveTable.evalBannedPhrasesCount,
+      evalBannedPhrases: dispatchArchiveTable.evalBannedPhrases,
+      evalModel: dispatchArchiveTable.evalModel,
+      evalRunAt: dispatchArchiveTable.evalRunAt,
       createdAt: dispatchArchiveTable.createdAt,
       itemCount: sql<number>`coalesce(jsonb_array_length(${dispatchArchiveTable.headlinesSnapshot}), 0)::int`,
     })

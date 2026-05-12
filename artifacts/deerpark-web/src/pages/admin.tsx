@@ -2336,6 +2336,22 @@ type DispatchArchiveItemSnapshot = {
   publishedAt: string;
 };
 
+type DispatchEvalDimension = { score: number; note: string };
+
+type DispatchEvalScores = {
+  introSpecificity: DispatchEvalDimension;
+  lensDiversity: DispatchEvalDimension;
+  cadenceVariety: DispatchEvalDimension;
+  sourceTiering: DispatchEvalDimension;
+  concreteness: DispatchEvalDimension;
+};
+
+type DispatchBannedPhraseHit = {
+  phrase: string;
+  count: number;
+  locations: string[];
+};
+
 type DispatchArchiveSummary = {
   id: number;
   kind: string;
@@ -2346,6 +2362,12 @@ type DispatchArchiveSummary = {
   bannerGenerated: boolean;
   feedback: string | null;
   feedbackUpdatedAt: string | null;
+  evalScores: DispatchEvalScores | null;
+  evalCompositeScore: string | number | null;
+  evalBannedPhrasesCount: number | null;
+  evalBannedPhrases: DispatchBannedPhraseHit[] | null;
+  evalModel: string | null;
+  evalRunAt: string | null;
   createdAt: string;
   itemCount: number;
 };
@@ -2353,6 +2375,94 @@ type DispatchArchiveSummary = {
 type DispatchArchiveDetail = DispatchArchiveSummary & {
   bodyHtml: string;
   headlinesSnapshot: DispatchArchiveItemSnapshot[];
+};
+
+const RUBRIC_LABELS: Record<keyof DispatchEvalScores, string> = {
+  introSpecificity: "Intro specificity",
+  lensDiversity: "Lens diversity",
+  cadenceVariety: "Cadence variety",
+  sourceTiering: "Source tiering",
+  concreteness: "Concreteness",
+};
+
+const compositeNumber = (v: string | number | null | undefined): number | null => {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const scoreColor = (score: number | null): string => {
+  if (score === null) return "text-muted-foreground";
+  if (score >= 7) return "text-emerald-400";
+  if (score >= 5) return "text-amber-300";
+  return "text-red-400";
+};
+
+const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
+  const points = items
+    .slice()
+    .reverse()
+    .map((it) => ({
+      id: it.id,
+      score: compositeNumber(it.evalCompositeScore),
+      banned: it.evalBannedPhrasesCount ?? null,
+      createdAt: it.createdAt,
+      subject: it.subject,
+    }))
+    .filter((p) => p.score !== null);
+  if (points.length < 2) return null;
+  const max = 10;
+  const width = 720;
+  const height = 80;
+  const barWidth = Math.max(2, Math.floor(width / points.length) - 2);
+  return (
+    <div className="border border-foreground/15 bg-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="section-label">Composite trend</div>
+          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+            Mean of the five rubric scores per dispatch — oldest → newest.
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {points.length} evaluated · latest{" "}
+          <span className={scoreColor(points[points.length - 1]?.score ?? null)}>
+            {points[points.length - 1]?.score?.toFixed(2) ?? "—"}
+          </span>
+          /10
+        </div>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-20"
+        preserveAspectRatio="none"
+      >
+        <line
+          x1={0}
+          x2={width}
+          y1={height - (height * 7) / max}
+          y2={height - (height * 7) / max}
+          stroke="currentColor"
+          strokeOpacity={0.15}
+          strokeDasharray="4 4"
+        />
+        {points.map((p, i) => {
+          const score = p.score ?? 0;
+          const h = Math.max(2, (score / max) * (height - 4));
+          const x = i * (width / points.length) + 1;
+          const y = height - h;
+          const color =
+            score >= 7 ? "#34d399" : score >= 5 ? "#fbbf24" : "#f87171";
+          return (
+            <g key={p.id}>
+              <title>{`${p.subject}\n${p.score?.toFixed(2)}/10 · ${p.banned ?? 0} banned hits`}</title>
+              <rect x={x} y={y} width={barWidth} height={h} fill={color} fillOpacity={0.75} />
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
 };
 
 const FeedbackTab = ({ token }: { token: string }) => {
@@ -2365,6 +2475,8 @@ const FeedbackTab = ({ token }: { token: string }) => {
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [savingId, setSavingId] = useState<number | null>(null);
   const [saveStatus, setSaveStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+  const [evalRunningId, setEvalRunningId] = useState<number | null>(null);
+  const [evalStatus, setEvalStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2453,15 +2565,81 @@ const FeedbackTab = ({ token }: { token: string }) => {
     }
   };
 
+  const runEval = async (id: number) => {
+    setEvalRunningId(id);
+    setEvalStatus(null);
+    try {
+      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/eval`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        composite?: number;
+        bannedCount?: number;
+        evalScores?: DispatchEvalScores | null;
+        evalBannedPhrases?: DispatchBannedPhraseHit[] | null;
+        evalRunAt?: string | null;
+        evalModel?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                evalScores: json.evalScores ?? null,
+                evalCompositeScore:
+                  typeof json.composite === "number" ? json.composite : null,
+                evalBannedPhrasesCount: json.bannedCount ?? null,
+                evalBannedPhrases: json.evalBannedPhrases ?? null,
+                evalRunAt: json.evalRunAt ?? null,
+                evalModel: json.evalModel ?? null,
+              }
+            : it,
+        ),
+      );
+      if (detail && detail.id === id) {
+        setDetail({
+          ...detail,
+          evalScores: json.evalScores ?? null,
+          evalCompositeScore:
+            typeof json.composite === "number" ? json.composite : null,
+          evalBannedPhrasesCount: json.bannedCount ?? null,
+          evalBannedPhrases: json.evalBannedPhrases ?? null,
+          evalRunAt: json.evalRunAt ?? null,
+          evalModel: json.evalModel ?? null,
+        });
+      }
+      setEvalStatus({
+        id,
+        ok: true,
+        message: `Composite ${json.composite?.toFixed(2) ?? "—"}/10 · ${json.bannedCount ?? 0} hits`,
+      });
+    } catch (err) {
+      setEvalStatus({
+        id,
+        ok: false,
+        message: err instanceof Error ? err.message : "Eval failed",
+      });
+    } finally {
+      setEvalRunningId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-serif">Feedback log</h2>
+          <h2 className="text-2xl font-serif">Dispatch eval &amp; feedback</h2>
           <p className="text-sm text-muted-foreground font-light mt-1 max-w-2xl">
-            Every composed dispatch (real send or admin test) is logged here.
-            Click a row to see the body, then leave feedback on the right —
-            it accumulates as a dataset for tuning the dispatch prompt.
+            Every composed dispatch (real send or admin test) is logged, scored
+            against a 5-dimension rubric, and scanned for banned phrases. Click
+            a row to read the body, see the rubric breakdown, and leave
+            freeform feedback — it accumulates as a dataset for tuning the
+            dispatch prompt.
           </p>
         </div>
         <Button
@@ -2488,12 +2666,17 @@ const FeedbackTab = ({ token }: { token: string }) => {
         </div>
       )}
 
+      <EvalTrendStrip items={items} />
+
       <div className="space-y-3">
         {items.map((it) => {
           const isOpen = expanded === it.id;
           const draft = drafts[it.id] ?? "";
           const dirty = draft !== (it.feedback ?? "");
           const status = saveStatus?.id === it.id ? saveStatus : null;
+          const evStatus = evalStatus?.id === it.id ? evalStatus : null;
+          const composite = compositeNumber(it.evalCompositeScore);
+          const banned = it.evalBannedPhrasesCount;
           return (
             <div key={it.id} className="border border-foreground/15 bg-card">
               <button
@@ -2508,15 +2691,35 @@ const FeedbackTab = ({ token }: { token: string }) => {
                   {formatDate(it.createdAt)}
                 </span>
                 <span className="flex-1 text-sm font-serif truncate">{it.subject}</span>
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground hidden sm:inline">
                   {it.itemCount} items
                 </span>
+                <span
+                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${scoreColor(composite)}`}
+                  title="Composite rubric score (0-10)"
+                >
+                  {composite !== null ? `${composite.toFixed(1)}/10` : "—"}
+                </span>
+                <span
+                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${
+                    banned === null
+                      ? "text-muted-foreground"
+                      : banned === 0
+                        ? "text-emerald-400"
+                        : banned <= 3
+                          ? "text-amber-300"
+                          : "text-red-400"
+                  }`}
+                  title="Banned-phrase hits (lower is better)"
+                >
+                  {banned === null ? "—" : `${banned} hits`}
+                </span>
                 {it.feedback ? (
-                  <span className="text-[10px] uppercase tracking-widest text-primary">
+                  <span className="text-[10px] uppercase tracking-widest text-primary w-20 text-right">
                     Feedback ✓
                   </span>
                 ) : (
-                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60">
+                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60 w-20 text-right">
                     —
                   </span>
                 )}
@@ -2581,15 +2784,123 @@ const FeedbackTab = ({ token }: { token: string }) => {
                     )}
                   </div>
 
-                  <div className="p-4 space-y-3">
-                    <div className="section-label">Feedback</div>
+                  <div className="p-4 space-y-4 max-h-[640px] overflow-auto">
+                    <div className="flex items-center justify-between">
+                      <div className="section-label">Eval</div>
+                      <div className="flex items-center gap-2">
+                        {evStatus && (
+                          <span
+                            className={`text-[10px] uppercase tracking-widest ${evStatus.ok ? "text-primary" : "text-red-400"}`}
+                          >
+                            {evStatus.message}
+                          </span>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void runEval(it.id)}
+                          disabled={evalRunningId === it.id}
+                          className="rounded-none text-[10px] uppercase tracking-widest"
+                        >
+                          <RefreshCw
+                            className={`w-3 h-3 ${evalRunningId === it.id ? "animate-spin" : ""}`}
+                          />{" "}
+                          {it.evalRunAt ? "Re-run eval" : "Run eval"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {it.evalRunAt ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          <div className="col-span-2 flex items-center justify-between border-b border-foreground/10 pb-2">
+                            <span className="text-xs text-muted-foreground">
+                              Composite
+                            </span>
+                            <span
+                              className={`text-lg font-serif ${scoreColor(composite)}`}
+                            >
+                              {composite !== null ? composite.toFixed(2) : "—"}
+                              <span className="text-xs text-muted-foreground ml-1">
+                                /10
+                              </span>
+                            </span>
+                          </div>
+                          {it.evalScores &&
+                            (Object.keys(RUBRIC_LABELS) as Array<keyof DispatchEvalScores>).map(
+                              (key) => {
+                                const dim = it.evalScores?.[key];
+                                return (
+                                  <div key={key} className="space-y-1">
+                                    <div className="flex items-baseline justify-between">
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {RUBRIC_LABELS[key]}
+                                      </span>
+                                      <span
+                                        className={`text-xs font-mono ${scoreColor(dim?.score ?? null)}`}
+                                      >
+                                        {dim ? `${dim.score.toFixed(1)}/10` : "—"}
+                                      </span>
+                                    </div>
+                                    {dim?.note && (
+                                      <div className="text-[11px] text-muted-foreground font-light leading-snug">
+                                        {dim.note}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              },
+                            )}
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+                            Banned-phrase hits ({banned ?? 0})
+                          </div>
+                          {it.evalBannedPhrases && it.evalBannedPhrases.length > 0 ? (
+                            <ul className="space-y-1">
+                              {it.evalBannedPhrases.map((h) => (
+                                <li
+                                  key={h.phrase}
+                                  className="flex items-baseline justify-between text-[11px]"
+                                >
+                                  <span className="text-red-300 font-mono">
+                                    "{h.phrase}"
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {h.count}× · {h.locations.slice(0, 4).join(", ")}
+                                    {h.locations.length > 4 ? "…" : ""}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="text-[11px] text-muted-foreground">
+                              No banned phrases detected.
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground/70 pt-1 border-t border-foreground/5">
+                          Last evaluated {formatDate(it.evalRunAt)}
+                          {it.evalModel ? ` · ${it.evalModel}` : ""}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">
+                        Not yet evaluated. Click "Run eval" to score against the
+                        rubric.
+                      </div>
+                    )}
+
+                    <div className="section-label pt-4 border-t border-foreground/10">
+                      Feedback
+                    </div>
                     <textarea
                       value={draft}
                       onChange={(e) =>
                         setDrafts((prev) => ({ ...prev, [it.id]: e.target.value }))
                       }
                       placeholder="What worked? What didn't? Specific phrases that leaked, items that felt off, intro framing notes…"
-                      className="w-full min-h-[420px] border border-foreground/20 bg-background/40 p-3 text-sm font-light leading-relaxed focus:border-primary focus:outline-none"
+                      className="w-full min-h-[260px] border border-foreground/20 bg-background/40 p-3 text-sm font-light leading-relaxed focus:border-primary focus:outline-none"
                     />
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-[10px] text-muted-foreground">
@@ -2670,10 +2981,10 @@ const WORKFLOW_NODES: WorkflowNodeSpec[] = [
   },
   {
     id: "feedback",
-    label: "Feedback log",
+    label: "Eval & feedback",
     Icon: MessageSquare,
-    description: "Review past dispatches and capture feedback",
-    io: "sends → feedback dataset",
+    description: "Rubric scores, banned-phrase scan, and operator feedback",
+    io: "sends → scored dataset",
   },
 ];
 

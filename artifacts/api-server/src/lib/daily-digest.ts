@@ -20,6 +20,7 @@ import {
   archiveDispatch,
   ensureDispatchArchiveSchema,
 } from "./dispatch-archive";
+import { ensureDispatchEvalSchema } from "./dispatch-eval";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -532,9 +533,10 @@ export async function ensureSchema(): Promise<void> {
   `);
   // pgcrypto for gen_random_uuid() — most Postgres installs have it; harmless if already enabled.
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-  // Dispatch-archive table — kept colocated with the other dispatch boot
-  // bookkeeping so a fresh DB picks up everything in one place.
+  // Dispatch-archive table + eval columns — kept colocated with the other
+  // dispatch boot bookkeeping so a fresh DB picks up everything in one place.
   await ensureDispatchArchiveSchema();
+  await ensureDispatchEvalSchema();
 }
 
 let digestHandle: NodeJS.Timeout | null = null;

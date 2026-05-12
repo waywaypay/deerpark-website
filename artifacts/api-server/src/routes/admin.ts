@@ -56,6 +56,7 @@ import {
   listDispatchArchive,
   updateDispatchFeedback,
 } from "../lib/dispatch-archive";
+import { evaluateDispatch } from "../lib/dispatch-eval";
 
 const router: IRouter = Router();
 
@@ -776,6 +777,36 @@ router.put("/admin/dispatch-archive/:id/feedback", async (req, res) => {
   } catch (err) {
     req.log.error({ err, id }, "Failed to update dispatch feedback");
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Re-run the regression-guard eval (regex sweep + LLM rubric) on one
+// archived dispatch. Runs synchronously so the admin UI gets fresh scores
+// back in the response; ~1 LLM call.
+router.post("/admin/dispatch-archive/:id/eval", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  try {
+    const outcome = await evaluateDispatch(id);
+    if (!outcome.ok) {
+      return res.status(outcome.error === "not_found" ? 404 : 500).json(outcome);
+    }
+    const row = await getDispatchArchive(id);
+    return res.json({
+      ok: true,
+      composite: outcome.composite,
+      bannedCount: outcome.bannedCount,
+      evalScores: row?.evalScores ?? null,
+      evalBannedPhrases: row?.evalBannedPhrases ?? null,
+      evalRunAt: row?.evalRunAt ?? null,
+      evalModel: row?.evalModel ?? null,
+    });
+  } catch (err) {
+    req.log.error({ err, id }, "Dispatch eval failed");
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal server error",
+    });
   }
 });
 
