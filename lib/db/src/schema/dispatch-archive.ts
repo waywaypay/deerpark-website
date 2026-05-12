@@ -29,6 +29,16 @@ export type DispatchBannedPhraseHit = {
   locations: Array<"subject" | "intro" | `item:${number}`>;
 };
 
+/** Content-addressed prompt versions in use at compose time.
+ *  Hash → dispatchPromptsTable.hash. Per slot so the operator can see
+ *  which polish prompt vs which fallback vs which commentator was active. */
+export type DispatchPromptVersionMap = {
+  polish?: string;
+  fallback?: string;
+  commentator?: string;
+  banner?: string;
+};
+
 export const dispatchArchiveTable = pgTable(
   "dispatch_archive",
   {
@@ -53,6 +63,11 @@ export const dispatchArchiveTable = pgTable(
     evalBannedPhrases: jsonb("eval_banned_phrases").$type<DispatchBannedPhraseHit[]>(),
     evalModel: text("eval_model"),
     evalRunAt: timestamp("eval_run_at", { withTimezone: true }),
+    /** Per-slot prompt hashes (sha256, first 16 chars) used at compose
+     *  time. Joins to dispatch_prompts for the full content. Lets the
+     *  Feedback log color-band and filter by prompt version without
+     *  joining the prompt rows on the list query. */
+    promptVersions: jsonb("prompt_versions").$type<DispatchPromptVersionMap>(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [index("dispatch_archive_created_at_idx").on(t.createdAt)],

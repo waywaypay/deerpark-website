@@ -21,6 +21,7 @@ import {
   ensureDispatchArchiveSchema,
 } from "./dispatch-archive";
 import { ensureDispatchEvalSchema } from "./dispatch-eval";
+import { ensureDispatchPromptsSchema } from "./dispatch-prompts";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -544,6 +545,7 @@ export async function ensureSchema(): Promise<void> {
   // dispatch boot bookkeeping so a fresh DB picks up everything in one place.
   await ensureDispatchArchiveSchema();
   await ensureDispatchEvalSchema();
+  await ensureDispatchPromptsSchema();
 }
 
 let digestHandle: NodeJS.Timeout | null = null;
