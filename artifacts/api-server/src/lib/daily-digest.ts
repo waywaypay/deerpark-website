@@ -16,6 +16,11 @@ import {
   BANNER_CID,
   type ComposedEmail,
 } from "./top10-email";
+import {
+  archiveDispatch,
+  ensureDispatchArchiveSchema,
+} from "./dispatch-archive";
+import { ensureDispatchEvalSchema } from "./dispatch-eval";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -331,6 +336,15 @@ export async function runDailyDigest(): Promise<DigestRunResult | null> {
     await setLastSentPtDate(ptDateString());
   }
 
+  // Archive the composed dispatch for feedback capture (uses the placeholder
+  // unsubscribe URL — we store the canonical composed HTML, not the
+  // per-recipient personalized variants).
+  await archiveDispatch({
+    kind: "send",
+    composed,
+    recipientCount: sent,
+  });
+
   logger.info(
     { subject: composed.subject, sent, failed },
     "Daily digest: complete",
@@ -411,6 +425,11 @@ export async function sendTestDigest(to: string): Promise<SendTestResult> {
     const body = await res.text().catch(() => "");
     return { ok: false, recipient, error: `Resend ${res.status}: ${body}` };
   }
+
+  // Archive the test send so the operator can review and leave feedback
+  // even on test runs (those are typically how the operator reviews
+  // dispatch quality before a real send).
+  await archiveDispatch({ kind: "test", composed });
 
   return {
     ok: true,
@@ -514,6 +533,10 @@ export async function ensureSchema(): Promise<void> {
   `);
   // pgcrypto for gen_random_uuid() — most Postgres installs have it; harmless if already enabled.
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+  // Dispatch-archive table + eval columns — kept colocated with the other
+  // dispatch boot bookkeeping so a fresh DB picks up everything in one place.
+  await ensureDispatchArchiveSchema();
+  await ensureDispatchEvalSchema();
 }
 
 let digestHandle: NodeJS.Timeout | null = null;

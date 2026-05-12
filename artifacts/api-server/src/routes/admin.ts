@@ -51,6 +51,12 @@ import {
   setBannerPromptTemplate,
   resetBannerPromptTemplate,
 } from "../lib/image-gen";
+import {
+  getDispatchArchive,
+  listDispatchArchive,
+  updateDispatchFeedback,
+} from "../lib/dispatch-archive";
+import { evaluateDispatch } from "../lib/dispatch-eval";
 
 const router: IRouter = Router();
 
@@ -718,6 +724,90 @@ router.delete("/admin/email/banner-prompt", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to reset banner prompt template");
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Dispatch archive — every composed dispatch (real send or admin test send)
+// is logged here. The admin UI surfaces each row alongside a textarea for
+// freeform operator feedback, which accumulates a training dataset for the
+// dispatch prompt.
+router.get("/admin/dispatch-archive", async (req, res) => {
+  try {
+    // Parse defensively — `?limit=abc` produces NaN which Math.min/max
+    // propagate, and Drizzle's `.limit(NaN)` would 500. Fall back to the
+    // default when the input isn't a finite integer.
+    const raw = Number(req.query["limit"] ?? 50);
+    const limit = Number.isFinite(raw) ? Math.min(Math.max(Math.trunc(raw), 1), 200) : 50;
+    const items = await listDispatchArchive(limit);
+    return res.json({ items });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load dispatch archive");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/admin/dispatch-archive/:id", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  try {
+    const row = await getDispatchArchive(id);
+    if (!row) return res.status(404).json({ error: "Not found" });
+    return res.json({ item: row });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to load dispatch archive item");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/dispatch-archive/:id/feedback", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  const body = req.body as { feedback?: unknown };
+  const feedback = typeof body?.feedback === "string" ? body.feedback : "";
+  if (feedback.length > 20_000) {
+    return res.status(400).json({ error: "Feedback too long (> 20k chars)" });
+  }
+  try {
+    const row = await updateDispatchFeedback(id, feedback);
+    if (!row) return res.status(404).json({ error: "Not found" });
+    return res.json({
+      ok: true,
+      feedback: row.feedback,
+      feedbackUpdatedAt: row.feedbackUpdatedAt,
+    });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to update dispatch feedback");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Re-run the regression-guard eval (regex sweep + LLM rubric) on one
+// archived dispatch. Runs synchronously so the admin UI gets fresh scores
+// back in the response; ~1 LLM call.
+router.post("/admin/dispatch-archive/:id/eval", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  try {
+    const outcome = await evaluateDispatch(id);
+    if (!outcome.ok) {
+      return res.status(outcome.error === "not_found" ? 404 : 500).json(outcome);
+    }
+    const row = await getDispatchArchive(id);
+    return res.json({
+      ok: true,
+      composite: outcome.composite,
+      bannedCount: outcome.bannedCount,
+      evalScores: row?.evalScores ?? null,
+      evalBannedPhrases: row?.evalBannedPhrases ?? null,
+      evalRunAt: row?.evalRunAt ?? null,
+      evalModel: row?.evalModel ?? null,
+    });
+  } catch (err) {
+    req.log.error({ err, id }, "Dispatch eval failed");
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal server error",
+    });
   }
 });
 

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Gavel,
   Eye,
+  MessageSquare,
 } from "lucide-react";
 
 const TOKEN_KEY = "deerpark.admin.token";
@@ -71,6 +72,18 @@ const formatDate = (value: string | null | undefined) => {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString();
+};
+
+// Strip HTML tags safely. DOMParser with "text/html" does NOT execute scripts
+// or fetch resources during parsing, so extracting textContent is XSS-safe
+// even for LLM-produced HTML (which is what we have in dispatch_archive —
+// intro text is rendered from polished markdown, an untrusted source from a
+// security perspective). Use this anywhere archived intro/commentary is
+// surfaced in the authenticated admin UI.
+const htmlToText = (html: string): string => {
+  if (typeof window === "undefined" || !html) return html ?? "";
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  return (doc.body.textContent ?? "").trim();
 };
 
 const apiFetch = async (token: string, path: string, init?: RequestInit) => {
@@ -2326,7 +2339,619 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
   );
 };
 
-type DispatchSection = "headlines" | "judge" | "writers" | "emails";
+type DispatchArchiveItemSnapshot = {
+  id: number;
+  source: string;
+  title: string;
+  url: string;
+  commentary: string | null;
+  publishedAt: string;
+};
+
+type DispatchEvalDimension = { score: number; note: string };
+
+type DispatchEvalScores = {
+  introSpecificity: DispatchEvalDimension;
+  lensDiversity: DispatchEvalDimension;
+  cadenceVariety: DispatchEvalDimension;
+  sourceTiering: DispatchEvalDimension;
+  concreteness: DispatchEvalDimension;
+};
+
+type DispatchBannedPhraseHit = {
+  phrase: string;
+  count: number;
+  locations: string[];
+};
+
+type DispatchArchiveSummary = {
+  id: number;
+  kind: string;
+  subject: string;
+  introHtml: string;
+  recipientCount: number | null;
+  polishApplied: boolean;
+  bannerGenerated: boolean;
+  feedback: string | null;
+  feedbackUpdatedAt: string | null;
+  evalScores: DispatchEvalScores | null;
+  evalCompositeScore: string | number | null;
+  evalBannedPhrasesCount: number | null;
+  evalBannedPhrases: DispatchBannedPhraseHit[] | null;
+  evalModel: string | null;
+  evalRunAt: string | null;
+  createdAt: string;
+  itemCount: number;
+};
+
+type DispatchArchiveDetail = DispatchArchiveSummary & {
+  bodyHtml: string;
+  headlinesSnapshot: DispatchArchiveItemSnapshot[];
+};
+
+const RUBRIC_LABELS: Record<keyof DispatchEvalScores, string> = {
+  introSpecificity: "Intro specificity",
+  lensDiversity: "Lens diversity",
+  cadenceVariety: "Cadence variety",
+  sourceTiering: "Source tiering",
+  concreteness: "Concreteness",
+};
+
+const compositeNumber = (v: string | number | null | undefined): number | null => {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+const scoreColor = (score: number | null): string => {
+  if (score === null) return "text-muted-foreground";
+  if (score >= 7) return "text-emerald-400";
+  if (score >= 5) return "text-amber-300";
+  return "text-red-400";
+};
+
+const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
+  const points = items
+    .slice()
+    .reverse()
+    .map((it) => ({
+      id: it.id,
+      score: compositeNumber(it.evalCompositeScore),
+      banned: it.evalBannedPhrasesCount ?? null,
+      createdAt: it.createdAt,
+      subject: it.subject,
+    }))
+    .filter((p) => p.score !== null);
+  if (points.length < 2) return null;
+  const max = 10;
+  const width = 720;
+  const height = 80;
+  const barWidth = Math.max(2, Math.floor(width / points.length) - 2);
+  return (
+    <div className="border border-foreground/15 bg-card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <div className="section-label">Composite trend</div>
+          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+            Mean of the five rubric scores per dispatch — oldest → newest.
+          </div>
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {points.length} evaluated · latest{" "}
+          <span className={scoreColor(points[points.length - 1]?.score ?? null)}>
+            {points[points.length - 1]?.score?.toFixed(2) ?? "—"}
+          </span>
+          /10
+        </div>
+      </div>
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="w-full h-20"
+        preserveAspectRatio="none"
+      >
+        <line
+          x1={0}
+          x2={width}
+          y1={height - (height * 7) / max}
+          y2={height - (height * 7) / max}
+          stroke="currentColor"
+          strokeOpacity={0.15}
+          strokeDasharray="4 4"
+        />
+        {points.map((p, i) => {
+          const score = p.score ?? 0;
+          const h = Math.max(2, (score / max) * (height - 4));
+          const x = i * (width / points.length) + 1;
+          const y = height - h;
+          const color =
+            score >= 7 ? "#34d399" : score >= 5 ? "#fbbf24" : "#f87171";
+          return (
+            <g key={p.id}>
+              <title>{`${p.subject}\n${p.score?.toFixed(2)}/10 · ${p.banned ?? 0} banned hits`}</title>
+              <rect x={x} y={y} width={barWidth} height={h} fill={color} fillOpacity={0.75} />
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+};
+
+const FeedbackTab = ({ token }: { token: string }) => {
+  const [items, setItems] = useState<DispatchArchiveSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [detail, setDetail] = useState<DispatchArchiveDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [saveStatus, setSaveStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+  const [evalRunningId, setEvalRunningId] = useState<number | null>(null);
+  const [evalStatus, setEvalStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(token, "/admin/dispatch-archive?limit=100");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { items: DispatchArchiveSummary[] };
+      setItems(json.items);
+      // Seed drafts with persisted feedback so the textarea reflects current state.
+      const seed: Record<number, string> = {};
+      for (const it of json.items) seed[it.id] = it.feedback ?? "";
+      setDrafts((prev) => ({ ...seed, ...prev }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load archive");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const openDetail = async (id: number) => {
+    if (expanded === id) {
+      setExpanded(null);
+      setDetail(null);
+      return;
+    }
+    setExpanded(id);
+    setDetail(null);
+    setDetailLoading(true);
+    try {
+      const res = await apiFetch(token, `/admin/dispatch-archive/${id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { item: DispatchArchiveDetail };
+      setDetail(json.item);
+    } catch (err) {
+      setSaveStatus({
+        id,
+        ok: false,
+        message: err instanceof Error ? err.message : "Failed to load detail",
+      });
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const saveFeedback = async (id: number) => {
+    const value = drafts[id] ?? "";
+    setSavingId(id);
+    setSaveStatus(null);
+    try {
+      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/feedback`, {
+        method: "PUT",
+        body: JSON.stringify({ feedback: value }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        feedback?: string | null;
+        feedbackUpdatedAt?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                feedback: json.feedback ?? null,
+                feedbackUpdatedAt: json.feedbackUpdatedAt ?? null,
+              }
+            : it,
+        ),
+      );
+      setSaveStatus({ id, ok: true, message: "Saved." });
+    } catch (err) {
+      setSaveStatus({
+        id,
+        ok: false,
+        message: err instanceof Error ? err.message : "Save failed",
+      });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const runEval = async (id: number) => {
+    setEvalRunningId(id);
+    setEvalStatus(null);
+    try {
+      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/eval`, {
+        method: "POST",
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        composite?: number;
+        bannedCount?: number;
+        evalScores?: DispatchEvalScores | null;
+        evalBannedPhrases?: DispatchBannedPhraseHit[] | null;
+        evalRunAt?: string | null;
+        evalModel?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                evalScores: json.evalScores ?? null,
+                evalCompositeScore:
+                  typeof json.composite === "number" ? json.composite : null,
+                evalBannedPhrasesCount: json.bannedCount ?? null,
+                evalBannedPhrases: json.evalBannedPhrases ?? null,
+                evalRunAt: json.evalRunAt ?? null,
+                evalModel: json.evalModel ?? null,
+              }
+            : it,
+        ),
+      );
+      if (detail && detail.id === id) {
+        setDetail({
+          ...detail,
+          evalScores: json.evalScores ?? null,
+          evalCompositeScore:
+            typeof json.composite === "number" ? json.composite : null,
+          evalBannedPhrasesCount: json.bannedCount ?? null,
+          evalBannedPhrases: json.evalBannedPhrases ?? null,
+          evalRunAt: json.evalRunAt ?? null,
+          evalModel: json.evalModel ?? null,
+        });
+      }
+      setEvalStatus({
+        id,
+        ok: true,
+        message: `Composite ${json.composite?.toFixed(2) ?? "—"}/10 · ${json.bannedCount ?? 0} hits`,
+      });
+    } catch (err) {
+      setEvalStatus({
+        id,
+        ok: false,
+        message: err instanceof Error ? err.message : "Eval failed",
+      });
+    } finally {
+      setEvalRunningId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-serif">Dispatch eval &amp; feedback</h2>
+          <p className="text-sm text-muted-foreground font-light mt-1 max-w-2xl">
+            Every composed dispatch (real send or admin test) is logged, scored
+            against a 5-dimension rubric, and scanned for banned phrases. Click
+            a row to read the body, see the rubric breakdown, and leave
+            freeform feedback — it accumulates as a dataset for tuning the
+            dispatch prompt.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded-none text-[10px] uppercase tracking-widest"
+        >
+          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </Button>
+      </div>
+
+      {error && (
+        <div className="border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+
+      {items.length === 0 && !loading && (
+        <div className="border border-foreground/15 bg-card px-4 py-6 text-sm text-muted-foreground">
+          No dispatches archived yet. Once a real send or a test send runs,
+          it will appear here.
+        </div>
+      )}
+
+      <EvalTrendStrip items={items} />
+
+      <div className="space-y-3">
+        {items.map((it) => {
+          const isOpen = expanded === it.id;
+          const draft = drafts[it.id] ?? "";
+          const dirty = draft !== (it.feedback ?? "");
+          const status = saveStatus?.id === it.id ? saveStatus : null;
+          const evStatus = evalStatus?.id === it.id ? evalStatus : null;
+          const composite = compositeNumber(it.evalCompositeScore);
+          const banned = it.evalBannedPhrasesCount;
+          return (
+            <div key={it.id} className="border border-foreground/15 bg-card">
+              <button
+                type="button"
+                onClick={() => void openDetail(it.id)}
+                className="w-full px-4 py-3 flex items-center gap-4 text-left hover:bg-background/40"
+              >
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-16">
+                  {it.kind === "test" ? "Test" : "Send"}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono w-44 shrink-0">
+                  {formatDate(it.createdAt)}
+                </span>
+                <span className="flex-1 text-sm font-serif truncate">{it.subject}</span>
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground hidden sm:inline">
+                  {it.itemCount} items
+                </span>
+                <span
+                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${scoreColor(composite)}`}
+                  title="Composite rubric score (0-10)"
+                >
+                  {composite !== null ? `${composite.toFixed(1)}/10` : "—"}
+                </span>
+                <span
+                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${
+                    banned === null
+                      ? "text-muted-foreground"
+                      : banned === 0
+                        ? "text-emerald-400"
+                        : banned <= 3
+                          ? "text-amber-300"
+                          : "text-red-400"
+                  }`}
+                  title="Banned-phrase hits (lower is better)"
+                >
+                  {banned === null ? "—" : `${banned} hits`}
+                </span>
+                {it.feedback ? (
+                  <span className="text-[10px] uppercase tracking-widest text-primary w-20 text-right">
+                    Feedback ✓
+                  </span>
+                ) : (
+                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60 w-20 text-right">
+                    —
+                  </span>
+                )}
+                <ChevronRight
+                  className={`w-3 h-3 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
+                />
+              </button>
+
+              {isOpen && (
+                <div className="border-t border-foreground/10 grid grid-cols-1 lg:grid-cols-2 gap-0">
+                  <div className="lg:border-r border-foreground/10 p-4 space-y-4 max-h-[640px] overflow-auto">
+                    <div className="section-label">Dispatch</div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                        Subject
+                      </div>
+                      <div className="text-sm font-serif mt-1">{it.subject}</div>
+                    </div>
+                    {detailLoading && (
+                      <div className="text-xs text-muted-foreground">Loading…</div>
+                    )}
+                    {detail && detail.id === it.id && (
+                      <>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                            Intro
+                          </div>
+                          <div className="text-sm font-light mt-1 leading-relaxed whitespace-pre-line">
+                            {htmlToText(detail.introHtml)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+                            Items ({detail.headlinesSnapshot.length})
+                          </div>
+                          <ol className="space-y-3">
+                            {detail.headlinesSnapshot.map((h, i) => (
+                              <li key={h.id} className="border-l-2 border-foreground/15 pl-3">
+                                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                                  {String(i + 1).padStart(2, "0")} · {h.source}
+                                </div>
+                                <a
+                                  href={h.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm font-serif hover:text-primary inline-flex items-baseline gap-1"
+                                >
+                                  {h.title}
+                                  <ExternalLink className="w-3 h-3 self-center" />
+                                </a>
+                                {h.commentary && (
+                                  <div className="text-xs text-muted-foreground font-light mt-1 leading-relaxed whitespace-pre-line">
+                                    {h.commentary}
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="p-4 space-y-4 max-h-[640px] overflow-auto">
+                    <div className="flex items-center justify-between">
+                      <div className="section-label">Eval</div>
+                      <div className="flex items-center gap-2">
+                        {evStatus && (
+                          <span
+                            className={`text-[10px] uppercase tracking-widest ${evStatus.ok ? "text-primary" : "text-red-400"}`}
+                          >
+                            {evStatus.message}
+                          </span>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void runEval(it.id)}
+                          disabled={evalRunningId === it.id}
+                          className="rounded-none text-[10px] uppercase tracking-widest"
+                        >
+                          <RefreshCw
+                            className={`w-3 h-3 ${evalRunningId === it.id ? "animate-spin" : ""}`}
+                          />{" "}
+                          {it.evalRunAt ? "Re-run eval" : "Run eval"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {it.evalRunAt ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                          <div className="col-span-2 flex items-center justify-between border-b border-foreground/10 pb-2">
+                            <span className="text-xs text-muted-foreground">
+                              Composite
+                            </span>
+                            <span
+                              className={`text-lg font-serif ${scoreColor(composite)}`}
+                            >
+                              {composite !== null ? composite.toFixed(2) : "—"}
+                              <span className="text-xs text-muted-foreground ml-1">
+                                /10
+                              </span>
+                            </span>
+                          </div>
+                          {it.evalScores &&
+                            (Object.keys(RUBRIC_LABELS) as Array<keyof DispatchEvalScores>).map(
+                              (key) => {
+                                const dim = it.evalScores?.[key];
+                                return (
+                                  <div key={key} className="space-y-1">
+                                    <div className="flex items-baseline justify-between">
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {RUBRIC_LABELS[key]}
+                                      </span>
+                                      <span
+                                        className={`text-xs font-mono ${scoreColor(dim?.score ?? null)}`}
+                                      >
+                                        {dim ? `${dim.score.toFixed(1)}/10` : "—"}
+                                      </span>
+                                    </div>
+                                    {dim?.note && (
+                                      <div className="text-[11px] text-muted-foreground font-light leading-snug">
+                                        {dim.note}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              },
+                            )}
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+                            Banned-phrase hits ({banned ?? 0})
+                          </div>
+                          {it.evalBannedPhrases && it.evalBannedPhrases.length > 0 ? (
+                            <ul className="space-y-1">
+                              {it.evalBannedPhrases.map((h) => (
+                                <li
+                                  key={h.phrase}
+                                  className="flex items-baseline justify-between text-[11px]"
+                                >
+                                  <span className="text-red-300 font-mono">
+                                    "{h.phrase}"
+                                  </span>
+                                  <span className="text-muted-foreground">
+                                    {h.count}× · {h.locations.slice(0, 4).join(", ")}
+                                    {h.locations.length > 4 ? "…" : ""}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="text-[11px] text-muted-foreground">
+                              No banned phrases detected.
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground/70 pt-1 border-t border-foreground/5">
+                          Last evaluated {formatDate(it.evalRunAt)}
+                          {it.evalModel ? ` · ${it.evalModel}` : ""}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground">
+                        Not yet evaluated. Click "Run eval" to score against the
+                        rubric.
+                      </div>
+                    )}
+
+                    <div className="section-label pt-4 border-t border-foreground/10">
+                      Feedback
+                    </div>
+                    <textarea
+                      value={draft}
+                      onChange={(e) =>
+                        setDrafts((prev) => ({ ...prev, [it.id]: e.target.value }))
+                      }
+                      placeholder="What worked? What didn't? Specific phrases that leaked, items that felt off, intro framing notes…"
+                      className="w-full min-h-[260px] border border-foreground/20 bg-background/40 p-3 text-sm font-light leading-relaxed focus:border-primary focus:outline-none"
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[10px] text-muted-foreground">
+                        {it.feedbackUpdatedAt
+                          ? `Last saved ${formatDate(it.feedbackUpdatedAt)}`
+                          : dirty
+                            ? "Unsaved changes"
+                            : "Not yet saved"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {status && (
+                          <span
+                            className={`text-[10px] uppercase tracking-widest ${status.ok ? "text-primary" : "text-red-400"}`}
+                          >
+                            {status.message}
+                          </span>
+                        )}
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => void saveFeedback(it.id)}
+                          disabled={savingId === it.id || !dirty}
+                          className="rounded-none text-[10px] uppercase tracking-widest"
+                        >
+                          Save feedback
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+type DispatchSection = "headlines" | "judge" | "writers" | "emails" | "feedback";
 
 type WorkflowNodeSpec = {
   id: DispatchSection;
@@ -2364,6 +2989,13 @@ const WORKFLOW_NODES: WorkflowNodeSpec[] = [
     Icon: Send,
     description: "Daily top-10 dispatch email",
     io: "picks + posts → inbox",
+  },
+  {
+    id: "feedback",
+    label: "Eval & feedback",
+    Icon: MessageSquare,
+    description: "Rubric scores, banned-phrase scan, and operator feedback",
+    io: "sends → scored dataset",
   },
 ];
 
@@ -2510,6 +3142,7 @@ const DispatchView = ({ token }: { token: string }) => {
         {section === "judge" && <JudgeTab token={token} />}
         {section === "writers" && <WriterAgentsTab token={token} />}
         {section === "emails" && <EmailAgentsTab token={token} />}
+        {section === "feedback" && <FeedbackTab token={token} />}
       </div>
     );
   }

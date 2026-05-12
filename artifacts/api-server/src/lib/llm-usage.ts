@@ -85,7 +85,8 @@ export type UsageCaller =
   | "email_polish"
   | "email_fallback"
   | "image_gen"
-  | "sms_bot";
+  | "sms_bot"
+  | "dispatch_eval";
 
 type LogUsageInput = {
   caller: UsageCaller;
