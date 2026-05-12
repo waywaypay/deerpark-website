@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Gavel,
   Eye,
+  MessageSquare,
 } from "lucide-react";
 
 const TOKEN_KEY = "deerpark.admin.token";
@@ -2326,7 +2327,309 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
   );
 };
 
-type DispatchSection = "headlines" | "judge" | "writers" | "emails";
+type DispatchArchiveItemSnapshot = {
+  id: number;
+  source: string;
+  title: string;
+  url: string;
+  commentary: string | null;
+  publishedAt: string;
+};
+
+type DispatchArchiveSummary = {
+  id: number;
+  kind: string;
+  subject: string;
+  introHtml: string;
+  recipientCount: number | null;
+  polishApplied: boolean;
+  bannerGenerated: boolean;
+  feedback: string | null;
+  feedbackUpdatedAt: string | null;
+  createdAt: string;
+  itemCount: number;
+};
+
+type DispatchArchiveDetail = DispatchArchiveSummary & {
+  bodyHtml: string;
+  headlinesSnapshot: DispatchArchiveItemSnapshot[];
+};
+
+const FeedbackTab = ({ token }: { token: string }) => {
+  const [items, setItems] = useState<DispatchArchiveSummary[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [detail, setDetail] = useState<DispatchArchiveDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [drafts, setDrafts] = useState<Record<number, string>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [saveStatus, setSaveStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(token, "/admin/dispatch-archive?limit=100");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { items: DispatchArchiveSummary[] };
+      setItems(json.items);
+      // Seed drafts with persisted feedback so the textarea reflects current state.
+      const seed: Record<number, string> = {};
+      for (const it of json.items) seed[it.id] = it.feedback ?? "";
+      setDrafts((prev) => ({ ...seed, ...prev }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load archive");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const openDetail = async (id: number) => {
+    if (expanded === id) {
+      setExpanded(null);
+      setDetail(null);
+      return;
+    }
+    setExpanded(id);
+    setDetail(null);
+    setDetailLoading(true);
+    try {
+      const res = await apiFetch(token, `/admin/dispatch-archive/${id}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { item: DispatchArchiveDetail };
+      setDetail(json.item);
+    } catch (err) {
+      setSaveStatus({
+        id,
+        ok: false,
+        message: err instanceof Error ? err.message : "Failed to load detail",
+      });
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const saveFeedback = async (id: number) => {
+    const value = drafts[id] ?? "";
+    setSavingId(id);
+    setSaveStatus(null);
+    try {
+      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/feedback`, {
+        method: "PUT",
+        body: JSON.stringify({ feedback: value }),
+      });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        feedback?: string | null;
+        feedbackUpdatedAt?: string | null;
+        error?: string;
+      };
+      if (!res.ok || !json.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === id
+            ? {
+                ...it,
+                feedback: json.feedback ?? null,
+                feedbackUpdatedAt: json.feedbackUpdatedAt ?? null,
+              }
+            : it,
+        ),
+      );
+      setSaveStatus({ id, ok: true, message: "Saved." });
+    } catch (err) {
+      setSaveStatus({
+        id,
+        ok: false,
+        message: err instanceof Error ? err.message : "Save failed",
+      });
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-serif">Feedback log</h2>
+          <p className="text-sm text-muted-foreground font-light mt-1 max-w-2xl">
+            Every composed dispatch (real send or admin test) is logged here.
+            Click a row to see the body, then leave feedback on the right —
+            it accumulates as a dataset for tuning the dispatch prompt.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded-none text-[10px] uppercase tracking-widest"
+        >
+          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </Button>
+      </div>
+
+      {error && (
+        <div className="border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+
+      {items.length === 0 && !loading && (
+        <div className="border border-foreground/15 bg-card px-4 py-6 text-sm text-muted-foreground">
+          No dispatches archived yet. Once a real send or a test send runs,
+          it will appear here.
+        </div>
+      )}
+
+      <div className="space-y-3">
+        {items.map((it) => {
+          const isOpen = expanded === it.id;
+          const draft = drafts[it.id] ?? "";
+          const dirty = draft !== (it.feedback ?? "");
+          const status = saveStatus?.id === it.id ? saveStatus : null;
+          return (
+            <div key={it.id} className="border border-foreground/15 bg-card">
+              <button
+                type="button"
+                onClick={() => void openDetail(it.id)}
+                className="w-full px-4 py-3 flex items-center gap-4 text-left hover:bg-background/40"
+              >
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-16">
+                  {it.kind === "test" ? "Test" : "Send"}
+                </span>
+                <span className="text-xs text-muted-foreground font-mono w-44 shrink-0">
+                  {formatDate(it.createdAt)}
+                </span>
+                <span className="flex-1 text-sm font-serif truncate">{it.subject}</span>
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                  {it.itemCount} items
+                </span>
+                {it.feedback ? (
+                  <span className="text-[10px] uppercase tracking-widest text-primary">
+                    Feedback ✓
+                  </span>
+                ) : (
+                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60">
+                    —
+                  </span>
+                )}
+                <ChevronRight
+                  className={`w-3 h-3 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
+                />
+              </button>
+
+              {isOpen && (
+                <div className="border-t border-foreground/10 grid grid-cols-1 lg:grid-cols-2 gap-0">
+                  <div className="lg:border-r border-foreground/10 p-4 space-y-4 max-h-[640px] overflow-auto">
+                    <div className="section-label">Dispatch</div>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                        Subject
+                      </div>
+                      <div className="text-sm font-serif mt-1">{it.subject}</div>
+                    </div>
+                    {detailLoading && (
+                      <div className="text-xs text-muted-foreground">Loading…</div>
+                    )}
+                    {detail && detail.id === it.id && (
+                      <>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                            Intro
+                          </div>
+                          <div
+                            className="text-sm font-light mt-1 leading-relaxed prose prose-invert prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: detail.introHtml }}
+                          />
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+                            Items ({detail.headlinesSnapshot.length})
+                          </div>
+                          <ol className="space-y-3">
+                            {detail.headlinesSnapshot.map((h, i) => (
+                              <li key={h.id} className="border-l-2 border-foreground/15 pl-3">
+                                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                                  {String(i + 1).padStart(2, "0")} · {h.source}
+                                </div>
+                                <a
+                                  href={h.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-sm font-serif hover:text-primary inline-flex items-baseline gap-1"
+                                >
+                                  {h.title}
+                                  <ExternalLink className="w-3 h-3 self-center" />
+                                </a>
+                                {h.commentary && (
+                                  <div className="text-xs text-muted-foreground font-light mt-1 leading-relaxed whitespace-pre-line">
+                                    {h.commentary}
+                                  </div>
+                                )}
+                              </li>
+                            ))}
+                          </ol>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="p-4 space-y-3">
+                    <div className="section-label">Feedback</div>
+                    <textarea
+                      value={draft}
+                      onChange={(e) =>
+                        setDrafts((prev) => ({ ...prev, [it.id]: e.target.value }))
+                      }
+                      placeholder="What worked? What didn't? Specific phrases that leaked, items that felt off, intro framing notes…"
+                      className="w-full min-h-[420px] border border-foreground/20 bg-background/40 p-3 text-sm font-light leading-relaxed focus:border-primary focus:outline-none"
+                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[10px] text-muted-foreground">
+                        {it.feedbackUpdatedAt
+                          ? `Last saved ${formatDate(it.feedbackUpdatedAt)}`
+                          : dirty
+                            ? "Unsaved changes"
+                            : "Not yet saved"}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {status && (
+                          <span
+                            className={`text-[10px] uppercase tracking-widest ${status.ok ? "text-primary" : "text-red-400"}`}
+                          >
+                            {status.message}
+                          </span>
+                        )}
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => void saveFeedback(it.id)}
+                          disabled={savingId === it.id || !dirty}
+                          className="rounded-none text-[10px] uppercase tracking-widest"
+                        >
+                          Save feedback
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+type DispatchSection = "headlines" | "judge" | "writers" | "emails" | "feedback";
 
 type WorkflowNodeSpec = {
   id: DispatchSection;
@@ -2364,6 +2667,13 @@ const WORKFLOW_NODES: WorkflowNodeSpec[] = [
     Icon: Send,
     description: "Daily top-10 dispatch email",
     io: "picks + posts → inbox",
+  },
+  {
+    id: "feedback",
+    label: "Feedback log",
+    Icon: MessageSquare,
+    description: "Review past dispatches and capture feedback",
+    io: "sends → feedback dataset",
   },
 ];
 
@@ -2510,6 +2820,7 @@ const DispatchView = ({ token }: { token: string }) => {
         {section === "judge" && <JudgeTab token={token} />}
         {section === "writers" && <WriterAgentsTab token={token} />}
         {section === "emails" && <EmailAgentsTab token={token} />}
+        {section === "feedback" && <FeedbackTab token={token} />}
       </div>
     );
   }

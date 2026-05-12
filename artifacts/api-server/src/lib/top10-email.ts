@@ -68,6 +68,8 @@ export type ComposeDiagnostics = {
 export type ComposedEmail = {
   subject: string;
   html: string;
+  /** The rendered intro paragraph as HTML (without surrounding wrappers). */
+  introHtml: string;
   text: string;
   headlineCount: number;
   bannerGenerated: boolean;
@@ -819,6 +821,7 @@ export async function composeDailyEmail(
   return {
     subject,
     html,
+    introHtml,
     text,
     headlineCount: finalHeadlines.length,
     bannerGenerated: bannerImage !== null,

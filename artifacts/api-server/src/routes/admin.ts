@@ -51,6 +51,11 @@ import {
   setBannerPromptTemplate,
   resetBannerPromptTemplate,
 } from "../lib/image-gen";
+import {
+  getDispatchArchive,
+  listDispatchArchive,
+  updateDispatchFeedback,
+} from "../lib/dispatch-archive";
 
 const router: IRouter = Router();
 
@@ -717,6 +722,59 @@ router.delete("/admin/email/banner-prompt", async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     req.log.error({ err }, "Failed to reset banner prompt template");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Dispatch archive — every composed dispatch (real send or admin test send)
+// is logged here. The admin UI surfaces each row alongside a textarea for
+// freeform operator feedback, which accumulates a training dataset for the
+// dispatch prompt.
+router.get("/admin/dispatch-archive", async (req, res) => {
+  try {
+    const limit = Math.min(
+      Math.max(Number(req.query["limit"] ?? 50), 1),
+      200,
+    );
+    const items = await listDispatchArchive(limit);
+    return res.json({ items });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load dispatch archive");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/admin/dispatch-archive/:id", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  try {
+    const row = await getDispatchArchive(id);
+    if (!row) return res.status(404).json({ error: "Not found" });
+    return res.json({ item: row });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to load dispatch archive item");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/dispatch-archive/:id/feedback", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  const body = req.body as { feedback?: unknown };
+  const feedback = typeof body?.feedback === "string" ? body.feedback : "";
+  if (feedback.length > 20_000) {
+    return res.status(400).json({ error: "Feedback too long (> 20k chars)" });
+  }
+  try {
+    const row = await updateDispatchFeedback(id, feedback);
+    if (!row) return res.status(404).json({ error: "Not found" });
+    return res.json({
+      ok: true,
+      feedback: row.feedback,
+      feedbackUpdatedAt: row.feedbackUpdatedAt,
+    });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to update dispatch feedback");
     return res.status(500).json({ error: "Internal server error" });
   }
 });
