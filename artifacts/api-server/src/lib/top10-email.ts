@@ -317,21 +317,27 @@ Given the day's top-10 headlines, produce three things in a single JSON object.
 1. SUBJECT — concise email subject under 70 characters that names the day's editorial angle, not a feature. No emoji. No "Daily Dispatch:" prefix.
 
 2. INTRO — 2-3 sentence paragraph, ~50-70 words, opening with a concrete thesis. NAME workflows, staffing, governance, infrastructure, or specific buyer behavior — not abstract nouns ("implications of AI", "operational strategies", "significant transformation").
-   Default editorial frame when applicable: AI vendors are increasingly organizing around industry-specific workflows rather than general-purpose capability. Lead with this thread when the day's headlines support it. Otherwise pick another through-line — infrastructure capitalization, regulatory friction, labor automation, market consolidation — but always commit to one.
+   Default editorial frame when applicable: the dispatch's strongest editorial threads are (a) AI vendors organizing around industry-specific workflows rather than general-purpose capability, (b) AI infrastructure economics — compute capitalization, deployment costs, latency thresholds, and (c) organizational restructuring — how enterprises restaff and re-audit around AI-assisted work. Lead with whichever thread the day's headlines support most directly. Always commit to one — never a generic "AI is advancing" recap.
    Hard requirements:
    - Lead with a claim that names something concrete (a workflow, a buyer, a governance structure, a deployment surface) — not a category abstraction.
    - Connect 2+ items under one thread.
    - State what is changing — operationally, commercially, or strategically — and for whom.
    - Do NOT repeat any noun phrase from the subject verbatim.
-   - NO generic "AI is advancing", "today's stories show", "headlines reveal", "the unmistakable trend", "implications of AI", "significant transformation" framings.
+   - NO generic openings: "AI is advancing", "today's stories show", "headlines reveal", "the unmistakable trend", "implications of AI", "significant transformation", "Companies are increasingly reevaluating", "today's headlines present a picture", "paints a picture", "a growing response from".
    - NO hedging ("questions remain", "the challenge lies in", "remains to be seen").
    - Trim. "Deeply verticalizing by industry is unmistakable" is heavier than needed.
 
-   Strong examples (use this register — note how each names workflows / staffing / risk / governance, not abstract nouns):
+   Weak vs strong intros — note the directional, named, falsifiable register of the strong versions:
 
-   "AI vendors are increasingly organizing around industry-specific workflows rather than general-purpose capability. This week's launches in cybersecurity, customer service, and financial services suggest the competitive edge is shifting toward operational specialization, compliance alignment, and domain-specific deployment."
+   WEAK (the LLM-summarizer voice — banned): "Companies are increasingly reevaluating how workforce training and data management processes support AI initiatives. Today's headlines present a picture of enterprises scaling their AI integration efforts alongside a growing response from investors and developers regarding this technology's productivity and application."
+   Why it fails: "increasingly", "reevaluating", "processes", "initiatives", "present a picture", "integration efforts", "this technology" — every clause is interchangeable across any AI news day; nothing is named.
 
-   "Companies are increasingly confronting how AI systems reshape research workflows, staffing needs, and operational risk. This week's research and product announcements point to a growing tension between automation gains and the governance structures required to manage them."
+   STRONG: "Today's AI cycle is shifting from experimentation to organizational restructuring. OpenAI and Google are pushing deployment tooling deeper into enterprise workflows, while METR's latest productivity data suggests companies may soon treat AI fluency less as a software skill and more as a baseline operational requirement."
+   Why it works: a directional claim ("shifting from experimentation to organizational restructuring"), named actors (OpenAI, Google, METR), a named consequence (AI fluency as baseline operational requirement vs software skill), and a connecting thread across multiple items.
+
+   STRONG: "AI vendors are increasingly organizing around industry-specific workflows rather than general-purpose capability. This week's launches in cybersecurity, customer service, and financial services suggest the competitive edge is shifting toward operational specialization, compliance alignment, and domain-specific deployment."
+
+   STRONG: "Companies are increasingly confronting how AI systems reshape research workflows, staffing needs, and operational risk. This week's research and product announcements point to a growing tension between automation gains and the governance structures required to manage them."
 
 3. COMMENTARY for EVERY item — 2-3 sentences each. Lead with the publisher and a paraphrased action verb describing what shipped, bolded with markdown asterisks. Then 1-2 sentences interpreting the news through ONE analytical LENS. Vary the lens across items — that's what makes the dispatch feel authored instead of generated.
 
@@ -350,13 +356,34 @@ Given the day's top-10 headlines, produce three things in a single JSON object.
 
    HARD CAP: At most 3 of 10 items may use lens (9) competitive impact. The rest must rotate across 1-8 — ideally a different lens for each item. The reader should not be able to predict which lens comes next.
 
+   SOURCE TIERING — weight depth of analysis to news weight:
+   - **Tier 1 (strategic / market-moving)**: OpenAI, Microsoft, Google, Anthropic, Meta, AWS, NVIDIA product/strategy posts; IPOs, large funding rounds, M&A; major regulation. These deserve the fullest analytical treatment — 3 sentences with a concrete framing of what changed commercially or operationally. Lead with editorial interpretation.
+   - **Tier 2 (research institutions)**: METR, Anthropic safety/research, DeepMind research, AI policy think tanks. Focus on methodological caveats or implications for measurement and governance. Usually 2-3 sentences.
+   - **Tier 3 (arXiv / academic preprints)**: Default to 2 sentences. Name a specific applied audience (clinicians, robotics labs, optimization researchers working on X) — never general "AI practitioners". If the paper isn't groundbreaking, prefer observational reporting over speculation about industry impact. Do NOT give an arXiv preprint the same editorial weight as a Microsoft or OpenAI item — that flattening is the single biggest "machine-curated" tell.
+
    FINANCIAL-EVENT ITEMS (IPOs, funding rounds, M&A, earnings)
    For these items, "investor confidence" / "growth trajectory" / "valuation milestone" framings are filler. The analysis must name what changes commercially or operationally — pricing power, GTM motion, capacity to acquire adjacent capability, regulatory exposure, customer-concentration risk. If you can't identify a concrete change beyond "investors believe in the company", make the item OBSERVATIONAL (just report round size, lead investor, valuation) — don't pad with filler interpretation.
+   Weak: "This reflects not just strong investor interest but also suggests an increased focus on the AI hardware sector as firms position themselves to capitalize on growing demand."
+   Strong: "The upsized IPO indicates public-market appetite for AI infrastructure remains strong despite concerns around model commoditization."
+   The strong version names a specific market dynamic ("public-market appetite for AI infrastructure", "model commoditization") rather than padding with "not just X but also Y" / "position themselves to capitalize" filler.
+
+   ARXIV ITEMS — short, applied, specific. Never an autogenerated-abstract paraphrase.
+   Weak: "thereby enhancing the accuracy of treatment outcome predictions and impacting patient care strategies significantly."
+   Strong: "The paper combines symbolic reasoning with neural architectures to model colorectal cancer drug responses — part of a broader push toward interpretable clinical AI systems."
+   The strong version is shorter, names a method ("symbolic reasoning with neural architectures"), names a specific applied domain (interpretable clinical AI), and skips the "thereby [verb]ing X and Y significantly" academic register.
 
    PRESENTATION RHYTHM (also vary):
    - Most items: editorial interpretation through one lens.
    - 2-3 items: **observational** — clean reporting of what shipped + what's notable, with NO consequence framing tacked on.
    - Up to 1 item: **skeptical** — flag a specific missing detail or unsupported metric. Only when warranted.
+
+   BANNED SENTENCE TEMPLATES (the single biggest "AI slop" tell — the SHAPE of the sentence repeats even when the words vary):
+   - "X announced Y. This [highlights/signals/suggests/underscores/reflects] Z." — kill the formulaic 2-sentence structure. Rotate cadences: direct implication, market framing, skepticism, operational impact, investor angle, technical significance, competitive positioning.
+   - "This reflects not just X but also suggests Y" — banned construction.
+   - "This [ambitious/strategic/significant] [goal/move/initiative] underscores X" — banned construction.
+   - "This expansion allows for X" / "This initiative targets X" / "This approach could enable X" / "This development could influence X" — banned constructions; the second sentence must NOT start with "This".
+   - "X may now need to adapt their Y" / "Y must implement operational shifts" — banned hedge-prediction template.
+   - "indicating a competitive push toward enhanced Z" / "suggesting a growing response from W" — banned filler-transition template.
 
 PRECISION OVER PRONOUNCEMENT — your strongest voice is specific and restrained
 The moment the prose becomes cinematic ("shaken", "intensifying scrutiny", "decisive move", "transformative"), credibility drops. Imply pressure; don't pronounce. "Strengthens Anthropic's position in financial-services agents alongside Hebbia and Rogo" is editorial. "A direct challenge to Anthropic's competitors" is performative.
@@ -398,23 +425,27 @@ BANNED DRAMATIC VERBS (financial/editorial register is measured):
 - "must now brace", "severely impair", "forced to bolster", "scramble to", "rush to", "race to", "double down on" (when not literally a 2x investment)
 
 BANNED ABSTRACT BUSINESS NOUNS (replace with named capabilities, metrics, or subjects):
-- "operational capabilities", "competitive landscape", "scalability potential", "enhancements", "functionality", "actionable improvements", "strategic synergies", "value proposition", "market dynamics", "growth trajectory", "core competencies", "key differentiators". When tempted to use one, name what you actually mean: which capability, which metric, which subject.
+- "operational capabilities", "competitive landscape", "scalability potential", "enhancements", "functionality", "actionable improvements", "strategic synergies", "value proposition", "market dynamics", "growth trajectory", "core competencies", "key differentiators", "operational frameworks", "innovation processes", "data-driven insights", "customer engagement strategies", "strategic execution", "integration efforts", "personalized financial insights". When tempted to use one, name what you actually mean: which capability, which metric, which subject.
 
 BANNED INFLATED / CINEMATIC LANGUAGE (drama beyond the headline):
 - "immense financial expectations", "face obsolescence", "saturated market", "beleaguered" (any usage), "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine", "transformative" (as a stand-alone adjective for a product or shift)
 
 BANNED HEDGING (cut or rewrite — these dilute authority):
-- "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "raises questions", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become"
+- "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "raises questions", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become", "may need to adapt", "may reshape", "could reshape", "could influence", "could enable"
+- Hedging adverbs as filler: "increasingly" (when paired with vague verbs like "reevaluating", "exploring", "reassessing", "adapting"), "significantly" (as a stand-alone modifier — name the magnitude or delete it), "potentially" (as filler softener). Professional analysts hedge SELECTIVELY, not continuously.
 
 BANNED CORPORATE-CHECKLIST JARGON (don't fall back into laundry-list framing):
 - "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "operator implications", "for CIOs evaluating vendors", "enterprise buyers should". Use specific market consequences instead — name the company, the product, the competitive shift.
 
 BANNED WORDS (overused AI-ese — never use, including in the intro):
 - "formidable player", "formidable" (as a descriptor for a company), "structural" (use a concrete word: "operational", "competitive", or just delete the modifier), "swiftly" (use "quickly", or restructure to drop the adverb)
+- "thereby" (academic-register connector — restructure the sentence), "underscores" (filler transition verb — pick a verb that names a specific consequence), "highlights" (when used as a filler transition verb between sentences — name what is highlighted, or delete), "signals" / "signaling" (when used vaguely — name what the signal is)
+- "this technology" (generic reference to AI — name the specific capability, model, or product instead), "this development", "this initiative", "this approach", "this expansion", "this ambitious goal" (the "this [generic-noun]" pattern is a tell that the sentence is summarizing rather than interpreting)
 
 BANNED AI-ESE FILLER:
-- "what's interesting is", "in a world where", "speaks volumes", "sends a clear message", "not just X but Y", "isn't merely", "more than just", "what's striking", "in an era of", "points to"
-- "growing trend", "highlights the growing appetite", "reflecting a broader trend", "increasingly flowing into", "in this landscape", "positions itself", "leverages", "drives value"
+- "what's interesting is", "in a world where", "speaks volumes", "sends a clear message", "not just X but Y", "not just X but also Y", "isn't merely", "more than just", "what's striking", "in an era of", "points to"
+- "growing trend", "growing response", "growing focus", "highlights the growing appetite", "reflecting a broader trend", "increasingly flowing into", "in this landscape", "positions itself", "leverages", "drives value"
+- "present(s) a picture", "paints a picture", "alongside a growing response", "Companies are increasingly reevaluating", "increasingly reevaluating", "today's headlines reveal", "today's headlines present"
 
 If existing commentary is provided in the input you may keep, lightly edit, or replace it. Every item MUST have commentary in the output. Apply the rules above to whatever you keep — including replacing repetitive competitive-pressure framing with observational reporting where the rhythm calls for it.
 
@@ -600,12 +631,13 @@ HARD RULES
 - BANNED VAGUE CAUTIONARY ENDINGS: "questions about practical applications", "concerns linger", "concerns linger in the air", "the path forward is uncertain", "remains an open question", "much will depend on", "the jury is still out", "time will tell".
 - BANNED "LACK OF CLARITY" CLUSTER: "clarity is lacking", "lacks clarity", "lack of clarity", "details remain undisclosed", "details are sparse", "details remain", "falls short" (as generic critique). If flagging missing detail, name what specifically (a number, a date, a scope, a geography) — not "details" as abstract noun.
 - BANNED DRAMATIC VERBS: "must now brace", "severely impair", "forced to bolster", "scramble to", "rush to", "race to", "double down on".
-- BANNED ABSTRACT BUSINESS NOUNS (replace with named capabilities/metrics/subjects): "operational capabilities", "competitive landscape", "scalability potential", "enhancements", "functionality", "actionable improvements", "strategic synergies", "value proposition", "market dynamics", "growth trajectory", "core competencies", "key differentiators".
+- BANNED ABSTRACT BUSINESS NOUNS (replace with named capabilities/metrics/subjects): "operational capabilities", "competitive landscape", "scalability potential", "enhancements", "functionality", "actionable improvements", "strategic synergies", "value proposition", "market dynamics", "growth trajectory", "core competencies", "key differentiators", "operational frameworks", "innovation processes", "data-driven insights", "customer engagement strategies", "strategic execution", "integration efforts".
 - BANNED INFLATED / CINEMATIC: "immense financial expectations", "face obsolescence", "saturated market", "beleaguered", "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine", "transformative" (as stand-alone adjective).
-- BANNED HEDGING: "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become".
+- BANNED HEDGING: "details remain unclear", "effectiveness will depend", "potential applications remain to be clarified", "remains to be seen", "still pending", "raises concerns", "it remains unclear", "questions remain", "stakeholders should consider", "raises skepticism", "suggests an intent", "the challenge lies in", "could enhance", "may prove", "could become", "may need to adapt", "may reshape", "could reshape", "could influence", "could enable", "potentially" (as filler softener), "significantly" (as stand-alone modifier — name the magnitude or delete), "increasingly" (when paired with "reevaluating" / "exploring" / "adapting" — name what specifically is changing).
 - BANNED CORPORATE JARGON: "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "for CIOs evaluating vendors", "enterprise buyers should".
-- BANNED WORDS: "formidable player", "formidable" (as company descriptor), "structural" (use a concrete word or delete), "swiftly" (use "quickly" or drop the adverb).
-- BANNED AI-ESE: "what's interesting", "in a world where", "speaks volumes", "isn't merely", "more than just", "in an era of", "growing trend", "highlights the growing appetite", "reflecting a broader trend", "in this landscape", "positions itself", "leverages", "drives value".
+- BANNED WORDS: "formidable player", "formidable" (as company descriptor), "structural" (use a concrete word or delete), "swiftly" (use "quickly" or drop the adverb), "thereby" (academic register — restructure), "underscores" / "highlights" / "signals" (as filler transition verbs — name the specific consequence), "this technology" / "this development" / "this initiative" / "this approach" / "this expansion" (generic reference — name the capability or product).
+- BANNED AI-ESE: "what's interesting", "in a world where", "speaks volumes", "isn't merely", "more than just", "not just X but Y", "not just X but also Y", "in an era of", "growing trend", "growing response", "highlights the growing appetite", "reflecting a broader trend", "in this landscape", "positions itself", "leverages", "drives value", "present(s) a picture", "paints a picture".
+- BANNED SENTENCE TEMPLATES: "X announced Y. This [highlights/signals/suggests/underscores/reflects] Z." — kill the formulaic 2-sentence shape. "This reflects not just X but also suggests Y", "This ambitious goal underscores Z", "This expansion allows for X", "This initiative targets X", "This approach could enable X" — all banned; the second sentence must NOT start with "This".
 
 Return ONLY this JSON:
 { "items": [{ "id": <number>, "commentary": "<2-3 sentences>" }, ...] }

@@ -95,15 +95,25 @@ PLAIN-LANGUAGE SUBSTITUTIONS — when tempted to write the LEFT, use the RIGHT
   "core competencies" → "what they're good at"
 
 BANNED VOCABULARY (never use, anywhere)
-  AI-ese filler: "what's interesting is", "in a world where", "in an era of", "in this landscape", "speaks volumes", "sends a clear message", "not just X but Y", "isn't merely", "more than just", "what's striking", "points to", "growing trend", "highlights the growing appetite", "reflecting a broader trend", "positions itself", "leverages", "drives value"
+  AI-ese filler: "what's interesting is", "in a world where", "in an era of", "in this landscape", "speaks volumes", "sends a clear message", "not just X but Y", "not just X but also Y", "isn't merely", "more than just", "what's striking", "points to", "growing trend", "growing response", "highlights the growing appetite", "reflecting a broader trend", "positions itself", "leverages", "drives value", "present(s) a picture", "paints a picture"
   Cinematic drama: "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine", "transformative" (standalone), "face obsolescence", "saturated market", "beleaguered", "shaken"
   Speculative competitive claims: "leaving X at a disadvantage", "challenging incumbents", "putting pressure on rivals", "puts pressure on", "intensifying scrutiny", "raising stakes", "decisive move", "competitive edge", "direct challenge", "forcing incumbents", "rivals will struggle"
-  Vague hedging: "remains to be seen", "questions remain", "concerns linger", "the path forward is uncertain", "raises concerns", "raises questions", "it remains unclear", "much will depend on", "the jury is still out", "time will tell", "stakeholders should consider", "could enhance", "may prove", "could become"
+  Vague hedging: "remains to be seen", "questions remain", "concerns linger", "the path forward is uncertain", "raises concerns", "raises questions", "it remains unclear", "much will depend on", "the jury is still out", "time will tell", "stakeholders should consider", "could enhance", "may prove", "could become", "may need to adapt", "may reshape", "could reshape", "could influence", "could enable"
+  Hedging adverbs (filler softeners): "potentially" (as a stand-alone hedge), "significantly" (as a stand-alone modifier — name the magnitude or delete), "increasingly" (when paired with vague verbs like "reevaluating", "exploring", "adapting")
   Lack-of-clarity cluster: "clarity is lacking", "lacks clarity", "details remain undisclosed", "details are sparse", "details remain", "falls short" (as generic critique). If you flag a missing detail, name what's missing — a number, a date, a scope.
   Dramatic verbs: "must now brace", "severely impair", "forced to bolster", "scramble to", "rush to", "race to", "double down on" (when not literally 2x)
-  Abstract business nouns: "operational capabilities", "competitive landscape", "scalability potential", "enhancements", "functionality", "actionable improvements", "strategic synergies", "value proposition", "market dynamics", "growth trajectory", "core competencies", "key differentiators"
+  Abstract business nouns: "operational capabilities", "competitive landscape", "scalability potential", "enhancements", "functionality", "actionable improvements", "strategic synergies", "value proposition", "market dynamics", "growth trajectory", "core competencies", "key differentiators", "operational frameworks", "innovation processes", "data-driven insights", "customer engagement strategies", "strategic execution", "integration efforts"
   Corporate-checklist jargon: "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "operator implications", "for CIOs evaluating vendors", "enterprise buyers should"
+  Filler transition verbs: "underscores", "highlights" (as a filler transition between sentences — name what is highlighted, or delete), "signals" / "signaling" (when used vaguely — name what the signal is), "thereby" (academic-register connector — restructure)
+  Generic "this [noun]" references: "this technology" (when referring to AI), "this development", "this initiative", "this approach", "this expansion", "this ambitious goal" — the "this [generic-noun]" pattern is the tell of a summarizer. Name the specific capability, model, product, or company.
   Other: "formidable" (as a company descriptor), "structural" (pick a concrete word), "swiftly" (use "quickly")
+
+BANNED SENTENCE TEMPLATES (the biggest "AI slop" tell — the shape of the sentence repeats even when the words vary)
+  - "X announced Y. This [highlights/signals/suggests/underscores/reflects] Z." Kill this formulaic 2-sentence structure entirely. The second sentence must not start with "This"; restructure to name the actor or consequence directly.
+  - "This reflects not just X but also suggests Y" — banned.
+  - "This [ambitious/strategic/significant] [goal/move/initiative] underscores X" — banned.
+  - "This expansion allows for X" / "This initiative targets X" / "This approach could enable X" / "This development could influence X" — banned.
+  - "X may now need to adapt their Y" / "Y must implement operational shifts" — banned hedge-prediction template.
 
 NO ACADEMIC REGISTER
 If a sentence sounds like a research-paper abstract ("Addressing semantics-structure decoupling is vital for advancing data management"), rewrite it as something a working operator at the affected company would actually say.
