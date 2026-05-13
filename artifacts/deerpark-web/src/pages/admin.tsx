@@ -2363,6 +2363,11 @@ type DispatchBannedPhraseHit = {
   phrase: string;
   count: number;
   locations: string[];
+  /** "violation" = sentence-shape or LLM-tic phrase (drives the headline
+   *  violations count). "warning" = bare-word ban (tracked but not counted).
+   *  Optional for back-compat with rows scanned before the severity split —
+   *  those are treated as "violation". */
+  severity?: "violation" | "warning";
 };
 
 type DispatchArchiveSummary = {
@@ -3042,32 +3047,79 @@ const FeedbackTab = ({ token }: { token: string }) => {
                               },
                             )}
                         </div>
-                        <div>
-                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
-                            Banned-phrase hits ({banned ?? 0})
-                          </div>
-                          {it.evalBannedPhrases && it.evalBannedPhrases.length > 0 ? (
-                            <ul className="space-y-1">
-                              {it.evalBannedPhrases.map((h) => (
-                                <li
-                                  key={h.phrase}
-                                  className="flex items-baseline justify-between text-[11px]"
-                                >
-                                  <span className="text-red-300 font-mono">
-                                    "{h.phrase}"
-                                  </span>
-                                  <span className="text-muted-foreground">
-                                    {h.count}× · {h.locations.slice(0, 4).join(", ")}
-                                    {h.locations.length > 4 ? "…" : ""}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <div className="text-[11px] text-muted-foreground">
-                              No banned phrases detected.
-                            </div>
-                          )}
+                        <div className="space-y-3">
+                          {(() => {
+                            // Split hits into violations (drive the headline
+                            // count) and warnings (bare-word bans tracked
+                            // separately). Rows scanned before the severity
+                            // split lack the field — treat those as
+                            // violations for back-compat.
+                            const hits = it.evalBannedPhrases ?? [];
+                            const violations = hits.filter(
+                              (h) => (h.severity ?? "violation") === "violation",
+                            );
+                            const warnings = hits.filter(
+                              (h) => h.severity === "warning",
+                            );
+                            const warningTotal = warnings.reduce((s, h) => s + h.count, 0);
+                            return (
+                              <>
+                                <div>
+                                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+                                    Violations ({banned ?? 0})
+                                  </div>
+                                  {violations.length > 0 ? (
+                                    <ul className="space-y-1">
+                                      {violations.map((h) => (
+                                        <li
+                                          key={h.phrase}
+                                          className="flex items-baseline justify-between text-[11px]"
+                                        >
+                                          <span className="text-red-300 font-mono">
+                                            "{h.phrase}"
+                                          </span>
+                                          <span className="text-muted-foreground">
+                                            {h.count}× · {h.locations.slice(0, 4).join(", ")}
+                                            {h.locations.length > 4 ? "…" : ""}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <div className="text-[11px] text-muted-foreground">
+                                      No violations detected.
+                                    </div>
+                                  )}
+                                </div>
+                                {warnings.length > 0 && (
+                                  <div>
+                                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
+                                      Warnings ({warningTotal}) ·{" "}
+                                      <span className="normal-case tracking-normal text-muted-foreground/70">
+                                        bare-word bans, not part of violation count
+                                      </span>
+                                    </div>
+                                    <ul className="space-y-1">
+                                      {warnings.map((h) => (
+                                        <li
+                                          key={h.phrase}
+                                          className="flex items-baseline justify-between text-[11px]"
+                                        >
+                                          <span className="text-amber-300/90 font-mono">
+                                            "{h.phrase}"
+                                          </span>
+                                          <span className="text-muted-foreground">
+                                            {h.count}× · {h.locations.slice(0, 4).join(", ")}
+                                            {h.locations.length > 4 ? "…" : ""}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </>
+                            );
+                          })()}
                         </div>
                         <div className="text-[10px] text-muted-foreground/70 pt-1 border-t border-foreground/5">
                           Last evaluated {formatDate(it.evalRunAt)}

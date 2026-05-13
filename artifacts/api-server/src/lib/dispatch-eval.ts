@@ -31,72 +31,80 @@ import { logUsage } from "./llm-usage";
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
 
-// Banned phrase patterns. Word-boundary aware. Case-insensitive. Each entry
-// is a {phrase, regex} so the report can show the canonical form even when
-// the prose used a near-variant.
-type Pattern = { phrase: string; re: RegExp };
+// Banned phrase patterns. Word-boundary aware. Case-insensitive.
+//
+// Two severity tiers:
+//   "violation" — specific sentence shapes / LLM-tic phrases that should
+//     never appear. These drive the visible "X violations" count.
+//   "warning"   — bare single-word bans ("increasingly", "transformative",
+//     "leverages", etc) that catch both legitimate and synthetic uses.
+//     Tracked + displayed but NOT counted toward the violations number, so
+//     a clean send can plausibly hit zero violations even when 1-2 of these
+//     show up incidentally.
+type Severity = "violation" | "warning";
+type Pattern = { phrase: string; re: RegExp; severity: Severity };
 
 const BANNED_PATTERNS: Pattern[] = [
-  // Intro shapes that kept leaking
-  { phrase: "increasingly reevaluating", re: /\bincreasingly\s+reevaluating\b/i },
-  { phrase: "present(s) a picture", re: /\bpresents?\s+a\s+picture\b/i },
-  { phrase: "paints a picture", re: /\bpaints\s+a\s+picture\b/i },
-  { phrase: "growing response", re: /\bgrowing\s+response\b/i },
-  { phrase: "integration efforts", re: /\bintegration\s+efforts\b/i },
-  { phrase: "this technology", re: /\bthis\s+technology\b/i },
-  // Filler transition verbs
-  { phrase: "underscores", re: /\bunderscores?\b/i },
-  { phrase: "thereby", re: /\bthereby\b/i },
-  // Generic "this [noun]" references that signal summary mode
-  { phrase: "this development", re: /\bthis\s+development\b/i },
-  { phrase: "this initiative", re: /\bthis\s+initiative\b/i },
-  { phrase: "this approach", re: /\bthis\s+approach\b/i },
-  { phrase: "this expansion", re: /\bthis\s+expansion\b/i },
-  { phrase: "this ambitious goal", re: /\bthis\s+ambitious\s+goal\b/i },
-  // Hedging templates
-  { phrase: "may need to adapt", re: /\bmay\s+need\s+to\s+adapt\b/i },
-  { phrase: "may reshape", re: /\bmay\s+reshape\b/i },
-  { phrase: "could reshape", re: /\bcould\s+reshape\b/i },
-  { phrase: "could influence", re: /\bcould\s+influence\b/i },
-  { phrase: "could enable", re: /\bcould\s+enable\b/i },
-  { phrase: "could enhance", re: /\bcould\s+enhance\b/i },
-  { phrase: "may prove", re: /\bmay\s+prove\b/i },
-  { phrase: "could become", re: /\bcould\s+become\b/i },
-  // Vague cautionary endings
-  { phrase: "remains to be seen", re: /\bremains\s+to\s+be\s+seen\b/i },
-  { phrase: "questions remain", re: /\bquestions\s+remain\b/i },
-  { phrase: "raises concerns", re: /\braises\s+concerns\b/i },
-  { phrase: "concerns linger", re: /\bconcerns\s+linger\b/i },
-  { phrase: "the path forward is uncertain", re: /\bthe\s+path\s+forward\s+is\s+uncertain\b/i },
-  { phrase: "time will tell", re: /\btime\s+will\s+tell\b/i },
-  // Speculative competitive framing
-  { phrase: "puts pressure on", re: /\bputs?\s+pressure\s+on\b/i },
-  { phrase: "putting pressure on", re: /\bputting\s+pressure\s+on\b/i },
-  { phrase: "competitive edge", re: /\bcompetitive\s+edge\b/i },
-  { phrase: "direct challenge", re: /\bdirect\s+challenge\b/i },
-  { phrase: "intensifying scrutiny", re: /\bintensifying\s+scrutiny\b/i },
-  // Cinematic drama
-  { phrase: "watershed moment", re: /\bwatershed\s+moment\b/i },
-  { phrase: "seismic shift", re: /\bseismic\s+shift\b/i },
-  { phrase: "existential threat", re: /\bexistential\s+threat\b/i },
-  // Abstract business nouns
-  { phrase: "operational frameworks", re: /\boperational\s+frameworks?\b/i },
-  { phrase: "innovation processes", re: /\binnovation\s+processes\b/i },
-  { phrase: "customer engagement strategies", re: /\bcustomer\s+engagement\s+strateg(?:y|ies)\b/i },
-  { phrase: "strategic execution", re: /\bstrategic\s+execution\b/i },
-  { phrase: "data-driven insights", re: /\bdata[-\s]driven\s+insights\b/i },
-  { phrase: "competitive landscape", re: /\bcompetitive\s+landscape\b/i },
-  { phrase: "growth trajectory", re: /\bgrowth\s+trajectory\b/i },
-  { phrase: "value proposition", re: /\bvalue\s+proposition\b/i },
-  // Cliche AI-ese
-  { phrase: "leverages", re: /\bleverag(?:e|es|ed|ing)\b/i },
-  { phrase: "positions itself", re: /\bpositions?\s+itself\b/i },
-  { phrase: "drives value", re: /\bdrives\s+value\b/i },
-  { phrase: "formidable", re: /\bformidable\b/i },
-  { phrase: "swiftly", re: /\bswiftly\b/i },
-  { phrase: "transformative", re: /\btransformative\b/i },
-  // Hedging adverbs paired with empty verbs
-  { phrase: "increasingly", re: /\bincreasingly\b/i },
+  // Intro shapes that kept leaking — VIOLATIONS
+  { phrase: "increasingly reevaluating", re: /\bincreasingly\s+reevaluating\b/i, severity: "violation" },
+  { phrase: "present(s) a picture", re: /\bpresents?\s+a\s+picture\b/i, severity: "violation" },
+  { phrase: "paints a picture", re: /\bpaints\s+a\s+picture\b/i, severity: "violation" },
+  { phrase: "growing response", re: /\bgrowing\s+response\b/i, severity: "violation" },
+  { phrase: "integration efforts", re: /\bintegration\s+efforts\b/i, severity: "violation" },
+  { phrase: "this technology", re: /\bthis\s+technology\b/i, severity: "violation" },
+  // Generic "this [noun]" references that signal summary mode — VIOLATIONS
+  { phrase: "this development", re: /\bthis\s+development\b/i, severity: "violation" },
+  { phrase: "this initiative", re: /\bthis\s+initiative\b/i, severity: "violation" },
+  { phrase: "this approach", re: /\bthis\s+approach\b/i, severity: "violation" },
+  { phrase: "this expansion", re: /\bthis\s+expansion\b/i, severity: "violation" },
+  { phrase: "this ambitious goal", re: /\bthis\s+ambitious\s+goal\b/i, severity: "violation" },
+  // Hedging templates — VIOLATIONS
+  { phrase: "may need to adapt", re: /\bmay\s+need\s+to\s+adapt\b/i, severity: "violation" },
+  { phrase: "may reshape", re: /\bmay\s+reshape\b/i, severity: "violation" },
+  { phrase: "could reshape", re: /\bcould\s+reshape\b/i, severity: "violation" },
+  { phrase: "could influence", re: /\bcould\s+influence\b/i, severity: "violation" },
+  { phrase: "could enable", re: /\bcould\s+enable\b/i, severity: "violation" },
+  { phrase: "could enhance", re: /\bcould\s+enhance\b/i, severity: "violation" },
+  { phrase: "may prove", re: /\bmay\s+prove\b/i, severity: "violation" },
+  { phrase: "could become", re: /\bcould\s+become\b/i, severity: "violation" },
+  // Vague cautionary endings — VIOLATIONS
+  { phrase: "remains to be seen", re: /\bremains\s+to\s+be\s+seen\b/i, severity: "violation" },
+  { phrase: "questions remain", re: /\bquestions\s+remain\b/i, severity: "violation" },
+  { phrase: "raises concerns", re: /\braises\s+concerns\b/i, severity: "violation" },
+  { phrase: "concerns linger", re: /\bconcerns\s+linger\b/i, severity: "violation" },
+  { phrase: "the path forward is uncertain", re: /\bthe\s+path\s+forward\s+is\s+uncertain\b/i, severity: "violation" },
+  { phrase: "time will tell", re: /\btime\s+will\s+tell\b/i, severity: "violation" },
+  // Speculative competitive framing — VIOLATIONS
+  { phrase: "puts pressure on", re: /\bputs?\s+pressure\s+on\b/i, severity: "violation" },
+  { phrase: "putting pressure on", re: /\bputting\s+pressure\s+on\b/i, severity: "violation" },
+  { phrase: "competitive edge", re: /\bcompetitive\s+edge\b/i, severity: "violation" },
+  { phrase: "direct challenge", re: /\bdirect\s+challenge\b/i, severity: "violation" },
+  { phrase: "intensifying scrutiny", re: /\bintensifying\s+scrutiny\b/i, severity: "violation" },
+  // Cinematic drama — VIOLATIONS
+  { phrase: "watershed moment", re: /\bwatershed\s+moment\b/i, severity: "violation" },
+  { phrase: "seismic shift", re: /\bseismic\s+shift\b/i, severity: "violation" },
+  { phrase: "existential threat", re: /\bexistential\s+threat\b/i, severity: "violation" },
+  // Abstract business nouns — VIOLATIONS
+  { phrase: "operational frameworks", re: /\boperational\s+frameworks?\b/i, severity: "violation" },
+  { phrase: "innovation processes", re: /\binnovation\s+processes\b/i, severity: "violation" },
+  { phrase: "customer engagement strategies", re: /\bcustomer\s+engagement\s+strateg(?:y|ies)\b/i, severity: "violation" },
+  { phrase: "strategic execution", re: /\bstrategic\s+execution\b/i, severity: "violation" },
+  { phrase: "data-driven insights", re: /\bdata[-\s]driven\s+insights\b/i, severity: "violation" },
+  { phrase: "competitive landscape", re: /\bcompetitive\s+landscape\b/i, severity: "violation" },
+  { phrase: "growth trajectory", re: /\bgrowth\s+trajectory\b/i, severity: "violation" },
+  { phrase: "value proposition", re: /\bvalue\s+proposition\b/i, severity: "violation" },
+  // Multi-word LLM-isms — VIOLATIONS
+  { phrase: "positions itself", re: /\bpositions?\s+itself\b/i, severity: "violation" },
+  { phrase: "drives value", re: /\bdrives\s+value\b/i, severity: "violation" },
+  // Bare single-word bans — WARNINGS. These catch both legitimate and
+  // synthetic uses, so they shouldn't drive the visible violations number.
+  { phrase: "underscores", re: /\bunderscores?\b/i, severity: "warning" },
+  { phrase: "thereby", re: /\bthereby\b/i, severity: "warning" },
+  { phrase: "leverages", re: /\bleverag(?:e|es|ed|ing)\b/i, severity: "warning" },
+  { phrase: "formidable", re: /\bformidable\b/i, severity: "warning" },
+  { phrase: "swiftly", re: /\bswiftly\b/i, severity: "warning" },
+  { phrase: "transformative", re: /\btransformative\b/i, severity: "warning" },
+  { phrase: "increasingly (bare)", re: /\bincreasingly\b/i, severity: "warning" },
 ];
 
 // "this" pattern that catches the LLM-tic of starting sentence 2 with "This".
@@ -130,7 +138,13 @@ function countMatches(re: RegExp, text: string): number {
 
 type ScanResult = {
   hits: DispatchBannedPhraseHit[];
-  total: number;
+  /** Count of severity="violation" hits only. This is the headline number
+   *  the admin UI shows as "X violations" — bare-word warnings don't count
+   *  here, so a clean send can plausibly read zero. */
+  violationCount: number;
+  /** Count of severity="warning" hits only. Tracked for the warnings
+   *  expandable in the admin UI; not part of the violations number. */
+  warningCount: number;
 };
 
 function scanForBannedPhrases(row: DispatchArchive): ScanResult {
@@ -139,29 +153,47 @@ function scanForBannedPhrases(row: DispatchArchive): ScanResult {
   const items = (row.headlinesSnapshot ?? []).map((it) => stripHtml(it.commentary ?? ""));
 
   const tallies = new Map<string, DispatchBannedPhraseHit>();
-  const bump = (phrase: string, where: DispatchBannedPhraseHit["locations"][number], count: number) => {
+  const bump = (
+    phrase: string,
+    severity: Severity,
+    where: DispatchBannedPhraseHit["locations"][number],
+    count: number,
+  ) => {
     if (count <= 0) return;
-    const entry = tallies.get(phrase) ?? { phrase, count: 0, locations: [] };
+    const entry = tallies.get(phrase) ?? { phrase, count: 0, locations: [], severity };
     entry.count += count;
     for (let i = 0; i < count; i++) entry.locations.push(where);
     tallies.set(phrase, entry);
   };
 
   for (const pat of BANNED_PATTERNS) {
-    bump(pat.phrase, "subject", countMatches(pat.re, subject));
-    bump(pat.phrase, "intro", countMatches(pat.re, introText));
-    items.forEach((text, i) => bump(pat.phrase, `item:${i + 1}`, countMatches(pat.re, text)));
+    bump(pat.phrase, pat.severity, "subject", countMatches(pat.re, subject));
+    bump(pat.phrase, pat.severity, "intro", countMatches(pat.re, introText));
+    items.forEach((text, i) =>
+      bump(pat.phrase, pat.severity, `item:${i + 1}`, countMatches(pat.re, text)),
+    );
   }
 
   // Structural "sentence 2 starts with This" tic — count once per item.
+  // Severity: violation — this is the canonical LLM-tic shape.
   items.forEach((text, i) => {
     const hits = (text.match(SENTENCE_TWO_THIS_RE) ?? []).length;
-    bump("sentence 2 starts with \"This\"", `item:${i + 1}`, hits);
+    bump("sentence 2 starts with \"This\"", "violation", `item:${i + 1}`, hits);
   });
 
-  const hits = Array.from(tallies.values()).sort((a, b) => b.count - a.count);
-  const total = hits.reduce((sum, h) => sum + h.count, 0);
-  return { hits, total };
+  const hits = Array.from(tallies.values()).sort((a, b) => {
+    // Violations on top, then by count descending.
+    const sevDelta = (a.severity === "violation" ? 0 : 1) - (b.severity === "violation" ? 0 : 1);
+    if (sevDelta !== 0) return sevDelta;
+    return b.count - a.count;
+  });
+  let violationCount = 0;
+  let warningCount = 0;
+  for (const h of hits) {
+    if (h.severity === "warning") warningCount += h.count;
+    else violationCount += h.count;
+  }
+  return { hits, violationCount, warningCount };
 }
 
 // LLM rubric ----------------------------------------------------------------
@@ -346,13 +378,13 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
     await db
       .update(dispatchArchiveTable)
       .set({
-        evalBannedPhrasesCount: scan.total,
+        evalBannedPhrasesCount: scan.violationCount,
         evalBannedPhrases: scan.hits,
         evalRunAt: new Date(),
       })
       .where(eq(dispatchArchiveTable.id, id));
     logger.warn({ id, error: rubric.error }, "Dispatch eval: rubric LLM failed");
-    return { ok: false, bannedCount: scan.total, error: rubric.error };
+    return { ok: false, bannedCount: scan.violationCount, error: rubric.error };
   }
 
   const scores = rubric.scores;
@@ -369,7 +401,10 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
     .set({
       evalScores: scores,
       evalCompositeScore: composite.toFixed(2),
-      evalBannedPhrasesCount: scan.total,
+      // evalBannedPhrasesCount stores VIOLATIONS only (severity="violation").
+      // Bare-word warnings are persisted in the same evalBannedPhrases jsonb
+      // with severity tagged, but don't drive the headline number.
+      evalBannedPhrasesCount: scan.violationCount,
       evalBannedPhrases: scan.hits,
       evalModel: rubric.model,
       evalRunAt: new Date(),
@@ -377,10 +412,15 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
     .where(eq(dispatchArchiveTable.id, id));
 
   logger.info(
-    { id, composite: Number(composite.toFixed(2)), bannedCount: scan.total },
+    {
+      id,
+      composite: Number(composite.toFixed(2)),
+      bannedCount: scan.violationCount,
+      warningCount: scan.warningCount,
+    },
     "Dispatch eval: complete",
   );
-  return { ok: true, composite, bannedCount: scan.total };
+  return { ok: true, composite, bannedCount: scan.violationCount };
 }
 
 /** Fire-and-forget wrapper for the post-archive hook. */
