@@ -27,6 +27,12 @@ export type DispatchBannedPhraseHit = {
   count: number;
   /** Where in the dispatch the phrase appeared. */
   locations: Array<"subject" | "intro" | `item:${number}`>;
+  /** "violation" = sentence-shape or LLM-tic phrase that should never appear.
+   *  "warning" = bare-word ban (e.g. "increasingly", "transformative") that
+   *  catches both legitimate and synthetic uses; tracked but not counted
+   *  toward the headline violations number. Optional for back-compat with
+   *  rows scanned before the severity split. */
+  severity?: "violation" | "warning";
 };
 
 /** Content-addressed prompt versions in use at compose time.
