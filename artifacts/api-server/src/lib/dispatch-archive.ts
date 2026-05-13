@@ -9,6 +9,10 @@
 
 import { db, dispatchArchiveTable } from "@workspace/db";
 import type { DispatchArchive, DispatchArchiveItem } from "@workspace/db";
+import {
+  dispatchLlmCallsTable,
+  dispatchPromptsTable,
+} from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import type { ComposedEmail } from "./top10-email";
@@ -485,4 +489,139 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
     topBannedPhrases,
     trend,
   };
+}
+
+// Fine-tune dataset export -------------------------------------------------
+//
+// Joins captured LLM calls back to their (a) prompt text and (b) the eval
+// scores + operator feedback on the parent dispatch. Each row becomes one
+// supervised training example in the OpenAI/Anthropic chat-completion
+// fine-tune JSONL shape:
+//
+//   {"messages": [
+//     {"role": "system",    "content": <prompt text>},
+//     {"role": "user",      "content": <user message>},
+//     {"role": "assistant", "content": <model response>}
+//   ]}
+//
+// The caller can attach `withMeta=true` to include a `metadata` block with
+// eval scores + feedback so they can post-filter / weight examples in their
+// fine-tune pipeline. OpenAI and Anthropic both ignore unknown top-level
+// JSONL keys during validation.
+
+export type FineTuneFilters = {
+  /** Drop calls from dispatches with composite below this score. */
+  minComposite?: number | null;
+  /** Restrict to one call kind. */
+  kind?: "polish" | "fallback" | "commentator" | null;
+  /** Only include dispatches that have operator feedback recorded. */
+  feedbackOnly?: boolean;
+  /** Attach per-row eval metadata in a `metadata` field. */
+  withMeta?: boolean;
+};
+
+export type FineTuneDatasetRow = {
+  messages: Array<{ role: "system" | "user" | "assistant"; content: string }>;
+  metadata?: {
+    archiveId: number | null;
+    callKind: string;
+    promptHash: string;
+    composite: number | null;
+    bannedCount: number | null;
+    dimensions: unknown;
+    feedback: string | null;
+    createdAt: string;
+  };
+};
+
+export async function buildFineTuneDataset(
+  filters: FineTuneFilters,
+): Promise<{ rows: FineTuneDatasetRow[]; total: number; skipped: number }> {
+  // Pull every successful LLM call joined with its prompt text and the
+  // parent dispatch's eval row. Skipping rows without a resolvable prompt
+  // (i.e. the prompt registry insert failed and we only have the hash) —
+  // those can't form a complete (system, user, assistant) triple.
+  const joined = await db
+    .select({
+      callId: dispatchLlmCallsTable.id,
+      archiveId: dispatchLlmCallsTable.dispatchArchiveId,
+      kind: dispatchLlmCallsTable.kind,
+      promptHash: dispatchLlmCallsTable.promptHash,
+      userMessage: dispatchLlmCallsTable.userMessage,
+      responseText: dispatchLlmCallsTable.responseText,
+      status: dispatchLlmCallsTable.status,
+      callCreatedAt: dispatchLlmCallsTable.createdAt,
+      promptContent: dispatchPromptsTable.content,
+      composite: dispatchArchiveTable.evalCompositeScore,
+      bannedCount: dispatchArchiveTable.evalBannedPhrasesCount,
+      evalScores: dispatchArchiveTable.evalScores,
+      feedback: dispatchArchiveTable.feedback,
+    })
+    .from(dispatchLlmCallsTable)
+    .leftJoin(
+      dispatchPromptsTable,
+      eq(dispatchLlmCallsTable.promptHash, dispatchPromptsTable.hash),
+    )
+    .leftJoin(
+      dispatchArchiveTable,
+      eq(dispatchLlmCallsTable.dispatchArchiveId, dispatchArchiveTable.id),
+    )
+    .orderBy(dispatchLlmCallsTable.createdAt);
+
+  const rows: FineTuneDatasetRow[] = [];
+  let skipped = 0;
+  for (const r of joined) {
+    if (r.status !== "ok") {
+      skipped++;
+      continue;
+    }
+    if (!r.promptContent || r.userMessage.length === 0 || r.responseText.length === 0) {
+      skipped++;
+      continue;
+    }
+    if (filters.kind && r.kind !== filters.kind) {
+      skipped++;
+      continue;
+    }
+    if (filters.feedbackOnly && (r.feedback === null || r.feedback.length === 0)) {
+      skipped++;
+      continue;
+    }
+    const compositeNum =
+      r.composite === null
+        ? null
+        : Number.isFinite(Number(r.composite))
+          ? Number(r.composite)
+          : null;
+    if (
+      filters.minComposite !== undefined &&
+      filters.minComposite !== null &&
+      (compositeNum === null || compositeNum < filters.minComposite)
+    ) {
+      skipped++;
+      continue;
+    }
+    const row: FineTuneDatasetRow = {
+      messages: [
+        { role: "system", content: r.promptContent },
+        { role: "user", content: r.userMessage },
+        { role: "assistant", content: r.responseText },
+      ],
+    };
+    if (filters.withMeta) {
+      row.metadata = {
+        archiveId: r.archiveId,
+        callKind: r.kind,
+        promptHash: r.promptHash,
+        composite: compositeNum,
+        bannedCount: r.bannedCount,
+        dimensions: r.evalScores,
+        feedback: r.feedback,
+        createdAt: r.callCreatedAt.toISOString(),
+      };
+    }
+    rows.push(row);
+  }
+
+  return { rows, total: rows.length, skipped };
 }

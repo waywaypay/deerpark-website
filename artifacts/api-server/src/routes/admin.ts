@@ -52,6 +52,7 @@ import {
   resetBannerPromptTemplate,
 } from "../lib/image-gen";
 import {
+  buildFineTuneDataset,
   getDispatchArchive,
   getDispatchEvalAggregates,
   listDispatchArchive,
@@ -750,6 +751,59 @@ router.get("/admin/dispatch-archive", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to load dispatch archive");
     return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Streamable JSONL export of (system, user, assistant) triples joined with
+// eval metadata. Direct upload to OpenAI / Anthropic / Together fine-tune
+// endpoints — they all accept the chat-completion JSONL format. Filters via
+// query params let the operator slice by composite score, call kind, or
+// feedback presence before downloading.
+router.get("/admin/dispatch-archive/fine-tune-dataset", async (req, res) => {
+  const parseNum = (v: unknown): number | null => {
+    if (typeof v !== "string") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+  const minComposite = parseNum(req.query["minComposite"]);
+  const kindParam = typeof req.query["kind"] === "string" ? req.query["kind"] : "";
+  const kind: "polish" | "fallback" | "commentator" | null =
+    kindParam === "polish" || kindParam === "fallback" || kindParam === "commentator"
+      ? kindParam
+      : null;
+  const feedbackOnly = req.query["feedbackOnly"] === "true" || req.query["feedbackOnly"] === "1";
+  const withMeta = req.query["withMeta"] === "true" || req.query["withMeta"] === "1";
+
+  try {
+    const dataset = await buildFineTuneDataset({
+      minComposite,
+      kind,
+      feedbackOnly,
+      withMeta,
+    });
+    const date = new Date().toISOString().slice(0, 10);
+    const tag = [
+      kind ?? "all",
+      minComposite !== null ? `min${minComposite}` : null,
+      feedbackOnly ? "feedback" : null,
+    ]
+      .filter(Boolean)
+      .join("-");
+    const filename = `dispatch-fine-tune-${date}-${tag}.jsonl`;
+    res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.setHeader("X-Dataset-Rows", String(dataset.total));
+    res.setHeader("X-Dataset-Skipped", String(dataset.skipped));
+    for (const row of dataset.rows) {
+      res.write(JSON.stringify(row) + "\n");
+    }
+    return res.end();
+  } catch (err) {
+    req.log.error({ err }, "Fine-tune dataset export failed");
+    if (!res.headersSent) {
+      return res.status(500).json({ error: "Internal server error" });
+    }
+    return res.end();
   }
 });
 

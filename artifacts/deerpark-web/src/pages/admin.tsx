@@ -2569,10 +2569,145 @@ const EvalTrendStrip = ({
   );
 };
 
+const DatasetDownloadControls = ({ token }: { token: string }) => {
+  const [minComposite, setMinComposite] = useState("");
+  const [kind, setKind] = useState<"" | "polish" | "fallback" | "commentator">("");
+  const [feedbackOnly, setFeedbackOnly] = useState(false);
+  const [withMeta, setWithMeta] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const download = async () => {
+    setDownloading(true);
+    setStatus(null);
+    const params = new URLSearchParams();
+    if (minComposite.trim().length > 0 && Number.isFinite(Number(minComposite))) {
+      params.set("minComposite", String(Number(minComposite)));
+    }
+    if (kind) params.set("kind", kind);
+    if (feedbackOnly) params.set("feedbackOnly", "1");
+    if (withMeta) params.set("withMeta", "1");
+    const path = `/admin/dispatch-archive/fine-tune-dataset${
+      params.toString().length > 0 ? `?${params.toString()}` : ""
+    }`;
+    try {
+      const res = await apiFetch(token, path);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = res.headers.get("X-Dataset-Rows");
+      const blob = await res.blob();
+      const filename =
+        res.headers
+          .get("Content-Disposition")
+          ?.match(/filename="([^"]+)"/)?.[1] ?? "dispatch-fine-tune.jsonl";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setStatus({ ok: true, message: `${rows ?? "?"} rows downloaded` });
+    } catch (err) {
+      setStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Download failed",
+      });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-foreground/10 pt-3 mt-1">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <div className="section-label">Fine-tune dataset</div>
+          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+            Downloads a JSONL of (system, user, assistant) triples from
+            captured LLM calls — upload directly to an OpenAI/Anthropic
+            fine-tune job.
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {status && (
+            <span
+              className={`text-[10px] uppercase tracking-widest ${status.ok ? "text-primary" : "text-red-400"}`}
+            >
+              {status.message}
+            </span>
+          )}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => void download()}
+            disabled={downloading}
+            className="rounded-none text-[10px] uppercase tracking-widest"
+          >
+            {downloading ? "Building…" : "Download JSONL"}
+          </Button>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-end gap-3 text-xs">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Min composite
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={10}
+            step={0.1}
+            value={minComposite}
+            onChange={(e) => setMinComposite(e.target.value)}
+            placeholder="e.g. 6"
+            className="w-24 bg-background/40 border border-foreground/20 px-2 py-1 text-xs font-mono focus:border-primary focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Call kind
+          </span>
+          <select
+            value={kind}
+            onChange={(e) =>
+              setKind(e.target.value as "" | "polish" | "fallback" | "commentator")
+            }
+            className="bg-background/40 border border-foreground/20 px-2 py-1 text-xs focus:border-primary focus:outline-none"
+          >
+            <option value="">All</option>
+            <option value="polish">Polish</option>
+            <option value="fallback">Fallback</option>
+            <option value="commentator">Commentator</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 pb-1">
+          <input
+            type="checkbox"
+            checked={feedbackOnly}
+            onChange={(e) => setFeedbackOnly(e.target.checked)}
+          />
+          <span className="text-muted-foreground">Feedback only</span>
+        </label>
+        <label className="flex items-center gap-2 pb-1">
+          <input
+            type="checkbox"
+            checked={withMeta}
+            onChange={(e) => setWithMeta(e.target.checked)}
+          />
+          <span className="text-muted-foreground">Include metadata</span>
+        </label>
+      </div>
+    </div>
+  );
+};
+
 const EvalAggregatePanel = ({
   aggregates,
+  token,
 }: {
   aggregates: DispatchEvalAggregates | null;
+  token: string;
 }) => {
   if (!aggregates) return null;
   const { totals, composite, bannedPerDispatch, dimensions, byPromptVersion, topBannedPhrases } =
@@ -2746,6 +2881,8 @@ const EvalAggregatePanel = ({
           )}
         </div>
       </div>
+
+      <DatasetDownloadControls token={token} />
     </div>
   );
 };
@@ -3095,7 +3232,7 @@ const FeedbackTab = ({ token }: { token: string }) => {
         </div>
       )}
 
-      <EvalAggregatePanel aggregates={aggregates} />
+      <EvalAggregatePanel aggregates={aggregates} token={token} />
       <EvalTrendStrip trend={aggregates?.trend ?? []} />
 
       <div className="space-y-3">
