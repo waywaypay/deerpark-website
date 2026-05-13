@@ -2594,6 +2594,8 @@ const DatasetDownloadControls = ({ token }: { token: string }) => {
       const res = await apiFetch(token, path);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const rows = res.headers.get("X-Dataset-Rows");
+      const skipped = res.headers.get("X-Dataset-Skipped");
+      const skippedByRaw = res.headers.get("X-Dataset-Skipped-By");
       const blob = await res.blob();
       const filename =
         res.headers
@@ -2607,7 +2609,19 @@ const DatasetDownloadControls = ({ token }: { token: string }) => {
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      setStatus({ ok: true, message: `${rows ?? "?"} rows downloaded` });
+      let breakdown = "";
+      if (skippedByRaw) {
+        try {
+          const parsed = JSON.parse(skippedByRaw) as Record<string, number>;
+          const parts = Object.entries(parsed)
+            .filter(([, n]) => n > 0)
+            .map(([k, n]) => `${k}:${n}`);
+          if (parts.length > 0) breakdown = ` (skipped ${skipped ?? "?"} — ${parts.join(", ")})`;
+        } catch {
+          // ignore parse errors
+        }
+      }
+      setStatus({ ok: true, message: `${rows ?? "?"} rows downloaded${breakdown}` });
     } catch (err) {
       setStatus({
         ok: false,

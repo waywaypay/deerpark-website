@@ -534,9 +534,22 @@ export type FineTuneDatasetRow = {
   };
 };
 
+export type FineTuneSkipReason =
+  | "status"
+  | "missingPrompt"
+  | "emptyMessage"
+  | "kindFilter"
+  | "feedbackFilter"
+  | "compositeFilter";
+
 export async function buildFineTuneDataset(
   filters: FineTuneFilters,
-): Promise<{ rows: FineTuneDatasetRow[]; total: number; skipped: number }> {
+): Promise<{
+  rows: FineTuneDatasetRow[];
+  total: number;
+  skipped: number;
+  skippedBy: Record<FineTuneSkipReason, number>;
+}> {
   // Pull every successful LLM call joined with its prompt text and the
   // parent dispatch's eval row. Skipping rows without a resolvable prompt
   // (i.e. the prompt registry insert failed and we only have the hash) —
@@ -569,21 +582,38 @@ export async function buildFineTuneDataset(
     .orderBy(dispatchLlmCallsTable.createdAt);
 
   const rows: FineTuneDatasetRow[] = [];
+  const skippedBy: Record<FineTuneSkipReason, number> = {
+    status: 0,
+    missingPrompt: 0,
+    emptyMessage: 0,
+    kindFilter: 0,
+    feedbackFilter: 0,
+    compositeFilter: 0,
+  };
   let skipped = 0;
   for (const r of joined) {
     if (r.status !== "ok") {
+      skippedBy.status++;
       skipped++;
       continue;
     }
-    if (!r.promptContent || r.userMessage.length === 0 || r.responseText.length === 0) {
+    if (!r.promptContent) {
+      skippedBy.missingPrompt++;
+      skipped++;
+      continue;
+    }
+    if (r.userMessage.length === 0 || r.responseText.length === 0) {
+      skippedBy.emptyMessage++;
       skipped++;
       continue;
     }
     if (filters.kind && r.kind !== filters.kind) {
+      skippedBy.kindFilter++;
       skipped++;
       continue;
     }
     if (filters.feedbackOnly && (r.feedback === null || r.feedback.length === 0)) {
+      skippedBy.feedbackFilter++;
       skipped++;
       continue;
     }
@@ -598,6 +628,7 @@ export async function buildFineTuneDataset(
       filters.minComposite !== null &&
       (compositeNum === null || compositeNum < filters.minComposite)
     ) {
+      skippedBy.compositeFilter++;
       skipped++;
       continue;
     }
@@ -623,5 +654,5 @@ export async function buildFineTuneDataset(
     rows.push(row);
   }
 
-  return { rows, total: rows.length, skipped };
+  return { rows, total: rows.length, skipped, skippedBy };
 }

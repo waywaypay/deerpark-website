@@ -794,6 +794,7 @@ router.get("/admin/dispatch-archive/fine-tune-dataset", async (req, res) => {
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("X-Dataset-Rows", String(dataset.total));
     res.setHeader("X-Dataset-Skipped", String(dataset.skipped));
+    res.setHeader("X-Dataset-Skipped-By", JSON.stringify(dataset.skippedBy));
     for (const row of dataset.rows) {
       res.write(JSON.stringify(row) + "\n");
     }
