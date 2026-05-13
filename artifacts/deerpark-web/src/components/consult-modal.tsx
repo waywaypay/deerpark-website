@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, X } from "lucide-react";
+import { encodeSource } from "@/lib/attribution";
 
 type Props = {
   open: boolean;
@@ -76,7 +77,7 @@ export function ConsultModal({ open, onClose, source }: Props) {
           name: `${firstName} ${lastName}`,
           contact: email,
           contactType: "email",
-          source,
+          source: encodeSource(source),
         }),
       });
       if (!res.ok) {
