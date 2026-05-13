@@ -16,6 +16,7 @@
     <meta property="og:image" content="https://www.deerpark.io/opengraph.jpg" />
     <meta property="og:image:width" content="1280" />
     <meta property="og:image:height" content="720" />
+    <meta property="og:locale" content="en_US" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="DeerPark — From AI curious to AI capable." />
@@ -40,6 +41,58 @@
         "description": "AI enablement for organizations. We assess, build, deploy, and train so the tools get adopted instead of shelved.",
         "email": "contact@deerpark.io",
         "logo": "https://www.deerpark.io/favicon-192.png"
+      }
+    </script>
+
+    <!-- ProfessionalService schema. Source of truth: SERVICE_PILLARS in src/pages/home.tsx — keep in sync if pillars change. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "ProfessionalService",
+        "name": "DeerPark.io",
+        "url": "https://www.deerpark.io",
+        "image": "https://www.deerpark.io/opengraph.jpg",
+        "description": "AI enablement consultancy. We assess organizational readiness, build custom AI applications, deploy them with your team, and train your people to operate them — kickoff to handoff in roughly 90 days.",
+        "areaServed": "Worldwide",
+        "serviceType": "AI consulting, custom AI application development, AI training",
+        "hasOfferCatalog": {
+          "@type": "OfferCatalog",
+          "name": "AI enablement services",
+          "itemListElement": [
+            {
+              "@type": "Offer",
+              "itemOffered": {
+                "@type": "Service",
+                "name": "Assess",
+                "description": "AI Readiness Assessment, Workflow Diagnostic & Mapping, Tool & Vendor Evaluation."
+              }
+            },
+            {
+              "@type": "Offer",
+              "itemOffered": {
+                "@type": "Service",
+                "name": "Build",
+                "description": "Custom AI Application Development, Process Automation, System Integration."
+              }
+            },
+            {
+              "@type": "Offer",
+              "itemOffered": {
+                "@type": "Service",
+                "name": "Deploy",
+                "description": "Rollout & Change Management, Runbooks & Governance, 30-Day On-Call Support."
+              }
+            },
+            {
+              "@type": "Offer",
+              "itemOffered": {
+                "@type": "Service",
+                "name": "Train",
+                "description": "Executive AI Briefings, Role-Based Workshops, Hands-On Team Enablement."
+              }
+            }
+          ]
+        }
       }
     </script>
 
