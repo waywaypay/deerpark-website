@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import { ArrowRight, Check, ExternalLink, Rss } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FadeIn, Footer, Navbar, ConsultationFAB } from "@/components/site-layout";
+import { encodeSource } from "@/lib/attribution";
 
 type Headline = {
   source: string;
@@ -101,7 +102,7 @@ const DispatchSubscribe = () => {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email,
-          source: "dispatch",
+          source: encodeSource("dispatch"),
         }),
       });
 
@@ -192,6 +193,9 @@ const DispatchSubscribe = () => {
           {status.message}
         </p>
       )}
+      <p className="text-xs text-muted-foreground font-light leading-relaxed">
+        One brief per weekday. No spam, no list sharing. Unsubscribe in one click from any email.
+      </p>
     </form>
   );
 };
