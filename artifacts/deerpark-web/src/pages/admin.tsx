@@ -2386,6 +2386,16 @@ type DispatchArchiveSummary = {
   evalBannedPhrases: DispatchBannedPhraseHit[] | null;
   evalModel: string | null;
   evalRunAt: string | null;
+  evalFormatting:
+    | {
+        issues: Array<{ type: string; count: number; sample?: string }>;
+        totalIssues: number;
+      }
+    | null;
+  evalFormattingScore: string | number | null;
+  evalBannerScores: Record<string, { score: number; note: string }> | null;
+  evalBannerCompositeScore: string | number | null;
+  evalBannerModel: string | null;
   promptVersions: DispatchPromptVersionMap | null;
   createdAt: string;
   itemCount: number;
@@ -2491,12 +2501,31 @@ type DispatchEvalAggregates = {
     banner: DispatchEvalPromptVersionAgg[];
   };
   topBannedPhrases: DispatchEvalBannedPhraseAgg[];
+  formatting: {
+    score: DispatchEvalDimensionStats;
+    totalIssues: DispatchEvalDimensionStats;
+    byType: Array<{ type: string; totalCount: number; dispatchCount: number }>;
+  };
+  banner: { composite: DispatchEvalDimensionStats };
   trend: Array<{
     id: number;
     createdAt: string;
     composite: number | null;
     banned: number | null;
+    formatting: number | null;
+    banner: number | null;
   }>;
+};
+
+const FORMATTING_ISSUE_LABELS: Record<string, string> = {
+  empty_paragraph: "Empty paragraph",
+  nbsp_run: "&nbsp; run",
+  double_space: "Double space",
+  broken_anchor: "Broken anchor",
+  item_count_mismatch: "Item count ≠ 10",
+  missing_alt: "Missing alt text",
+  unrendered_token: "Unrendered {{token}}",
+  duplicate_link: "Duplicate link",
 };
 
 const EvalTrendStrip = ({
@@ -2724,8 +2753,16 @@ const EvalAggregatePanel = ({
   token: string;
 }) => {
   if (!aggregates) return null;
-  const { totals, composite, bannedPerDispatch, dimensions, byPromptVersion, topBannedPhrases } =
-    aggregates;
+  const {
+    totals,
+    composite,
+    bannedPerDispatch,
+    dimensions,
+    byPromptVersion,
+    topBannedPhrases,
+    formatting,
+    banner,
+  } = aggregates;
   // Sorted weakest → strongest so the dimensions most in need of fine-tune
   // examples lead the eye.
   const dimRows = (Object.keys(RUBRIC_LABELS) as Array<keyof DispatchEvalScores>)
@@ -2744,25 +2781,34 @@ const EvalAggregatePanel = ({
     })
     .filter((v): v is { slot: "polish" | "fallback" | "commentator" | "banner"; agg: DispatchEvalPromptVersionAgg } => v !== null);
   return (
-    <div className="border border-foreground/15 bg-card p-4 space-y-4">
-      <div className="flex items-baseline justify-between">
-        <div>
-          <div className="section-label">Aggregate signals</div>
-          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-            Rolled up across the full archive. Shapes the fine-tuning
-            dataset: weakest dimensions to target, top prompt versions to
-            anchor on, leaked phrases to mine as negatives.
-          </div>
-        </div>
-        <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground text-right">
+    <div className="space-y-4">
+      <div className="border border-foreground/15 bg-card p-4 space-y-2">
+        <div className="flex items-baseline justify-between">
           <div>
-            {totals.archived} archived · {totals.evaluated} evaluated
+            <div className="section-label">Aggregate signals</div>
+            <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+              Three independent tracks. Each targets a different model and
+              has its own dataset — never folded into one composite.
+            </div>
           </div>
-          <div className="text-primary/80 mt-0.5">
-            {totals.withFeedback} with feedback
+          <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground text-right">
+            <div>
+              {totals.archived} archived · {totals.evaluated} evaluated
+            </div>
+            <div className="text-primary/80 mt-0.5">
+              {totals.withFeedback} with feedback
+            </div>
           </div>
         </div>
       </div>
+
+      <div className="border border-foreground/15 bg-card p-4 space-y-4">
+        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
+          <div className="section-label">Writing track</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Target: text fine-tune (chat completions JSONL)
+          </div>
+        </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
@@ -2896,7 +2942,126 @@ const EvalAggregatePanel = ({
         </div>
       </div>
 
-      <DatasetDownloadControls token={token} />
+        <DatasetDownloadControls token={token} />
+      </div>
+
+      <div className="border border-foreground/15 bg-card p-4 space-y-3">
+        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
+          <div className="section-label">Formatting track</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Target: template / post-processing fixes (no fine-tune)
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+              Score (10 = clean)
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Score mean</span>
+                <span className={`font-mono ${scoreColor(formatting.score.mean)}`}>
+                  {formatting.score.mean !== null
+                    ? formatting.score.mean.toFixed(2)
+                    : "—"}
+                  /10
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Range</span>
+                <span className="font-mono text-muted-foreground">
+                  {formatting.score.min !== null && formatting.score.max !== null
+                    ? `${formatting.score.min.toFixed(1)}–${formatting.score.max.toFixed(1)}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Issues/send mean</span>
+                <span
+                  className={`font-mono ${
+                    formatting.totalIssues.mean === null
+                      ? "text-muted-foreground"
+                      : formatting.totalIssues.mean <= 1
+                        ? "text-emerald-400"
+                        : formatting.totalIssues.mean <= 3
+                          ? "text-amber-300"
+                          : "text-red-400"
+                  }`}
+                >
+                  {formatting.totalIssues.mean !== null
+                    ? formatting.totalIssues.mean.toFixed(2)
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Evaluated</span>
+                <span className="font-mono text-muted-foreground">
+                  n={formatting.score.n}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+              Top issue types
+            </div>
+            {formatting.byType.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground">
+                No formatting issues recorded yet.
+              </div>
+            ) : (
+              <ul className="space-y-1 text-xs max-h-40 overflow-auto pr-1">
+                {formatting.byType.slice(0, 12).map((i) => (
+                  <li
+                    key={i.type}
+                    className="flex items-baseline justify-between"
+                  >
+                    <span className="font-mono text-amber-300/90">
+                      {FORMATTING_ISSUE_LABELS[i.type] ?? i.type}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {i.totalCount}× · {i.dispatchCount} sends
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-foreground/15 bg-card p-4 space-y-3">
+        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
+          <div className="section-label">Image track</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Target: banner LoRA fine-tune (prompt + image JSONL)
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <div className="flex items-baseline justify-between">
+            <span className="text-muted-foreground">Banner score mean</span>
+            <span className={`font-mono ${scoreColor(banner.composite.mean)}`}>
+              {banner.composite.mean !== null
+                ? banner.composite.mean.toFixed(2)
+                : "—"}
+              /10
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-muted-foreground">Evaluated</span>
+            <span className="font-mono text-muted-foreground">
+              n={banner.composite.n}
+            </span>
+          </div>
+        </div>
+        {banner.composite.n === 0 && (
+          <div className="text-[11px] text-muted-foreground italic">
+            Vision rubric not wired yet — landing in PR B (Venice VL call +
+            banner-image archive + image dataset download).
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -3153,8 +3318,12 @@ const FeedbackTab = ({ token }: { token: string }) => {
         ok?: boolean;
         composite?: number;
         bannedCount?: number;
+        formattingScore?: number;
+        formattingIssues?: number;
         evalScores?: DispatchEvalScores | null;
         evalBannedPhrases?: DispatchBannedPhraseHit[] | null;
+        evalFormatting?: DispatchArchiveSummary["evalFormatting"];
+        evalFormattingScore?: number | null;
         evalRunAt?: string | null;
         evalModel?: string | null;
         error?: string;
@@ -3172,6 +3341,13 @@ const FeedbackTab = ({ token }: { token: string }) => {
                   typeof json.composite === "number" ? json.composite : null,
                 evalBannedPhrasesCount: json.bannedCount ?? null,
                 evalBannedPhrases: json.evalBannedPhrases ?? null,
+                evalFormatting: json.evalFormatting ?? null,
+                evalFormattingScore:
+                  typeof json.evalFormattingScore === "number"
+                    ? json.evalFormattingScore
+                    : typeof json.formattingScore === "number"
+                      ? json.formattingScore
+                      : null,
                 evalRunAt: json.evalRunAt ?? null,
                 evalModel: json.evalModel ?? null,
               }
@@ -3186,6 +3362,13 @@ const FeedbackTab = ({ token }: { token: string }) => {
             typeof json.composite === "number" ? json.composite : null,
           evalBannedPhrasesCount: json.bannedCount ?? null,
           evalBannedPhrases: json.evalBannedPhrases ?? null,
+          evalFormatting: json.evalFormatting ?? null,
+          evalFormattingScore:
+            typeof json.evalFormattingScore === "number"
+              ? json.evalFormattingScore
+              : typeof json.formattingScore === "number"
+                ? json.formattingScore
+                : null,
           evalRunAt: json.evalRunAt ?? null,
           evalModel: json.evalModel ?? null,
         });
@@ -3193,7 +3376,7 @@ const FeedbackTab = ({ token }: { token: string }) => {
       setEvalStatus({
         id,
         ok: true,
-        message: `Composite ${json.composite?.toFixed(2) ?? "—"}/10 · ${json.bannedCount ?? 0} hits`,
+        message: `W ${json.composite?.toFixed(2) ?? "—"}/10 · F ${json.formattingScore?.toFixed(1) ?? "—"}/10 · ${json.bannedCount ?? 0} hits · ${json.formattingIssues ?? 0} fmt`,
       });
       // Refresh aggregates so the dashboard reflects the new score without
       // forcing a full archive reload.
@@ -3258,6 +3441,8 @@ const FeedbackTab = ({ token }: { token: string }) => {
           const evStatus = evalStatus?.id === it.id ? evalStatus : null;
           const composite = compositeNumber(it.evalCompositeScore);
           const banned = it.evalBannedPhrasesCount;
+          const formattingScore = compositeNumber(it.evalFormattingScore);
+          const formattingIssues = it.evalFormatting?.totalIssues ?? null;
           return (
             <div key={it.id} className="border border-foreground/15 bg-card">
               <button
@@ -3306,6 +3491,16 @@ const FeedbackTab = ({ token }: { token: string }) => {
                   title="Banned-phrase hits (lower is better)"
                 >
                   {banned === null ? "—" : `${banned} hits`}
+                </span>
+                <span
+                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${scoreColor(formattingScore)}`}
+                  title={
+                    formattingIssues === null
+                      ? "Formatting score (10 = clean)"
+                      : `Formatting: ${formattingIssues} issue${formattingIssues === 1 ? "" : "s"}`
+                  }
+                >
+                  {formattingScore !== null ? `F ${formattingScore.toFixed(1)}` : "F —"}
                 </span>
                 {it.feedback ? (
                   <span className="text-[10px] uppercase tracking-widest text-primary w-20 text-right">

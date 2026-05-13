@@ -134,6 +134,11 @@ export async function listDispatchArchive(limit = 50): Promise<DispatchArchiveSu
       evalBannedPhrases: dispatchArchiveTable.evalBannedPhrases,
       evalModel: dispatchArchiveTable.evalModel,
       evalRunAt: dispatchArchiveTable.evalRunAt,
+      evalFormatting: dispatchArchiveTable.evalFormatting,
+      evalFormattingScore: dispatchArchiveTable.evalFormattingScore,
+      evalBannerScores: dispatchArchiveTable.evalBannerScores,
+      evalBannerCompositeScore: dispatchArchiveTable.evalBannerCompositeScore,
+      evalBannerModel: dispatchArchiveTable.evalBannerModel,
       promptVersions: dispatchArchiveTable.promptVersions,
       createdAt: dispatchArchiveTable.createdAt,
       itemCount: sql<number>`coalesce(jsonb_array_length(${dispatchArchiveTable.headlinesSnapshot}), 0)::int`,
@@ -234,11 +239,25 @@ export type DispatchEvalAggregates = {
     banner: DispatchEvalPromptVersionAgg[];
   };
   topBannedPhrases: DispatchEvalBannedPhraseAgg[];
+  /** Formatting track (deterministic). Score is 10 - issues, clamped. */
+  formatting: {
+    score: DispatchEvalDimensionStats;
+    totalIssues: DispatchEvalDimensionStats;
+    /** Most common formatting issue types across the archive. */
+    byType: Array<{ type: string; totalCount: number; dispatchCount: number }>;
+  };
+  /** Image / banner track. Populated by the vision rubric in PR B; until
+   *  then n=0 and means are null so the UI renders an empty state. */
+  banner: {
+    composite: DispatchEvalDimensionStats;
+  };
   trend: Array<{
     id: number;
     createdAt: string;
     composite: number | null;
     banned: number | null;
+    formatting: number | null;
+    banner: number | null;
   }>;
 };
 
@@ -297,6 +316,17 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
     concrete_mean: string | null;
     concrete_min: string | null;
     concrete_max: string | null;
+    fmt_score_mean: string | null;
+    fmt_score_min: string | null;
+    fmt_score_max: string | null;
+    fmt_n: string | null;
+    fmt_issues_mean: string | null;
+    fmt_issues_min: string | null;
+    fmt_issues_max: string | null;
+    banner_score_mean: string | null;
+    banner_score_min: string | null;
+    banner_score_max: string | null;
+    banner_n: string | null;
   }>(sql`
     SELECT
       count(*)::text AS archived,
@@ -322,7 +352,18 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
       max((eval_scores->'sourceTiering'->>'score')::numeric)::text AS source_max,
       avg((eval_scores->'concreteness'->>'score')::numeric)::text AS concrete_mean,
       min((eval_scores->'concreteness'->>'score')::numeric)::text AS concrete_min,
-      max((eval_scores->'concreteness'->>'score')::numeric)::text AS concrete_max
+      max((eval_scores->'concreteness'->>'score')::numeric)::text AS concrete_max,
+      avg(eval_formatting_score)::text AS fmt_score_mean,
+      min(eval_formatting_score)::text AS fmt_score_min,
+      max(eval_formatting_score)::text AS fmt_score_max,
+      count(*) FILTER (WHERE eval_formatting IS NOT NULL)::text AS fmt_n,
+      avg((eval_formatting->>'totalIssues')::int)::text AS fmt_issues_mean,
+      min((eval_formatting->>'totalIssues')::int)::text AS fmt_issues_min,
+      max((eval_formatting->>'totalIssues')::int)::text AS fmt_issues_max,
+      avg(eval_banner_composite_score)::text AS banner_score_mean,
+      min(eval_banner_composite_score)::text AS banner_score_min,
+      max(eval_banner_composite_score)::text AS banner_score_max,
+      count(*) FILTER (WHERE eval_banner_composite_score IS NOT NULL)::text AS banner_n
     FROM dispatch_archive
   `);
   const o = overallRows.rows[0];
@@ -457,15 +498,39 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
     }),
   );
 
-  // Full-archive trend. Just the two scalar columns and an id; cheap to
-  // pull even for thousands of rows. Ordered oldest → newest so the UI
-  // can draw left-to-right without an extra reverse.
+  // Top formatting issue types — same unnest-and-group shape as banned
+  // phrases, but over eval_formatting->'issues'.
+  const fmtRows = await db.execute<{
+    type: string;
+    total_count: string;
+    dispatch_count: string;
+  }>(sql`
+    SELECT
+      (issue->>'type')::text AS type,
+      sum((issue->>'count')::int)::text AS total_count,
+      count(DISTINCT id)::text AS dispatch_count
+    FROM dispatch_archive,
+         jsonb_array_elements(coalesce(eval_formatting->'issues', '[]'::jsonb)) AS issue
+    GROUP BY type
+    ORDER BY total_count DESC
+    LIMIT 25
+  `);
+  const formattingByType = fmtRows.rows.map((r) => ({
+    type: r.type,
+    totalCount: Number(r.total_count) || 0,
+    dispatchCount: Number(r.dispatch_count) || 0,
+  }));
+
+  // Full-archive trend. Per-row scalar scores for all three tracks, ordered
+  // oldest → newest so the UI can draw left-to-right without a reverse.
   const trendRows = await db
     .select({
       id: dispatchArchiveTable.id,
       createdAt: dispatchArchiveTable.createdAt,
       composite: dispatchArchiveTable.evalCompositeScore,
       banned: dispatchArchiveTable.evalBannedPhrasesCount,
+      formatting: dispatchArchiveTable.evalFormattingScore,
+      banner: dispatchArchiveTable.evalBannerCompositeScore,
     })
     .from(dispatchArchiveTable)
     .orderBy(dispatchArchiveTable.createdAt);
@@ -474,6 +539,8 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
     createdAt: r.createdAt.toISOString(),
     composite: numOrNull(r.composite),
     banned: r.banned ?? null,
+    formatting: numOrNull(r.formatting),
+    banner: numOrNull(r.banner),
   }));
 
   return {
@@ -487,6 +554,29 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
     dimensions,
     byPromptVersion,
     topBannedPhrases,
+    formatting: {
+      score: {
+        mean: roundTo(numOrNull(o?.fmt_score_mean ?? null), 2),
+        min: roundTo(numOrNull(o?.fmt_score_min ?? null), 2),
+        max: roundTo(numOrNull(o?.fmt_score_max ?? null), 2),
+        n: Number(o?.fmt_n ?? 0) || 0,
+      },
+      totalIssues: {
+        mean: roundTo(numOrNull(o?.fmt_issues_mean ?? null), 2),
+        min: roundTo(numOrNull(o?.fmt_issues_min ?? null), 2),
+        max: roundTo(numOrNull(o?.fmt_issues_max ?? null), 2),
+        n: Number(o?.fmt_n ?? 0) || 0,
+      },
+      byType: formattingByType,
+    },
+    banner: {
+      composite: {
+        mean: roundTo(numOrNull(o?.banner_score_mean ?? null), 2),
+        min: roundTo(numOrNull(o?.banner_score_min ?? null), 2),
+        max: roundTo(numOrNull(o?.banner_score_max ?? null), 2),
+        n: Number(o?.banner_n ?? 0) || 0,
+      },
+    },
     trend,
   };
 }
