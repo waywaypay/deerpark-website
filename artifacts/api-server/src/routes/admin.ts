@@ -873,8 +873,12 @@ router.post("/admin/dispatch-archive/:id/eval", async (req, res) => {
       ok: true,
       composite: outcome.composite,
       bannedCount: outcome.bannedCount,
+      formattingScore: outcome.formattingScore,
+      formattingIssues: outcome.formattingIssues,
       evalScores: row?.evalScores ?? null,
       evalBannedPhrases: row?.evalBannedPhrases ?? null,
+      evalFormatting: row?.evalFormatting ?? null,
+      evalFormattingScore: row?.evalFormattingScore ?? null,
       evalRunAt: row?.evalRunAt ?? null,
       evalModel: row?.evalModel ?? null,
     });
