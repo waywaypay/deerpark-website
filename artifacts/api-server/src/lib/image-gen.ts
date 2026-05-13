@@ -11,7 +11,12 @@ import type { HeadlineRow } from "./top-headlines";
 import { logUsage } from "./llm-usage";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-const DEFAULT_MODEL = "venice-sd35";
+// flux-dev follows long, restriction-heavy prompts noticeably better than
+// venice-sd35 — it actually honors the "abstract, non-representational,
+// no landscapes" clauses our template depends on. SD 3.5 routinely drifted
+// back to mountains/sunsets regardless of the negative list. Override with
+// IMAGE_GEN_MODEL if a future Venice release moves the bar (e.g. hidream).
+const DEFAULT_MODEL = "flux-dev";
 const DEFAULT_WIDTH = 1200;
 const DEFAULT_HEIGHT = 400;
 const TIMEOUT_MS = 90_000;
