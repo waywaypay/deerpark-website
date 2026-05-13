@@ -40,53 +40,30 @@ async function fetchPostById(id) {
 }
 
 function injectMeta(html, fields) {
-  const safeTitle = escapeHtml(fields.title);
-  const safeDesc = escapeHtml(fields.description);
-  const safeUrl = escapeHtml(fields.url);
-  const safeImg = escapeHtml(fields.image);
+  const title = escapeHtml(fields.title);
+  const description = escapeHtml(fields.description);
+  const url = escapeHtml(fields.url);
+  const image = escapeHtml(fields.image);
 
-  return html
-    .replace(/<title>[^<]*<\/title>/i, `<title>${safeTitle}</title>`)
-    .replace(
-      /<meta\s+name="description"\s+content="[^"]*"\s*\/?>/i,
-      `<meta name="description" content="${safeDesc}" />`,
-    )
-    .replace(
-      /<meta\s+property="og:type"\s+content="[^"]*"\s*\/?>/i,
-      `<meta property="og:type" content="article" />`,
-    )
-    .replace(
-      /<meta\s+property="og:title"\s+content="[^"]*"\s*\/?>/i,
-      `<meta property="og:title" content="${safeTitle}" />`,
-    )
-    .replace(
-      /<meta\s+property="og:description"\s+content="[^"]*"\s*\/?>/i,
-      `<meta property="og:description" content="${safeDesc}" />`,
-    )
-    .replace(
-      /<meta\s+property="og:url"\s+content="[^"]*"\s*\/?>/i,
-      `<meta property="og:url" content="${safeUrl}" />`,
-    )
-    .replace(
-      /<meta\s+property="og:image"\s+content="[^"]*"\s*\/?>/i,
-      `<meta property="og:image" content="${safeImg}" />`,
-    )
-    .replace(
-      /<meta\s+name="twitter:title"\s+content="[^"]*"\s*\/?>/i,
-      `<meta name="twitter:title" content="${safeTitle}" />`,
-    )
-    .replace(
-      /<meta\s+name="twitter:description"\s+content="[^"]*"\s*\/?>/i,
-      `<meta name="twitter:description" content="${safeDesc}" />`,
-    )
-    .replace(
-      /<meta\s+name="twitter:image"\s+content="[^"]*"\s*\/?>/i,
-      `<meta name="twitter:image" content="${safeImg}" />`,
-    )
-    .replace(
-      /<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i,
-      `<link rel="canonical" href="${safeUrl}" />`,
-    );
+  const metaRe = (attr, name) =>
+    new RegExp(`<meta\\s+${attr}="${name}"\\s+content="[^"]*"\\s*/?>`, "i");
+  const meta = (attr, name, content) => `<meta ${attr}="${name}" content="${content}" />`;
+
+  const replacements = [
+    [/<title>[^<]*<\/title>/i, `<title>${title}</title>`],
+    [metaRe("name", "description"), meta("name", "description", description)],
+    [metaRe("property", "og:type"), meta("property", "og:type", "article")],
+    [metaRe("property", "og:title"), meta("property", "og:title", title)],
+    [metaRe("property", "og:description"), meta("property", "og:description", description)],
+    [metaRe("property", "og:url"), meta("property", "og:url", url)],
+    [metaRe("property", "og:image"), meta("property", "og:image", image)],
+    [metaRe("name", "twitter:title"), meta("name", "twitter:title", title)],
+    [metaRe("name", "twitter:description"), meta("name", "twitter:description", description)],
+    [metaRe("name", "twitter:image"), meta("name", "twitter:image", image)],
+    [/<link\s+rel="canonical"\s+href="[^"]*"\s*\/?>/i, `<link rel="canonical" href="${url}" />`],
+  ];
+
+  return replacements.reduce((out, [re, value]) => out.replace(re, value), html);
 }
 
 module.exports = async function handler(req, res) {
