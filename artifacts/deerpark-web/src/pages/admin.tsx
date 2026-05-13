@@ -2403,6 +2403,23 @@ type DispatchPromptDetail = DispatchPromptSummary & {
   content: string;
 };
 
+type DispatchLlmCall = {
+  id: number;
+  dispatchArchiveId: number | null;
+  kind: "polish" | "fallback" | "commentator";
+  promptHash: string;
+  userMessage: string;
+  responseText: string;
+  model: string;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  latencyMs: number | null;
+  status: "ok" | "request_failed" | "parse_failed" | "missing_subject_or_intro";
+  errorMessage: string | null;
+  createdAt: string;
+};
+
 const PROMPT_SLOTS: { id: DispatchPromptSlot; label: string }[] = [
   { id: "polish", label: "Polish" },
   { id: "fallback", label: "Fallback" },
@@ -2503,6 +2520,112 @@ const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
   );
 };
 
+const formatTokensMaybe = (n: number | null): string =>
+  n === null ? "—" : n.toLocaleString();
+
+const callStatusColor = (status: DispatchLlmCall["status"]): string =>
+  status === "ok"
+    ? "text-emerald-400"
+    : status === "missing_subject_or_intro"
+      ? "text-amber-300"
+      : "text-red-400";
+
+const DispatchLlmTrace = ({
+  archiveId,
+  state,
+  openCallId,
+  onToggle,
+}: {
+  archiveId: number;
+  state: DispatchLlmCall[] | "loading" | "error" | undefined;
+  openCallId: number | null;
+  onToggle: (id: number | null) => void;
+}) => {
+  return (
+    <div className="border-t border-foreground/10 p-4 space-y-3">
+      <div className="flex items-baseline justify-between">
+        <div className="section-label">LLM trace</div>
+        <div className="text-[10px] text-muted-foreground">
+          Raw input + output captured per call · archive #{archiveId}
+        </div>
+      </div>
+      {state === "loading" && (
+        <div className="text-xs text-muted-foreground">Loading…</div>
+      )}
+      {state === "error" && (
+        <div className="text-xs text-red-400">Failed to load LLM calls.</div>
+      )}
+      {Array.isArray(state) && state.length === 0 && (
+        <div className="text-xs text-muted-foreground">
+          No LLM calls captured for this dispatch (composed before tracing was
+          enabled, or fallback didn't fire).
+        </div>
+      )}
+      {Array.isArray(state) && state.length > 0 && (
+        <div className="space-y-2">
+          {state.map((c) => {
+            const isOpen = openCallId === c.id;
+            return (
+              <div key={c.id} className="border border-foreground/15 bg-background/40">
+                <button
+                  type="button"
+                  onClick={() => onToggle(isOpen ? null : c.id)}
+                  className="w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-background/60"
+                >
+                  <span className="text-[10px] uppercase tracking-widest w-20">
+                    {c.kind}
+                  </span>
+                  <span
+                    className={`text-[10px] uppercase tracking-widest w-32 ${callStatusColor(c.status)}`}
+                  >
+                    {c.status}
+                  </span>
+                  <span className="text-[10px] text-primary/80 font-mono">
+                    p:{c.promptHash.slice(0, 7)}
+                  </span>
+                  <span className="flex-1 text-[10px] text-muted-foreground font-mono truncate">
+                    {c.model}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono">
+                    {formatTokensMaybe(c.promptTokens)} in ·{" "}
+                    {formatTokensMaybe(c.completionTokens)} out
+                  </span>
+                  <span className="text-[10px] text-muted-foreground font-mono w-16 text-right">
+                    {c.latencyMs !== null ? `${c.latencyMs}ms` : "—"}
+                  </span>
+                  <ChevronRight
+                    className={`w-3 h-3 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
+                  />
+                </button>
+                {isOpen && (
+                  <div className="border-t border-foreground/10 grid grid-cols-1 lg:grid-cols-2 gap-px bg-foreground/10">
+                    <div className="bg-card p-3 space-y-1">
+                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                        User message
+                      </div>
+                      <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-[480px] overflow-auto">
+                        {c.userMessage}
+                      </pre>
+                    </div>
+                    <div className="bg-card p-3 space-y-1">
+                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                        Raw response{c.status !== "ok" ? ` (${c.status})` : ""}
+                      </div>
+                      <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-[480px] overflow-auto">
+                        {c.responseText || c.errorMessage || "(empty)"}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const FeedbackTab = ({ token }: { token: string }) => {
   const [items, setItems] = useState<DispatchArchiveSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -2515,6 +2638,8 @@ const FeedbackTab = ({ token }: { token: string }) => {
   const [saveStatus, setSaveStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
   const [evalRunningId, setEvalRunningId] = useState<number | null>(null);
   const [evalStatus, setEvalStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
+  const [llmCalls, setLlmCalls] = useState<Record<number, DispatchLlmCall[] | "loading" | "error">>({});
+  const [openCallId, setOpenCallId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2537,6 +2662,19 @@ const FeedbackTab = ({ token }: { token: string }) => {
 
   useEffect(() => { void load(); }, [load]);
 
+  const loadLlmCalls = async (id: number) => {
+    if (llmCalls[id] !== undefined && llmCalls[id] !== "error") return;
+    setLlmCalls((prev) => ({ ...prev, [id]: "loading" }));
+    try {
+      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/llm-calls`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { items: DispatchLlmCall[] };
+      setLlmCalls((prev) => ({ ...prev, [id]: json.items }));
+    } catch {
+      setLlmCalls((prev) => ({ ...prev, [id]: "error" }));
+    }
+  };
+
   const openDetail = async (id: number) => {
     if (expanded === id) {
       setExpanded(null);
@@ -2546,6 +2684,8 @@ const FeedbackTab = ({ token }: { token: string }) => {
     setExpanded(id);
     setDetail(null);
     setDetailLoading(true);
+    // Fire LLM calls fetch in parallel with the detail fetch.
+    void loadLlmCalls(id);
     try {
       const res = await apiFetch(token, `/admin/dispatch-archive/${id}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -2779,7 +2919,8 @@ const FeedbackTab = ({ token }: { token: string }) => {
               </button>
 
               {isOpen && (
-                <div className="border-t border-foreground/10 grid grid-cols-1 lg:grid-cols-2 gap-0">
+                <div className="border-t border-foreground/10">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
                   <div className="lg:border-r border-foreground/10 p-4 space-y-4 max-h-[640px] overflow-auto">
                     <div className="section-label">Dispatch</div>
                     <div>
@@ -2979,6 +3120,13 @@ const FeedbackTab = ({ token }: { token: string }) => {
                       </div>
                     </div>
                   </div>
+                </div>
+                <DispatchLlmTrace
+                  archiveId={it.id}
+                  state={llmCalls[it.id]}
+                  openCallId={openCallId}
+                  onToggle={setOpenCallId}
+                />
                 </div>
               )}
             </div>

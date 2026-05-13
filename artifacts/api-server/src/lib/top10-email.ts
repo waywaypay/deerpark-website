@@ -23,7 +23,8 @@ import {
 } from "./image-gen";
 import { logger } from "./logger";
 import { logUsage } from "./llm-usage";
-import { recordActivePromptVersions } from "./dispatch-prompts";
+import { hashPrompt, recordActivePromptVersions } from "./dispatch-prompts";
+import type { DispatchLlmCallTrace } from "./dispatch-llm-calls";
 import type { DispatchPromptVersionMap } from "@workspace/db";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
@@ -92,6 +93,11 @@ export type ComposedEmail = {
   /** Per-slot prompt hashes captured at compose time. Slots that didn't
    *  run (e.g. fallback only fires when polish drops items) are absent. */
   promptVersions: DispatchPromptVersionMap;
+  /** Raw LLM call traces (input/output/timing) captured during this
+   *  compose. Buffered here because the calls happen before the
+   *  dispatch_archive row exists; archiveDispatch flushes them with the
+   *  archive_id once the row is inserted. */
+  llmCalls: DispatchLlmCallTrace[];
 };
 
 // Match the website's /api/headlines?mode=top default so the dispatch
@@ -511,11 +517,19 @@ function parsePolishJson(text: string): {
   }
 }
 
+type PolishCallResult = {
+  outcome: PolishOutcome;
+  /** Trace of the LLM call so the composer can flush it to
+   *  dispatch_llm_calls after the archive row exists. Null only when
+   *  the call didn't fire (e.g. no_api_key). */
+  trace: DispatchLlmCallTrace | null;
+};
+
 async function polishWithLlm(
   headlines: HeadlineRow[],
-): Promise<PolishOutcome> {
+): Promise<PolishCallResult> {
   const setup = getPolishClient();
-  if (!setup) return { ok: false, reason: "no_api_key" };
+  if (!setup) return { outcome: { ok: false, reason: "no_api_key" }, trace: null };
 
   const corpus = headlines
     .map((h) => {
@@ -524,41 +538,63 @@ async function polishWithLlm(
     })
     .join("\n---\n");
 
+  const userMessage = `Today's top ${headlines.length} headlines:\n\n${corpus}`;
+  const promptHash = hashPrompt(POLISH_SYSTEM_PROMPT);
+
+  const trace: DispatchLlmCallTrace = {
+    kind: "polish",
+    promptHash,
+    userMessage,
+    responseText: "",
+    model: setup.model,
+    status: "ok",
+  };
+
   let text = "";
+  const startedAt = Date.now();
   try {
     const response = await setup.client.chat.completions.create({
       model: setup.model,
       max_tokens: 8192,
       messages: [
         { role: "system", content: POLISH_SYSTEM_PROMPT },
-        {
-          role: "user",
-          content: `Today's top ${headlines.length} headlines:\n\n${corpus}`,
-        },
+        { role: "user", content: userMessage },
       ],
       response_format: { type: "json_object" },
     });
+    trace.latencyMs = Date.now() - startedAt;
+    trace.promptTokens = response.usage?.prompt_tokens ?? 0;
+    trace.completionTokens = response.usage?.completion_tokens ?? 0;
+    trace.totalTokens =
+      response.usage?.total_tokens ??
+      (trace.promptTokens ?? 0) + (trace.completionTokens ?? 0);
     await logUsage({
       caller: "email_polish",
       callKind: "chat",
       model: setup.model,
-      promptTokens: response.usage?.prompt_tokens ?? 0,
-      completionTokens: response.usage?.completion_tokens ?? 0,
+      promptTokens: trace.promptTokens ?? 0,
+      completionTokens: trace.completionTokens ?? 0,
     });
     text = response.choices[0]?.message?.content ?? "";
+    trace.responseText = text;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    trace.latencyMs = Date.now() - startedAt;
+    trace.status = "request_failed";
+    trace.errorMessage = msg;
     logger.warn({ err: msg }, "Email polish: request failed");
-    return { ok: false, reason: "request_failed", error: msg };
+    return { outcome: { ok: false, reason: "request_failed", error: msg }, trace };
   }
 
   const parsed = parsePolishJson(text);
   if (!parsed) {
+    trace.status = "parse_failed";
+    trace.errorMessage = text.slice(0, 200);
     logger.warn(
       { textPreview: text.slice(0, 300) },
       "Email polish: parse failed",
     );
-    return { ok: false, reason: "parse_failed", error: text.slice(0, 200) };
+    return { outcome: { ok: false, reason: "parse_failed", error: text.slice(0, 200) }, trace };
   }
   const subject =
     typeof parsed.subject === "string" && parsed.subject.trim()
@@ -567,7 +603,8 @@ async function polishWithLlm(
   const introMd =
     typeof parsed.intro === "string" ? parsed.intro.trim() : "";
   if (!subject || !introMd) {
-    return { ok: false, reason: "missing_subject_or_intro" };
+    trace.status = "missing_subject_or_intro";
+    return { outcome: { ok: false, reason: "missing_subject_or_intro" }, trace };
   }
   const introHtml = marked.parse(introMd, { async: false }) as string;
   const commentary = new Map<number, string>();
@@ -582,7 +619,10 @@ async function polishWithLlm(
       commentary.set(id, itemText);
     }
   }
-  return { ok: true, result: { subject, introHtml, commentary } };
+  return {
+    outcome: { ok: true, result: { subject, introHtml, commentary } },
+    trace,
+  };
 }
 
 /**
@@ -654,11 +694,11 @@ One entry per input id.`;
 
 async function backfillCommentaryViaLlm(
   missing: HeadlineRow[],
-): Promise<{ commentary: Map<number, string>; error?: string }> {
+): Promise<{ commentary: Map<number, string>; error?: string; trace: DispatchLlmCallTrace | null }> {
   const result: Map<number, string> = new Map();
-  if (missing.length === 0) return { commentary: result };
+  if (missing.length === 0) return { commentary: result, trace: null };
   const setup = getPolishClient();
-  if (!setup) return { commentary: result, error: "no_api_key" };
+  if (!setup) return { commentary: result, error: "no_api_key", trace: null };
 
   const corpus = missing
     .map(
@@ -666,30 +706,48 @@ async function backfillCommentaryViaLlm(
     )
     .join("\n---\n");
 
+  const userMessage = `Write commentary for these ${missing.length} headlines:\n\n${corpus}`;
+  const promptHash = hashPrompt(COMMENTARY_FALLBACK_PROMPT);
+  const trace: DispatchLlmCallTrace = {
+    kind: "fallback",
+    promptHash,
+    userMessage,
+    responseText: "",
+    model: setup.model,
+    status: "ok",
+  };
+
+  const startedAt = Date.now();
   try {
     const response = await setup.client.chat.completions.create({
       model: setup.model,
       max_tokens: 4096,
       messages: [
         { role: "system", content: COMMENTARY_FALLBACK_PROMPT },
-        {
-          role: "user",
-          content: `Write commentary for these ${missing.length} headlines:\n\n${corpus}`,
-        },
+        { role: "user", content: userMessage },
       ],
       response_format: { type: "json_object" },
     });
+    trace.latencyMs = Date.now() - startedAt;
+    trace.promptTokens = response.usage?.prompt_tokens ?? 0;
+    trace.completionTokens = response.usage?.completion_tokens ?? 0;
+    trace.totalTokens =
+      response.usage?.total_tokens ??
+      (trace.promptTokens ?? 0) + (trace.completionTokens ?? 0);
     await logUsage({
       caller: "email_fallback",
       callKind: "chat",
       model: setup.model,
-      promptTokens: response.usage?.prompt_tokens ?? 0,
-      completionTokens: response.usage?.completion_tokens ?? 0,
+      promptTokens: trace.promptTokens ?? 0,
+      completionTokens: trace.completionTokens ?? 0,
     });
     const text = response.choices[0]?.message?.content ?? "";
+    trace.responseText = text;
     const parsed = parsePolishJson(text);
     if (!parsed?.items || !Array.isArray(parsed.items)) {
-      return { commentary: result, error: "parse_failed" };
+      trace.status = "parse_failed";
+      trace.errorMessage = text.slice(0, 200);
+      return { commentary: result, error: "parse_failed", trace };
     }
     const validIds = new Set(missing.map((h) => h.id));
     for (const e of parsed.items) {
@@ -700,11 +758,14 @@ async function backfillCommentaryViaLlm(
       if (!itemText || itemText.length > 800) continue;
       result.set(id, itemText);
     }
-    return { commentary: result };
+    return { commentary: result, trace };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    trace.latencyMs = Date.now() - startedAt;
+    trace.status = "request_failed";
+    trace.errorMessage = msg;
     logger.warn({ err: msg }, "Email commentary fallback: request failed");
-    return { commentary: result, error: msg };
+    return { commentary: result, error: msg, trace };
   }
 }
 
@@ -748,10 +809,13 @@ export async function composeDailyEmail(
   // Image gen + polish run in parallel — both are independent calls and the
   // total wall-clock cost is dominated by whichever is slower.
   const bannerPrompt = await buildPromptFromHeadlinesAsync(headlines);
-  const [bannerImage, polishOutcome] = await Promise.all([
+  const [bannerImage, polishCallResult] = await Promise.all([
     generateBannerImage(bannerPrompt),
     polishWithLlm(headlines),
   ]);
+  const polishOutcome = polishCallResult.outcome;
+  const llmCalls: DispatchLlmCallTrace[] = [];
+  if (polishCallResult.trace) llmCalls.push(polishCallResult.trace);
   const bannerSrc = bannerImage ? `cid:${BANNER_CID}` : null;
 
   // Merge sources of truth for commentary:
@@ -777,7 +841,8 @@ export async function composeDailyEmail(
   const stillMissing = mergedHeadlines.filter((h) => !h.commentary);
   if (stillMissing.length > 0) {
     fallbackInvoked = true;
-    const { commentary: fallbackMap, error } = await backfillCommentaryViaLlm(stillMissing);
+    const { commentary: fallbackMap, error, trace } = await backfillCommentaryViaLlm(stillMissing);
+    if (trace) llmCalls.push(trace);
     fallbackCommentaryCount = fallbackMap.size;
     fallbackError = error;
     if (fallbackMap.size > 0) {
@@ -851,5 +916,6 @@ export async function composeDailyEmail(
     bannerImage,
     diagnostics,
     promptVersions,
+    llmCalls,
   };
 }

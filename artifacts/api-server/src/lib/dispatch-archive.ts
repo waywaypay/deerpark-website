@@ -13,6 +13,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import type { ComposedEmail } from "./top10-email";
 import { evaluateDispatchInBackground } from "./dispatch-eval";
+import { recordDispatchLlmCalls } from "./dispatch-llm-calls";
 
 /**
  * Idempotent self-heal. Mirrors the lib/db/migrations/0003 migration so the
@@ -88,6 +89,13 @@ export async function archiveDispatch(params: ArchiveParams): Promise<void> {
       })
       .returning({ id: dispatchArchiveTable.id });
     if (row) {
+      // Flush the in-memory LLM call traces buffered during compose now
+      // that we have an archive_id to FK them against. Done before the
+      // eval kicks off so the eval can see them if it ever wants to.
+      // Failures log but never break the archive.
+      if (composed.llmCalls && composed.llmCalls.length > 0) {
+        await recordDispatchLlmCalls(row.id, composed.llmCalls);
+      }
       // Kick off the regex sweep + LLM rubric in the background. Eval
       // failures never block the send / test flow.
       evaluateDispatchInBackground(row.id);
