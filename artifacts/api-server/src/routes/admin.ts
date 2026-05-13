@@ -53,6 +53,7 @@ import {
 } from "../lib/image-gen";
 import {
   getDispatchArchive,
+  getDispatchEvalAggregates,
   listDispatchArchive,
   updateDispatchFeedback,
 } from "../lib/dispatch-archive";
@@ -748,6 +749,21 @@ router.get("/admin/dispatch-archive", async (req, res) => {
     return res.json({ items });
   } catch (err) {
     req.log.error({ err }, "Failed to load dispatch archive");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Fleet-wide eval aggregates for the admin dashboard. Single endpoint so the
+// UI doesn't have to pull and re-reduce every archived row on every render —
+// scales as the archive grows and surfaces fine-tuning signals (which
+// prompts perform best, which dimensions to target with more training data,
+// which banned phrases to mine as negatives).
+router.get("/admin/dispatch-archive/eval-aggregates", async (req, res) => {
+  try {
+    const aggregates = await getDispatchEvalAggregates();
+    return res.json(aggregates);
+  } catch (err) {
+    req.log.error({ err }, "Failed to load dispatch eval aggregates");
     return res.status(500).json({ error: "Internal server error" });
   }
 });
