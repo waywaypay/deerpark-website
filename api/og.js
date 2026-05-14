@@ -66,6 +66,51 @@ function injectMeta(html, fields) {
   return replacements.reduce((out, [re, value]) => out.replace(re, value), html);
 }
 
+// Builds the NewsArticle JSON-LD that makes a post eligible for Google's
+// Top Stories carousel and Discover. Returns a `<script>` tag; we inject it
+// before `</head>` so it lives alongside the static Organization /
+// ProfessionalService schemas shipped in index.html.
+function buildNewsArticleScript({ title, description, url, image, datePublished }) {
+  const payload = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: title,
+    description,
+    datePublished,
+    dateModified: datePublished,
+    image: [image],
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": url,
+    },
+    author: {
+      "@type": "Organization",
+      name: "DeerPark.io",
+      url: SITE_URL,
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "DeerPark.io",
+      url: SITE_URL,
+      logo: {
+        "@type": "ImageObject",
+        url: `${SITE_URL}/favicon-192.png`,
+      },
+    },
+  };
+  // JSON inside a <script> tag — escape only the sequence that could
+  // terminate the script element early. JSON.stringify handles the rest.
+  const json = JSON.stringify(payload).replace(/<\/script/gi, "<\\/script");
+  return `<script type="application/ld+json">${json}</script>`;
+}
+
+function injectArticleSchema(html, script) {
+  if (/<\/head>/i.test(html)) {
+    return html.replace(/<\/head>/i, `${script}\n  </head>`);
+  }
+  return html + script;
+}
+
 module.exports = async function handler(req, res) {
   const id = String((req.query && req.query.id) || "").trim();
   if (!/^\d+$/.test(id)) {
@@ -87,12 +132,21 @@ module.exports = async function handler(req, res) {
     const description = post.dek || "Daily AI analysis for enterprise operators.";
     const url = `${SITE_URL}/dispatch/${id}`;
 
-    const out = injectMeta(html, {
+    const withMeta = injectMeta(html, {
       title,
       description,
       url,
       image: DEFAULT_OG_IMAGE,
     });
+
+    const articleScript = buildNewsArticleScript({
+      title,
+      description,
+      url,
+      image: DEFAULT_OG_IMAGE,
+      datePublished: post.publishedAt,
+    });
+    const out = injectArticleSchema(withMeta, articleScript);
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "public, max-age=300, s-maxage=300");
