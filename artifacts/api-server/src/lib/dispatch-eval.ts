@@ -61,6 +61,15 @@ const BANNED_PATTERNS: Pattern[] = [
   { phrase: "this approach", re: /\bthis\s+approach\b/i, severity: "violation" },
   { phrase: "this expansion", re: /\bthis\s+expansion\b/i, severity: "violation" },
   { phrase: "this ambitious goal", re: /\bthis\s+ambitious\s+goal\b/i, severity: "violation" },
+  // "This new X" — narration-template family signalling summarizer mode — VIOLATIONS
+  { phrase: "this new model", re: /\bthis\s+new\s+model\b/i, severity: "violation" },
+  { phrase: "this new approach", re: /\bthis\s+new\s+approach\b/i, severity: "violation" },
+  { phrase: "this new setup", re: /\bthis\s+new\s+setup\b/i, severity: "violation" },
+  // Narration tails — the "this [generic] will/aims to help" cadence — VIOLATIONS
+  { phrase: "this setup will", re: /\bthis\s+setup\s+will\b/i, severity: "violation" },
+  { phrase: "this will help", re: /\bthis\s+will\s+help\b/i, severity: "violation" },
+  { phrase: "aims to help", re: /\baims?\s+to\s+(?:help|provide|support|enable|enhance|improve)\b/i, severity: "violation" },
+  { phrase: "aiming to enhance", re: /\baiming\s+to\s+(?:enhance|improve|provide|support|help|enable)\b/i, severity: "violation" },
   // Hedging templates — VIOLATIONS
   { phrase: "may need to adapt", re: /\bmay\s+need\s+to\s+adapt\b/i, severity: "violation" },
   { phrase: "may reshape", re: /\bmay\s+reshape\b/i, severity: "violation" },
@@ -68,8 +77,14 @@ const BANNED_PATTERNS: Pattern[] = [
   { phrase: "could influence", re: /\bcould\s+influence\b/i, severity: "violation" },
   { phrase: "could enable", re: /\bcould\s+enable\b/i, severity: "violation" },
   { phrase: "could enhance", re: /\bcould\s+enhance\b/i, severity: "violation" },
+  { phrase: "could lead to", re: /\bcould\s+lead\s+to\b/i, severity: "violation" },
+  { phrase: "could prompt", re: /\bcould\s+prompt\b/i, severity: "violation" },
+  { phrase: "may drive", re: /\bmay\s+drive\b/i, severity: "violation" },
   { phrase: "may prove", re: /\bmay\s+prove\b/i, severity: "violation" },
   { phrase: "could become", re: /\bcould\s+become\b/i, severity: "violation" },
+  { phrase: "potentially saving", re: /\bpotentially\s+saving\b/i, severity: "violation" },
+  { phrase: "increasingly prioritizing", re: /\bincreasingly\s+prioriti[sz]ing\b/i, severity: "violation" },
+  { phrase: "enhancing accessibility", re: /\benhancing\s+accessibility\b/i, severity: "violation" },
   // Vague cautionary endings — VIOLATIONS
   { phrase: "remains to be seen", re: /\bremains\s+to\s+be\s+seen\b/i, severity: "violation" },
   { phrase: "questions remain", re: /\bquestions\s+remain\b/i, severity: "violation" },
@@ -89,11 +104,16 @@ const BANNED_PATTERNS: Pattern[] = [
   { phrase: "existential threat", re: /\bexistential\s+threat\b/i, severity: "violation" },
   // Abstract business nouns — VIOLATIONS
   { phrase: "operational frameworks", re: /\boperational\s+frameworks?\b/i, severity: "violation" },
+  { phrase: "operational capabilities", re: /\boperational\s+capabilities\b/i, severity: "violation" },
   { phrase: "innovation processes", re: /\binnovation\s+processes\b/i, severity: "violation" },
   { phrase: "customer engagement strategies", re: /\bcustomer\s+engagement\s+strateg(?:y|ies)\b/i, severity: "violation" },
   { phrase: "strategic execution", re: /\bstrategic\s+execution\b/i, severity: "violation" },
+  { phrase: "strategic synergies", re: /\bstrategic\s+synergies\b/i, severity: "violation" },
+  { phrase: "actionable improvements", re: /\bactionable\s+improvements?\b/i, severity: "violation" },
+  { phrase: "key differentiators", re: /\bkey\s+differentiators\b/i, severity: "violation" },
   { phrase: "data-driven insights", re: /\bdata[-\s]driven\s+insights\b/i, severity: "violation" },
   { phrase: "competitive landscape", re: /\bcompetitive\s+landscape\b/i, severity: "violation" },
+  { phrase: "market dynamics", re: /\bmarket\s+dynamics\b/i, severity: "violation" },
   { phrase: "growth trajectory", re: /\bgrowth\s+trajectory\b/i, severity: "violation" },
   { phrase: "value proposition", re: /\bvalue\s+proposition\b/i, severity: "violation" },
   // Multi-word LLM-isms — VIOLATIONS
@@ -108,6 +128,8 @@ const BANNED_PATTERNS: Pattern[] = [
   { phrase: "swiftly", re: /\bswiftly\b/i, severity: "warning" },
   { phrase: "transformative", re: /\btransformative\b/i, severity: "warning" },
   { phrase: "increasingly (bare)", re: /\bincreasingly\b/i, severity: "warning" },
+  { phrase: "streamlining", re: /\bstreamlin(?:e|es|ed|ing)\b/i, severity: "warning" },
+  { phrase: "enhancing", re: /\benhanc(?:e|es|ed|ing|ement|ements)\b/i, severity: "warning" },
 ];
 
 // "this" pattern that catches the LLM-tic of starting sentence 2 with "This".
