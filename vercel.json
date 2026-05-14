@@ -6,6 +6,10 @@
   "outputDirectory": "artifacts/deerpark-web/dist",
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "https://deerpark-api.fly.dev/api/sitemap.xml"
+    },
+    {
       "source": "/dispatch/archive",
       "destination": "/index.html"
     },
