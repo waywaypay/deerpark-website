@@ -948,6 +948,158 @@ const Products = () => (
   </section>
 );
 
+type PricingTier = {
+  id: string;
+  name: string;
+  price: string;
+  cadence: string;
+  pitch: string;
+  bullets: string[];
+  cta: string;
+  featured?: boolean;
+};
+
+const PRICING_TIERS: PricingTier[] = [
+  {
+    id: "diagnostic",
+    name: "Readiness Diagnostic",
+    price: "From $15k",
+    cadence: "2 weeks · fixed scope",
+    pitch:
+      "A short, scoped engagement to map where AI pays back fastest in your organization and what it would take to ship the first workflow.",
+    bullets: [
+      "Workflow inventory and ROI ranking",
+      "Tool and vendor evaluation",
+      "Architecture sketch for the top-ranked workflow",
+      "Executive readout and 90-day plan",
+    ],
+    cta: "Start a diagnostic",
+  },
+  {
+    id: "build",
+    name: "90-Day Build",
+    price: "From $90k",
+    cadence: "13 weeks · assess · build · deploy · train",
+    pitch:
+      "Our flagship engagement. We embed with your team, ship the application into production, and train the people who will run it.",
+    bullets: [
+      "Custom AI application or agent in your stack",
+      "Evals, runbooks, and governance",
+      "Executive and role-based training",
+      "30-day on-call window after handoff",
+    ],
+    cta: "Plan a build",
+    featured: true,
+  },
+  {
+    id: "embedded",
+    name: "Embedded AI Team",
+    price: "From $25k/mo",
+    cadence: "Quarterly retainer · 3-month minimum",
+    pitch:
+      "A standing pod of DeerPark operators inside your team — sequencing the roadmap, shipping new workflows, and keeping production healthy.",
+    bullets: [
+      "Dedicated lead plus rotating specialists",
+      "Quarterly roadmap and metric targets",
+      "Production monitoring and eval upkeep",
+      "Priority access to new agent products",
+    ],
+    cta: "Scope a retainer",
+  },
+];
+
+const Pricing = () => (
+  <section id="pricing" className="py-32 border-t border-foreground/10 bg-background">
+    <div className="max-w-7xl mx-auto px-6">
+      <FadeIn>
+        <div className="flex items-center gap-3 mb-8">
+          <div className="h-[1px] w-12 bg-primary" />
+          <span className="section-label">Engagement Pricing</span>
+        </div>
+        <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">
+          Three ways to put us to work.
+        </h2>
+        <p className="text-lg text-muted-foreground font-light max-w-2xl mb-4">
+          Fixed-scope diagnostics, full 90-day builds, and ongoing embedded teams.
+          Every engagement is led by operators who have shipped AI in production.
+        </p>
+        <p className="text-sm text-muted-foreground/80 font-light max-w-2xl mb-12 italic">
+          Prices are starting points. Final scope is set after a short discovery call — no procurement theater.
+        </p>
+      </FadeIn>
+
+      <div className="grid md:grid-cols-3 gap-6">
+        {PRICING_TIERS.map((tier, i) => (
+          <FadeIn key={tier.id} delay={i * 0.1}>
+            <div
+              className={`group h-full flex flex-col border p-8 transition-colors ${
+                tier.featured
+                  ? "border-primary/60 bg-foreground/[0.04] ring-1 ring-primary/20"
+                  : "border-foreground/15 bg-card hover:bg-foreground/[0.03]"
+              }`}
+            >
+              <div className="flex items-center justify-between mb-6">
+                <span className="section-label">{tier.cadence}</span>
+                {tier.featured ? (
+                  <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.18em] text-primary border border-primary/40 px-2 py-1">
+                    Most chosen
+                  </span>
+                ) : null}
+              </div>
+              <h3 className="text-3xl md:text-4xl font-serif mb-3">{tier.name}</h3>
+              <div className="text-2xl font-serif text-foreground mb-6 pb-6 border-b border-foreground/10">
+                {tier.price}
+              </div>
+              <p className="text-sm text-muted-foreground font-light leading-relaxed mb-6">
+                {tier.pitch}
+              </p>
+              <ul className="space-y-3 mb-8">
+                {tier.bullets.map((b) => (
+                  <li
+                    key={b}
+                    className="flex items-start gap-3 text-sm font-light text-foreground/80"
+                  >
+                    <Check className="w-3.5 h-3.5 mt-1 text-primary shrink-0" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+              <ConsultCTA
+                source={`pricing_${tier.id}`}
+                className={`mt-auto inline-flex items-center justify-center gap-2 rounded-none h-12 px-6 text-xs font-medium uppercase tracking-widest transition-colors ${
+                  tier.featured
+                    ? "bg-foreground text-background hover:bg-foreground/90"
+                    : "border border-foreground/25 text-foreground hover:bg-foreground/5"
+                }`}
+              >
+                {tier.cta} <ArrowRight className="w-3.5 h-3.5" />
+              </ConsultCTA>
+            </div>
+          </FadeIn>
+        ))}
+      </div>
+
+      <FadeIn delay={0.3}>
+        <div className="mt-12 flex flex-col md:flex-row md:items-center md:justify-between gap-4 border border-foreground/15 bg-card p-6">
+          <div>
+            <div className="section-label mb-2">Not sure which fits?</div>
+            <p className="text-sm text-muted-foreground font-light max-w-xl">
+              Book a free 30-minute consult. We'll listen, sketch the right entry
+              point, and send a written recommendation within one business day.
+            </p>
+          </div>
+          <ConsultCTA
+            source="pricing_unsure"
+            className="inline-flex items-center justify-center gap-2 rounded-none h-12 px-6 text-xs font-medium uppercase tracking-widest border border-foreground/25 text-foreground hover:bg-foreground/5 transition-colors shrink-0"
+          >
+            Free Consult <ArrowRight className="w-3.5 h-3.5" />
+          </ConsultCTA>
+        </div>
+      </FadeIn>
+    </div>
+  </section>
+);
+
 const ABOUT_BELIEFS: { title: string; body: string }[] = [
   {
     title: "Operators, not vendors",
@@ -1107,6 +1259,7 @@ export default function Home() {
         <Services />
         <Products />
         <CaseStudy />
+        <Pricing />
         <About />
         <FAQ />
       </main>

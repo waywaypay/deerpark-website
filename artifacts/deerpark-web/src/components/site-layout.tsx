@@ -37,6 +37,7 @@ const NAV_HASH_LINKS: HashLink[] = [
   { href: "/#approach", label: "Services" },
   { href: "/#products", label: "Products" },
   { href: "/#engagements", label: "Engagements" },
+  { href: "/#pricing", label: "Pricing" },
   { href: "/#about", label: "About" },
   { href: "/#faq", label: "FAQ" },
 ];
@@ -187,6 +188,7 @@ export const Footer = () => (
           <h4 className="font-sans text-xs font-semibold uppercase tracking-[0.15em] mb-6 text-foreground">Company</h4>
           <ul className="space-y-4 text-sm text-muted-foreground font-light">
             <li><a href="/#engagements" className="hover:text-foreground transition-colors">Sample Engagements</a></li>
+            <li><a href="/#pricing" className="hover:text-foreground transition-colors">Pricing</a></li>
             <li><a href="/#about" className="hover:text-foreground transition-colors">About</a></li>
             <li className="pt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-foreground">
               <a href="/#products" className="hover:text-foreground/70 transition-colors">
