@@ -211,7 +211,7 @@ const SubscribeHero = () => (
         <div className="lg:grid lg:grid-cols-12">
           <div className="lg:col-span-6 min-w-0">
             <p className="text-muted-foreground font-light leading-relaxed mb-6">
-              Daily relevant AI news in your inbox at 3:30 PM PT — the day's top 10, with 2–4 sentences of context on each. The same top 10 lives below; email is just the convenience.
+              Most AI newsletters are a firehose. Dispatch is ten stories that actually mattered today, each with the two sentences of context the headline left out. 3:30 PM PT, weekdays. Funding rounds and "we added dark mode" don't make it.
             </p>
             <DispatchSubscribe />
           </div>
