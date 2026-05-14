@@ -7,6 +7,7 @@ import {
 } from "./lib/writer-agent";
 import { startDailyDigestScheduler } from "./lib/daily-digest";
 import { ensureLeadsSchema } from "./routes/leads";
+import { ensureSubscribersSchema } from "./routes/subscribe";
 import { runDataMigrations } from "./lib/migrate";
 import { ensureJudgeSchema } from "./lib/headline-judge";
 import { ensureCommentatorSchema } from "./lib/headline-commentator";
@@ -36,6 +37,10 @@ app.listen(port, (err) => {
 
   ensureLeadsSchema().catch((schemaErr) => {
     logger.error({ err: schemaErr }, "Leads: ensureSchema failed");
+  });
+
+  ensureSubscribersSchema().catch((schemaErr) => {
+    logger.error({ err: schemaErr }, "Subscribers: ensureSchema failed");
   });
 
   runDataMigrations().catch((err) => {

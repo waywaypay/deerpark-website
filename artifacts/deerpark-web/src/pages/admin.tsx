@@ -2393,6 +2393,16 @@ type DispatchArchiveSummary = {
   evalBannedPhrases: DispatchBannedPhraseHit[] | null;
   evalModel: string | null;
   evalRunAt: string | null;
+  evalFormatting:
+    | {
+        issues: Array<{ type: string; count: number; sample?: string }>;
+        totalIssues: number;
+      }
+    | null;
+  evalFormattingScore: string | number | null;
+  evalBannerScores: Record<string, { score: number; note: string }> | null;
+  evalBannerCompositeScore: string | number | null;
+  evalBannerModel: string | null;
   promptVersions: DispatchPromptVersionMap | null;
   createdAt: string;
   itemCount: number;
@@ -2465,6 +2475,66 @@ const scoreColor = (score: number | null): string => {
   return "text-red-400";
 };
 
+type DispatchEvalDimensionStats = {
+  mean: number | null;
+  min: number | null;
+  max: number | null;
+  n: number;
+};
+
+type DispatchEvalPromptVersionAgg = {
+  hash: string;
+  n: number;
+  compositeMean: number | null;
+  bannedMean: number | null;
+};
+
+type DispatchEvalBannedPhraseAgg = {
+  phrase: string;
+  severity: "violation" | "warning";
+  totalCount: number;
+  dispatchCount: number;
+};
+
+type DispatchEvalAggregates = {
+  totals: { archived: number; evaluated: number; withFeedback: number };
+  composite: DispatchEvalDimensionStats;
+  bannedPerDispatch: DispatchEvalDimensionStats;
+  dimensions: Record<keyof DispatchEvalScores, DispatchEvalDimensionStats>;
+  byPromptVersion: {
+    polish: DispatchEvalPromptVersionAgg[];
+    fallback: DispatchEvalPromptVersionAgg[];
+    commentator: DispatchEvalPromptVersionAgg[];
+    banner: DispatchEvalPromptVersionAgg[];
+  };
+  topBannedPhrases: DispatchEvalBannedPhraseAgg[];
+  formatting: {
+    score: DispatchEvalDimensionStats;
+    totalIssues: DispatchEvalDimensionStats;
+    byType: Array<{ type: string; totalCount: number; dispatchCount: number }>;
+  };
+  banner: { composite: DispatchEvalDimensionStats };
+  trend: Array<{
+    id: number;
+    createdAt: string;
+    composite: number | null;
+    banned: number | null;
+    formatting: number | null;
+    banner: number | null;
+  }>;
+};
+
+const FORMATTING_ISSUE_LABELS: Record<string, string> = {
+  empty_paragraph: "Empty paragraph",
+  nbsp_run: "&nbsp; run",
+  double_space: "Double space",
+  broken_anchor: "Broken anchor",
+  item_count_mismatch: "Item count ≠ 10",
+  missing_alt: "Missing alt text",
+  unrendered_token: "Unrendered {{token}}",
+  duplicate_link: "Duplicate link",
+};
+
 // Trailing window for the rolling baseline shown on the trend chart. 7 sends
 // is roughly a week of daily dispatches — short enough to track prompt
 // changes, long enough to dampen single-day noise.
@@ -2474,18 +2544,22 @@ const BASELINE_WINDOW = 7;
 // letter-grade drop — visible to the eye but unambiguous.
 const REGRESSION_THRESHOLD = 1.0;
 
-const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
-  const points = items
-    .slice()
-    .reverse()
-    .map((it) => ({
-      id: it.id,
-      score: compositeNumber(it.evalCompositeScore),
-      banned: it.evalBannedPhrasesCount ?? null,
-      createdAt: it.createdAt,
-      subject: it.subject,
-    }))
-    .filter((p): p is typeof p & { score: number } => p.score !== null);
+const EvalTrendStrip = ({
+  trend,
+}: {
+  trend: DispatchEvalAggregates["trend"];
+}) => {
+  // Pre-filter once, memoize the geometry so re-renders of the parent
+  // (driven by feedback drafts, expanded row state, etc) don't rebuild the
+  // bar list. The aggregate endpoint already returns points in oldest →
+  // newest order, so no reverse here.
+  const points = useMemo(
+    () =>
+      trend.filter(
+        (p): p is typeof p & { composite: number } => p.composite !== null,
+      ),
+    [trend],
+  );
   if (points.length < 2) return null;
 
   // Trailing baseline: mean of the previous BASELINE_WINDOW points (NOT
@@ -2500,8 +2574,8 @@ const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
     const prior = points.slice(Math.max(0, i - BASELINE_WINDOW), i);
     if (prior.length < 3) return { ...p, baseline: null, regression: false };
     const baseline =
-      prior.reduce((s, q) => s + q.score, 0) / prior.length;
-    const regression = baseline - p.score >= REGRESSION_THRESHOLD;
+      prior.reduce((s, q) => s + q.composite, 0) / prior.length;
+    const regression = baseline - p.composite >= REGRESSION_THRESHOLD;
     return { ...p, baseline, regression };
   });
 
@@ -2533,16 +2607,17 @@ const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
         <div>
           <div className="section-label">Composite trend</div>
           <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-            Mean of the five rubric scores per dispatch — oldest → newest. Dashed
-            line is the trailing {BASELINE_WINDOW}-send baseline; ringed bars
-            dropped ≥{REGRESSION_THRESHOLD.toFixed(1)} below it.
+            Mean of the five rubric scores per dispatch — oldest → newest,
+            full archive. Dashed line is the trailing {BASELINE_WINDOW}-send
+            baseline; ringed bars dropped ≥{REGRESSION_THRESHOLD.toFixed(1)}{" "}
+            below it.
           </div>
         </div>
         <div className="text-xs text-muted-foreground space-x-3">
           <span>
             {points.length} evaluated · latest{" "}
-            <span className={scoreColor(latest?.score ?? null)}>
-              {latest?.score?.toFixed(2) ?? "—"}
+            <span className={scoreColor(latest?.composite ?? null)}>
+              {latest?.composite?.toFixed(2) ?? "—"}
             </span>
             /10
           </span>
@@ -2552,13 +2627,13 @@ const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
               <span className="font-mono">{latest.baseline.toFixed(2)}</span>
               <span
                 className={
-                  latest.score - latest.baseline >= 0
+                  latest.composite - latest.baseline >= 0
                     ? "text-emerald-400 ml-1"
                     : "text-red-400 ml-1"
                 }
               >
-                ({latest.score - latest.baseline >= 0 ? "+" : ""}
-                {(latest.score - latest.baseline).toFixed(2)})
+                ({latest.composite - latest.baseline >= 0 ? "+" : ""}
+                {(latest.composite - latest.baseline).toFixed(2)})
               </span>
             </span>
           )}
@@ -2584,14 +2659,14 @@ const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
           strokeDasharray="4 4"
         />
         {annotated.map((p, i) => {
-          const score = p.score;
+          const score = p.composite;
           const h = Math.max(2, (score / max) * (height - 4));
           const x = i * (width / points.length) + 1;
           const y = height - h;
           const color =
             score >= 7 ? "#34d399" : score >= 5 ? "#fbbf24" : "#f87171";
           const tooltip =
-            `${p.subject}\n${score.toFixed(2)}/10 · ${p.banned ?? 0} banned hits` +
+            `#${p.id}\n${score.toFixed(2)}/10 · ${p.banned ?? 0} banned hits` +
             (p.baseline !== null
               ? `\nBaseline ${p.baseline.toFixed(2)} (${score - p.baseline >= 0 ? "+" : ""}${(score - p.baseline).toFixed(2)})`
               : "") +
@@ -2637,101 +2712,469 @@ const EvalTrendStrip = ({ items }: { items: DispatchArchiveSummary[] }) => {
   );
 };
 
-// Per-polish-prompt-hash aggregation for A/B-ing prompt versions. Polish is
-// the slot that most influences voice, so we group by it. Buckets with <2
-// scored sends are dropped — a single send isn't enough signal to compare.
-const PromptVersionBreakdown = ({
-  items,
-}: {
-  items: DispatchArchiveSummary[];
-}) => {
-  type Bucket = {
-    hash: string;
-    n: number;
-    scoreSum: number;
-    bannedSum: number;
-    firstSeenAt: string;
-    lastSeenAt: string;
+const DatasetDownloadControls = ({ token }: { token: string }) => {
+  const [minComposite, setMinComposite] = useState("");
+  const [kind, setKind] = useState<"" | "polish" | "fallback" | "commentator">("");
+  const [feedbackOnly, setFeedbackOnly] = useState(false);
+  const [withMeta, setWithMeta] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const download = async () => {
+    setDownloading(true);
+    setStatus(null);
+    const params = new URLSearchParams();
+    if (minComposite.trim().length > 0 && Number.isFinite(Number(minComposite))) {
+      params.set("minComposite", String(Number(minComposite)));
+    }
+    if (kind) params.set("kind", kind);
+    if (feedbackOnly) params.set("feedbackOnly", "1");
+    if (withMeta) params.set("withMeta", "1");
+    const path = `/admin/dispatch-archive/fine-tune-dataset${
+      params.toString().length > 0 ? `?${params.toString()}` : ""
+    }`;
+    try {
+      const res = await apiFetch(token, path);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = res.headers.get("X-Dataset-Rows");
+      const skipped = res.headers.get("X-Dataset-Skipped");
+      const skippedByRaw = res.headers.get("X-Dataset-Skipped-By");
+      const blob = await res.blob();
+      const filename =
+        res.headers
+          .get("Content-Disposition")
+          ?.match(/filename="([^"]+)"/)?.[1] ?? "dispatch-fine-tune.jsonl";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      let breakdown = "";
+      if (skippedByRaw) {
+        try {
+          const parsed = JSON.parse(skippedByRaw) as Record<string, number>;
+          const parts = Object.entries(parsed)
+            .filter(([, n]) => n > 0)
+            .map(([k, n]) => `${k}:${n}`);
+          if (parts.length > 0) breakdown = ` (skipped ${skipped ?? "?"} — ${parts.join(", ")})`;
+        } catch {
+          // ignore parse errors
+        }
+      }
+      setStatus({ ok: true, message: `${rows ?? "?"} rows downloaded${breakdown}` });
+    } catch (err) {
+      setStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Download failed",
+      });
+    } finally {
+      setDownloading(false);
+    }
   };
-  const buckets = new Map<string, Bucket>();
-  for (const it of items) {
-    const hash = it.promptVersions?.polish;
-    const score = compositeNumber(it.evalCompositeScore);
-    if (!hash || score === null) continue;
-    const b = buckets.get(hash) ?? {
-      hash,
-      n: 0,
-      scoreSum: 0,
-      bannedSum: 0,
-      firstSeenAt: it.createdAt,
-      lastSeenAt: it.createdAt,
-    };
-    b.n += 1;
-    b.scoreSum += score;
-    b.bannedSum += it.evalBannedPhrasesCount ?? 0;
-    if (it.createdAt < b.firstSeenAt) b.firstSeenAt = it.createdAt;
-    if (it.createdAt > b.lastSeenAt) b.lastSeenAt = it.createdAt;
-    buckets.set(hash, b);
-  }
-  const rows = Array.from(buckets.values())
-    .filter((b) => b.n >= 2)
-    .map((b) => ({
-      ...b,
-      avgScore: b.scoreSum / b.n,
-      avgBanned: b.bannedSum / b.n,
-    }))
-    .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt));
-  if (rows.length < 2) return null;
-  const best = rows.reduce((m, r) => (r.avgScore > m ? r.avgScore : m), -Infinity);
+
   return (
-    <div className="border border-foreground/15 bg-card p-4">
-      <div className="mb-3">
-        <div className="section-label">Polish prompt A/B</div>
-        <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-          Average composite score and banned-phrase hits per polish prompt
-          version (n ≥ 2). Sorted by most recent use. Green row = current
-          leader.
+    <div className="border-t border-foreground/10 pt-3 mt-1">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <div>
+          <div className="section-label">Fine-tune dataset</div>
+          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+            Downloads a JSONL of (system, user, assistant) triples from
+            captured LLM calls — upload directly to an OpenAI/Anthropic
+            fine-tune job.
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {status && (
+            <span
+              className={`text-[10px] uppercase tracking-widest ${status.ok ? "text-primary" : "text-red-400"}`}
+            >
+              {status.message}
+            </span>
+          )}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => void download()}
+            disabled={downloading}
+            className="rounded-none text-[10px] uppercase tracking-widest"
+          >
+            {downloading ? "Building…" : "Download JSONL"}
+          </Button>
         </div>
       </div>
-      <div className="space-y-1">
-        <div className="grid grid-cols-[100px_60px_80px_80px_1fr] gap-3 text-[10px] uppercase tracking-widest text-muted-foreground px-2 py-1 border-b border-foreground/10">
-          <span>Prompt</span>
-          <span className="text-right">N</span>
-          <span className="text-right">Avg score</span>
-          <span className="text-right">Avg hits</span>
-          <span>Active window</span>
+      <div className="flex flex-wrap items-end gap-3 text-xs">
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Min composite
+          </span>
+          <input
+            type="number"
+            min={0}
+            max={10}
+            step={0.1}
+            value={minComposite}
+            onChange={(e) => setMinComposite(e.target.value)}
+            placeholder="e.g. 6"
+            className="w-24 bg-background/40 border border-foreground/20 px-2 py-1 text-xs font-mono focus:border-primary focus:outline-none"
+          />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Call kind
+          </span>
+          <select
+            value={kind}
+            onChange={(e) =>
+              setKind(e.target.value as "" | "polish" | "fallback" | "commentator")
+            }
+            className="bg-background/40 border border-foreground/20 px-2 py-1 text-xs focus:border-primary focus:outline-none"
+          >
+            <option value="">All</option>
+            <option value="polish">Polish</option>
+            <option value="fallback">Fallback</option>
+            <option value="commentator">Commentator</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 pb-1">
+          <input
+            type="checkbox"
+            checked={feedbackOnly}
+            onChange={(e) => setFeedbackOnly(e.target.checked)}
+          />
+          <span className="text-muted-foreground">Feedback only</span>
+        </label>
+        <label className="flex items-center gap-2 pb-1">
+          <input
+            type="checkbox"
+            checked={withMeta}
+            onChange={(e) => setWithMeta(e.target.checked)}
+          />
+          <span className="text-muted-foreground">Include metadata</span>
+        </label>
+      </div>
+    </div>
+  );
+};
+
+const EvalAggregatePanel = ({
+  aggregates,
+  token,
+}: {
+  aggregates: DispatchEvalAggregates | null;
+  token: string;
+}) => {
+  if (!aggregates) return null;
+  const {
+    totals,
+    composite,
+    bannedPerDispatch,
+    dimensions,
+    byPromptVersion,
+    topBannedPhrases,
+    formatting,
+    banner,
+  } = aggregates;
+  // Sorted weakest → strongest so the dimensions most in need of fine-tune
+  // examples lead the eye.
+  const dimRows = (Object.keys(RUBRIC_LABELS) as Array<keyof DispatchEvalScores>)
+    .map((k) => ({ key: k, label: RUBRIC_LABELS[k], stats: dimensions[k] }))
+    .sort((a, b) => (a.stats.mean ?? 99) - (b.stats.mean ?? 99));
+  // Best prompt per slot (highest composite mean with n >= 2 — drop single-row
+  // hashes since one composite isn't signal). The server already orders by
+  // composite_mean desc within each slot.
+  const bestPromptPerSlot = (
+    ["polish", "fallback", "commentator", "banner"] as const
+  )
+    .map((slot) => {
+      const list = byPromptVersion[slot];
+      const candidate = list.find((p) => p.n >= 2 && p.compositeMean !== null) ?? list[0];
+      return candidate ? { slot, agg: candidate } : null;
+    })
+    .filter((v): v is { slot: "polish" | "fallback" | "commentator" | "banner"; agg: DispatchEvalPromptVersionAgg } => v !== null);
+  return (
+    <div className="space-y-4">
+      <div className="border border-foreground/15 bg-card p-4 space-y-2">
+        <div className="flex items-baseline justify-between">
+          <div>
+            <div className="section-label">Aggregate signals</div>
+            <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+              Three independent tracks. Each targets a different model and
+              has its own dataset — never folded into one composite.
+            </div>
+          </div>
+          <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground text-right">
+            <div>
+              {totals.archived} archived · {totals.evaluated} evaluated
+            </div>
+            <div className="text-primary/80 mt-0.5">
+              {totals.withFeedback} with feedback
+            </div>
+          </div>
         </div>
-        {rows.map((r) => {
-          const isLeader = r.avgScore === best;
-          return (
-            <div
-              key={r.hash}
-              className={`grid grid-cols-[100px_60px_80px_80px_1fr] gap-3 text-xs px-2 py-1.5 font-mono ${
-                isLeader ? "bg-emerald-500/5 border-l-2 border-emerald-400/60" : ""
-              }`}
-            >
-              <span className="text-primary/80">p:{r.hash.slice(0, 7)}</span>
-              <span className="text-right text-muted-foreground">{r.n}</span>
-              <span className={`text-right ${scoreColor(r.avgScore)}`}>
-                {r.avgScore.toFixed(2)}
-              </span>
-              <span
-                className={`text-right ${
-                  r.avgBanned <= 0.5
-                    ? "text-emerald-400"
-                    : r.avgBanned <= 2
-                      ? "text-amber-300"
-                      : "text-red-400"
-                }`}
-              >
-                {r.avgBanned.toFixed(1)}
-              </span>
-              <span className="text-muted-foreground text-[11px] truncate">
-                {formatDate(r.firstSeenAt)} → {formatDate(r.lastSeenAt)}
+      </div>
+
+      <div className="border border-foreground/15 bg-card p-4 space-y-4">
+        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
+          <div className="section-label">Writing track</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Target: text fine-tune (chat completions JSONL)
+          </div>
+        </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+            Composite & banned (fleet)
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Composite mean</span>
+              <span className={`font-mono ${scoreColor(composite.mean)}`}>
+                {composite.mean !== null ? composite.mean.toFixed(2) : "—"}/10
               </span>
             </div>
-          );
-        })}
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Range</span>
+              <span className="font-mono text-muted-foreground">
+                {composite.min !== null && composite.max !== null
+                  ? `${composite.min.toFixed(1)}–${composite.max.toFixed(1)}`
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Banned/send mean</span>
+              <span
+                className={`font-mono ${
+                  bannedPerDispatch.mean === null
+                    ? "text-muted-foreground"
+                    : bannedPerDispatch.mean <= 1
+                      ? "text-emerald-400"
+                      : bannedPerDispatch.mean <= 3
+                        ? "text-amber-300"
+                        : "text-red-400"
+                }`}
+              >
+                {bannedPerDispatch.mean !== null
+                  ? bannedPerDispatch.mean.toFixed(2)
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-muted-foreground">Banned range</span>
+              <span className="font-mono text-muted-foreground">
+                {bannedPerDispatch.min !== null && bannedPerDispatch.max !== null
+                  ? `${bannedPerDispatch.min}–${bannedPerDispatch.max}`
+                  : "—"}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+            Rubric dimensions (weakest first)
+          </div>
+          <div className="space-y-1">
+            {dimRows.map((d) => (
+              <div key={d.key} className="flex items-baseline justify-between text-xs">
+                <span className="text-muted-foreground">{d.label}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className={`font-mono ${scoreColor(d.stats.mean)}`}>
+                    {d.stats.mean !== null ? d.stats.mean.toFixed(2) : "—"}
+                  </span>
+                  <span className="font-mono text-muted-foreground/70 text-[10px]">
+                    {d.stats.min !== null && d.stats.max !== null
+                      ? `(${d.stats.min.toFixed(1)}–${d.stats.max.toFixed(1)})`
+                      : ""}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+            Best prompt per slot
+          </div>
+          {bestPromptPerSlot.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground">
+              Not enough evaluated dispatches to compare prompt versions yet.
+            </div>
+          ) : (
+            <div className="space-y-1 text-xs">
+              {bestPromptPerSlot.map(({ slot, agg }) => (
+                <div key={slot} className="flex items-baseline justify-between">
+                  <span className="text-muted-foreground capitalize">{slot}</span>
+                  <span className="flex items-baseline gap-2">
+                    <span className="font-mono text-primary/80">
+                      {agg.hash.slice(0, 10)}
+                    </span>
+                    <span className={`font-mono ${scoreColor(agg.compositeMean)}`}>
+                      {agg.compositeMean !== null ? agg.compositeMean.toFixed(2) : "—"}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">n={agg.n}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+            Top leaked phrases
+          </div>
+          {topBannedPhrases.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground">
+              No banned phrases recorded across the archive yet.
+            </div>
+          ) : (
+            <ul className="space-y-1 text-xs max-h-40 overflow-auto pr-1">
+              {topBannedPhrases.slice(0, 12).map((p) => (
+                <li
+                  key={`${p.phrase}:${p.severity}`}
+                  className="flex items-baseline justify-between"
+                >
+                  <span
+                    className={`font-mono ${p.severity === "violation" ? "text-red-300" : "text-amber-300/90"}`}
+                  >
+                    "{p.phrase}"
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {p.totalCount}× · {p.dispatchCount} sends
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+        <DatasetDownloadControls token={token} />
+      </div>
+
+      <div className="border border-foreground/15 bg-card p-4 space-y-3">
+        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
+          <div className="section-label">Formatting track</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Target: template / post-processing fixes (no fine-tune)
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+              Score (10 = clean)
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Score mean</span>
+                <span className={`font-mono ${scoreColor(formatting.score.mean)}`}>
+                  {formatting.score.mean !== null
+                    ? formatting.score.mean.toFixed(2)
+                    : "—"}
+                  /10
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Range</span>
+                <span className="font-mono text-muted-foreground">
+                  {formatting.score.min !== null && formatting.score.max !== null
+                    ? `${formatting.score.min.toFixed(1)}–${formatting.score.max.toFixed(1)}`
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Issues/send mean</span>
+                <span
+                  className={`font-mono ${
+                    formatting.totalIssues.mean === null
+                      ? "text-muted-foreground"
+                      : formatting.totalIssues.mean <= 1
+                        ? "text-emerald-400"
+                        : formatting.totalIssues.mean <= 3
+                          ? "text-amber-300"
+                          : "text-red-400"
+                  }`}
+                >
+                  {formatting.totalIssues.mean !== null
+                    ? formatting.totalIssues.mean.toFixed(2)
+                    : "—"}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-muted-foreground">Evaluated</span>
+                <span className="font-mono text-muted-foreground">
+                  n={formatting.score.n}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
+              Top issue types
+            </div>
+            {formatting.byType.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground">
+                No formatting issues recorded yet.
+              </div>
+            ) : (
+              <ul className="space-y-1 text-xs max-h-40 overflow-auto pr-1">
+                {formatting.byType.slice(0, 12).map((i) => (
+                  <li
+                    key={i.type}
+                    className="flex items-baseline justify-between"
+                  >
+                    <span className="font-mono text-amber-300/90">
+                      {FORMATTING_ISSUE_LABELS[i.type] ?? i.type}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {i.totalCount}× · {i.dispatchCount} sends
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="border border-foreground/15 bg-card p-4 space-y-3">
+        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
+          <div className="section-label">Image track</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Target: banner LoRA fine-tune (prompt + image JSONL)
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <div className="flex items-baseline justify-between">
+            <span className="text-muted-foreground">Banner score mean</span>
+            <span className={`font-mono ${scoreColor(banner.composite.mean)}`}>
+              {banner.composite.mean !== null
+                ? banner.composite.mean.toFixed(2)
+                : "—"}
+              /10
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-muted-foreground">Evaluated</span>
+            <span className="font-mono text-muted-foreground">
+              n={banner.composite.n}
+            </span>
+          </div>
+        </div>
+        {banner.composite.n === 0 && (
+          <div className="text-[11px] text-muted-foreground italic">
+            Vision rubric not wired yet — landing in PR B (Venice VL call +
+            banner-image archive + image dataset download).
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2857,14 +3300,32 @@ const FeedbackTab = ({ token }: { token: string }) => {
   const [evalStatus, setEvalStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
   const [llmCalls, setLlmCalls] = useState<Record<number, DispatchLlmCall[] | "loading" | "error">>({});
   const [openCallId, setOpenCallId] = useState<number | null>(null);
+  const [aggregates, setAggregates] = useState<DispatchEvalAggregates | null>(null);
+
+  const loadAggregates = useCallback(async () => {
+    try {
+      const res = await apiFetch(token, "/admin/dispatch-archive/eval-aggregates");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as DispatchEvalAggregates;
+      setAggregates(json);
+    } catch {
+      // Non-fatal — the row list still renders without aggregates.
+    }
+  }, [token]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await apiFetch(token, "/admin/dispatch-archive?limit=100");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { items: DispatchArchiveSummary[] };
+      // Fire list + aggregates in parallel. Aggregates roll up the full
+      // archive server-side, so they don't depend on the (capped) list
+      // response and don't need to wait on it.
+      const [listRes] = await Promise.all([
+        apiFetch(token, "/admin/dispatch-archive?limit=100"),
+        loadAggregates(),
+      ]);
+      if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
+      const json = (await listRes.json()) as { items: DispatchArchiveSummary[] };
       setItems(json.items);
       // Seed drafts with persisted feedback so the textarea reflects current state.
       const seed: Record<number, string> = {};
@@ -2875,7 +3336,7 @@ const FeedbackTab = ({ token }: { token: string }) => {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, loadAggregates]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -2971,8 +3432,12 @@ const FeedbackTab = ({ token }: { token: string }) => {
         ok?: boolean;
         composite?: number;
         bannedCount?: number;
+        formattingScore?: number;
+        formattingIssues?: number;
         evalScores?: DispatchEvalScores | null;
         evalBannedPhrases?: DispatchBannedPhraseHit[] | null;
+        evalFormatting?: DispatchArchiveSummary["evalFormatting"];
+        evalFormattingScore?: number | null;
         evalRunAt?: string | null;
         evalModel?: string | null;
         error?: string;
@@ -2990,6 +3455,13 @@ const FeedbackTab = ({ token }: { token: string }) => {
                   typeof json.composite === "number" ? json.composite : null,
                 evalBannedPhrasesCount: json.bannedCount ?? null,
                 evalBannedPhrases: json.evalBannedPhrases ?? null,
+                evalFormatting: json.evalFormatting ?? null,
+                evalFormattingScore:
+                  typeof json.evalFormattingScore === "number"
+                    ? json.evalFormattingScore
+                    : typeof json.formattingScore === "number"
+                      ? json.formattingScore
+                      : null,
                 evalRunAt: json.evalRunAt ?? null,
                 evalModel: json.evalModel ?? null,
               }
@@ -3004,6 +3476,13 @@ const FeedbackTab = ({ token }: { token: string }) => {
             typeof json.composite === "number" ? json.composite : null,
           evalBannedPhrasesCount: json.bannedCount ?? null,
           evalBannedPhrases: json.evalBannedPhrases ?? null,
+          evalFormatting: json.evalFormatting ?? null,
+          evalFormattingScore:
+            typeof json.evalFormattingScore === "number"
+              ? json.evalFormattingScore
+              : typeof json.formattingScore === "number"
+                ? json.formattingScore
+                : null,
           evalRunAt: json.evalRunAt ?? null,
           evalModel: json.evalModel ?? null,
         });
@@ -3011,8 +3490,11 @@ const FeedbackTab = ({ token }: { token: string }) => {
       setEvalStatus({
         id,
         ok: true,
-        message: `Composite ${json.composite?.toFixed(2) ?? "—"}/10 · ${json.bannedCount ?? 0} hits`,
+        message: `W ${json.composite?.toFixed(2) ?? "—"}/10 · F ${json.formattingScore?.toFixed(1) ?? "—"}/10 · ${json.bannedCount ?? 0} hits · ${json.formattingIssues ?? 0} fmt`,
       });
+      // Refresh aggregates so the dashboard reflects the new score without
+      // forcing a full archive reload.
+      void loadAggregates();
     } catch (err) {
       setEvalStatus({
         id,
@@ -3061,8 +3543,8 @@ const FeedbackTab = ({ token }: { token: string }) => {
         </div>
       )}
 
-      <EvalTrendStrip items={items} />
-      <PromptVersionBreakdown items={items} />
+      <EvalAggregatePanel aggregates={aggregates} token={token} />
+      <EvalTrendStrip trend={aggregates?.trend ?? []} />
 
       <div className="space-y-3">
         {items.map((it) => {
@@ -3073,6 +3555,8 @@ const FeedbackTab = ({ token }: { token: string }) => {
           const evStatus = evalStatus?.id === it.id ? evalStatus : null;
           const composite = compositeNumber(it.evalCompositeScore);
           const banned = it.evalBannedPhrasesCount;
+          const formattingScore = compositeNumber(it.evalFormattingScore);
+          const formattingIssues = it.evalFormatting?.totalIssues ?? null;
           return (
             <div key={it.id} className="border border-foreground/15 bg-card">
               <button
@@ -3121,6 +3605,16 @@ const FeedbackTab = ({ token }: { token: string }) => {
                   title="Banned-phrase hits (lower is better)"
                 >
                   {banned === null ? "—" : `${banned} hits`}
+                </span>
+                <span
+                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${scoreColor(formattingScore)}`}
+                  title={
+                    formattingIssues === null
+                      ? "Formatting score (10 = clean)"
+                      : `Formatting: ${formattingIssues} issue${formattingIssues === 1 ? "" : "s"}`
+                  }
+                >
+                  {formattingScore !== null ? `F ${formattingScore.toFixed(1)}` : "F —"}
                 </span>
                 {it.feedback ? (
                   <span className="text-[10px] uppercase tracking-widest text-primary w-20 text-right">

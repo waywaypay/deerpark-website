@@ -41,6 +41,47 @@ export type DispatchBannedPhraseHit = {
   severity?: "violation" | "warning";
 };
 
+export type DispatchFormattingIssueType =
+  | "empty_paragraph"
+  | "nbsp_run"
+  | "double_space"
+  | "broken_anchor"
+  | "item_count_mismatch"
+  | "missing_alt"
+  | "unrendered_token"
+  | "duplicate_link";
+
+export type DispatchFormattingIssue = {
+  type: DispatchFormattingIssueType;
+  count: number;
+  /** First offending fragment, trimmed to ~80 chars. Helps the operator
+   *  locate the issue without unpacking the full body HTML. */
+  sample?: string;
+};
+
+export type DispatchFormattingResult = {
+  issues: DispatchFormattingIssue[];
+  /** Total issue count across all types. The persisted score
+   *  `eval_formatting_score` is derived from this; this jsonb keeps the
+   *  breakdown so the UI can list which checks tripped. */
+  totalIssues: number;
+};
+
+export type DispatchBannerEvalDimension = {
+  score: number;
+  note: string;
+};
+
+/** Image rubric — scored by a vision model in PR B. Tracked separately from
+ *  the prose rubric because the banner targets a different (image) model,
+ *  so its scores should never fold into the writing composite. */
+export type DispatchBannerEvalScores = {
+  abstractness: DispatchBannerEvalDimension;
+  paletteAdherence: DispatchBannerEvalDimension;
+  motifMatch: DispatchBannerEvalDimension;
+  restraint: DispatchBannerEvalDimension;
+};
+
 /** Content-addressed prompt versions in use at compose time.
  *  Hash → dispatchPromptsTable.hash. Per slot so the operator can see
  *  which polish prompt vs which fallback vs which commentator was active. */
@@ -75,6 +116,18 @@ export const dispatchArchiveTable = pgTable(
     evalBannedPhrases: jsonb("eval_banned_phrases").$type<DispatchBannedPhraseHit[]>(),
     evalModel: text("eval_model"),
     evalRunAt: timestamp("eval_run_at", { withTimezone: true }),
+    // Formatting eval — deterministic HTML/structure checks (no LLM cost).
+    // Tracked as its own track because formatting issues are usually fixed
+    // by template / post-processing changes rather than fine-tuning, so its
+    // score should not feed the writing composite.
+    evalFormatting: jsonb("eval_formatting").$type<DispatchFormattingResult>(),
+    evalFormattingScore: numeric("eval_formatting_score", { precision: 4, scale: 2 }),
+    // Banner / image eval — populated by a vision model in PR B. The score
+    // and per-dimension notes drive a separate image-fine-tune dataset
+    // export, never folded into the writing composite.
+    evalBannerScores: jsonb("eval_banner_scores").$type<DispatchBannerEvalScores>(),
+    evalBannerCompositeScore: numeric("eval_banner_composite_score", { precision: 4, scale: 2 }),
+    evalBannerModel: text("eval_banner_model"),
     /** Per-slot prompt hashes (sha256, first 16 chars) used at compose
      *  time. Joins to dispatch_prompts for the full content. Lets the
      *  Feedback log color-band and filter by prompt version without

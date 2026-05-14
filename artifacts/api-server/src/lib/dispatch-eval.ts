@@ -23,6 +23,9 @@ import {
   type DispatchArchive,
   type DispatchEvalScores,
   type DispatchBannedPhraseHit,
+  type DispatchFormattingIssue,
+  type DispatchFormattingIssueType,
+  type DispatchFormattingResult,
 } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
@@ -381,12 +384,144 @@ async function runRubricLlm(row: DispatchArchive): Promise<{
   return { scores: out as DispatchEvalScores, model: setup.model };
 }
 
+// Formatting eval -----------------------------------------------------------
+//
+// Deterministic structural checks. No LLM cost. Score = 10 minus issue
+// count, clamped to [0, 10]. Scoped to issues that are usually fixed by
+// template / post-processing changes — not the prose itself — which is
+// why this is a separate track from the writing rubric.
+
+const FORMATTING_SAMPLE_LEN = 80;
+
+const sample = (s: string): string => {
+  const trimmed = s.replace(/\s+/g, " ").trim();
+  return trimmed.length <= FORMATTING_SAMPLE_LEN
+    ? trimmed
+    : `${trimmed.slice(0, FORMATTING_SAMPLE_LEN - 1)}…`;
+};
+
+function pushIssue(
+  out: Map<DispatchFormattingIssueType, DispatchFormattingIssue>,
+  type: DispatchFormattingIssueType,
+  count: number,
+  sampleText?: string,
+): void {
+  if (count <= 0) return;
+  const existing = out.get(type);
+  if (existing) {
+    existing.count += count;
+    if (!existing.sample && sampleText) existing.sample = sample(sampleText);
+    return;
+  }
+  out.set(type, {
+    type,
+    count,
+    ...(sampleText ? { sample: sample(sampleText) } : {}),
+  });
+}
+
+function evaluateFormatting(row: DispatchArchive): DispatchFormattingResult {
+  const body = row.bodyHtml ?? "";
+  const intro = row.introHtml ?? "";
+  const issues = new Map<DispatchFormattingIssueType, DispatchFormattingIssue>();
+
+  // 1. Empty paragraphs in body or intro — visible vertical-gap bugs.
+  const emptyP = (body + intro).match(/<p[^>]*>\s*(?:&nbsp;| |\s)*<\/p>/gi);
+  if (emptyP) pushIssue(issues, "empty_paragraph", emptyP.length, emptyP[0]);
+
+  // 2. Runs of consecutive &nbsp; (3+) — usually a copy-paste artifact.
+  const nbspRun = body.match(/(?:&nbsp;| ){3,}/gi);
+  if (nbspRun) pushIssue(issues, "nbsp_run", nbspRun.length, nbspRun[0]);
+
+  // 3. Double spaces inside text content (between a letter and a letter,
+  //    not inside HTML attributes). Sample one if found.
+  const doubleSpace = body.match(/[A-Za-z),.!?]  +[A-Za-z(]/g);
+  if (doubleSpace)
+    pushIssue(issues, "double_space", doubleSpace.length, doubleSpace[0]);
+
+  // 4. Anchors without href, or with empty/placeholder href.
+  const brokenAnchorMatches = Array.from(body.matchAll(/<a\b([^>]*)>/gi));
+  let brokenAnchorCount = 0;
+  let brokenAnchorSample = "";
+  for (const m of brokenAnchorMatches) {
+    const attrs = m[1] ?? "";
+    const hrefMatch = /\bhref\s*=\s*"([^"]*)"/i.exec(attrs);
+    const href = hrefMatch?.[1] ?? "";
+    if (!hrefMatch || href.length === 0 || href === "#" || href === "about:blank") {
+      brokenAnchorCount++;
+      if (!brokenAnchorSample) brokenAnchorSample = m[0];
+    }
+  }
+  if (brokenAnchorCount > 0)
+    pushIssue(issues, "broken_anchor", brokenAnchorCount, brokenAnchorSample);
+
+  // 5. Item count mismatch — top-10 dispatch should always be exactly 10.
+  const itemCount = (row.headlinesSnapshot ?? []).length;
+  if (itemCount !== 10) {
+    pushIssue(
+      issues,
+      "item_count_mismatch",
+      1,
+      `expected 10 items, got ${itemCount}`,
+    );
+  }
+
+  // 6. <img> without alt — accessibility + most clients render the alt as
+  //    fallback text on image-blocking inboxes.
+  const imgs = Array.from(body.matchAll(/<img\b([^>]*)>/gi));
+  let missingAlt = 0;
+  let missingAltSample = "";
+  for (const m of imgs) {
+    if (!/\balt\s*=/i.test(m[1] ?? "")) {
+      missingAlt++;
+      if (!missingAltSample) missingAltSample = m[0];
+    }
+  }
+  if (missingAlt > 0) pushIssue(issues, "missing_alt", missingAlt, missingAltSample);
+
+  // 7. Unrendered template tokens — `{{stories}}`, `{{motif}}`, etc that
+  //    survived rendering. Strong signal something broke.
+  const tokens = body.match(/\{\{\s*\w+\s*\}\}/g);
+  if (tokens) pushIssue(issues, "unrendered_token", tokens.length, tokens[0]);
+
+  // 8. Duplicate hrefs — same item link appearing more than once in the
+  //    body (often a sign the same headline got picked up twice).
+  const hrefSeen = new Map<string, number>();
+  for (const m of body.matchAll(/<a\b[^>]*\bhref\s*=\s*"([^"]+)"[^>]*>/gi)) {
+    const href = m[1] ?? "";
+    if (href.startsWith("mailto:") || href === "#") continue;
+    hrefSeen.set(href, (hrefSeen.get(href) ?? 0) + 1);
+  }
+  let dupCount = 0;
+  let dupSample = "";
+  for (const [href, n] of hrefSeen) {
+    if (n > 1) {
+      dupCount += n - 1;
+      if (!dupSample) dupSample = href;
+    }
+  }
+  if (dupCount > 0) pushIssue(issues, "duplicate_link", dupCount, dupSample);
+
+  const arr = Array.from(issues.values()).sort((a, b) => b.count - a.count);
+  return {
+    issues: arr,
+    totalIssues: arr.reduce((s, i) => s + i.count, 0),
+  };
+}
+
+function formattingScoreFrom(result: DispatchFormattingResult): number {
+  const penalty = result.totalIssues;
+  return Math.max(0, Math.min(10, 10 - penalty));
+}
+
 // Public entry ---------------------------------------------------------------
 
 export type EvalOutcome = {
   ok: boolean;
   composite?: number;
   bannedCount?: number;
+  formattingScore?: number;
+  formattingIssues?: number;
   error?: string;
 };
 
@@ -404,21 +539,31 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
   if (!row) return { ok: false, error: "not_found" };
 
   const scan = scanForBannedPhrases(row);
+  const formatting = evaluateFormatting(row);
+  const formattingScore = formattingScoreFrom(formatting);
 
   const rubric = await runRubricLlm(row);
   if ("error" in rubric) {
-    // Persist the regex sweep even if the LLM failed — that piece is the
-    // most actionable signal and never costs anything to compute.
+    // Persist deterministic results even if the LLM failed — regex + HTML
+    // checks are the most actionable signals and never cost anything.
     await db
       .update(dispatchArchiveTable)
       .set({
         evalBannedPhrasesCount: scan.violationCount,
         evalBannedPhrases: scan.hits,
+        evalFormatting: formatting,
+        evalFormattingScore: formattingScore.toFixed(2),
         evalRunAt: new Date(),
       })
       .where(eq(dispatchArchiveTable.id, id));
     logger.warn({ id, error: rubric.error }, "Dispatch eval: rubric LLM failed");
-    return { ok: false, bannedCount: scan.violationCount, error: rubric.error };
+    return {
+      ok: false,
+      bannedCount: scan.violationCount,
+      formattingScore,
+      formattingIssues: formatting.totalIssues,
+      error: rubric.error,
+    };
   }
 
   const scores = rubric.scores;
@@ -440,6 +585,8 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
       // with severity tagged, but don't drive the headline number.
       evalBannedPhrasesCount: scan.violationCount,
       evalBannedPhrases: scan.hits,
+      evalFormatting: formatting,
+      evalFormattingScore: formattingScore.toFixed(2),
       evalModel: rubric.model,
       evalRunAt: new Date(),
     })
@@ -451,10 +598,18 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
       composite: Number(composite.toFixed(2)),
       bannedCount: scan.violationCount,
       warningCount: scan.warningCount,
+      formattingScore,
+      formattingIssues: formatting.totalIssues,
     },
     "Dispatch eval: complete",
   );
-  return { ok: true, composite, bannedCount: scan.violationCount };
+  return {
+    ok: true,
+    composite,
+    bannedCount: scan.violationCount,
+    formattingScore,
+    formattingIssues: formatting.totalIssues,
+  };
 }
 
 /** Fire-and-forget wrapper for the post-archive hook. */
@@ -469,7 +624,7 @@ export function evaluateDispatchInBackground(id: number): void {
 
 /**
  * Idempotent self-heal — adds the eval columns if a prod DB predates the
- * migration. Safe to call on every boot. Mirrors migrations/0004.
+ * migration. Safe to call on every boot. Mirrors migrations/0004 + 0007.
  */
 export async function ensureDispatchEvalSchema(): Promise<void> {
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_scores JSONB`);
@@ -478,4 +633,10 @@ export async function ensureDispatchEvalSchema(): Promise<void> {
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_banned_phrases JSONB`);
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_model TEXT`);
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_run_at TIMESTAMPTZ`);
+  // Three-track eval columns (PR A: formatting; PR B: banner).
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_formatting JSONB`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_formatting_score NUMERIC(4, 2)`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_banner_scores JSONB`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_banner_composite_score NUMERIC(4, 2)`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_banner_model TEXT`);
 }
