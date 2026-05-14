@@ -203,27 +203,27 @@ function scanForBannedPhrases(row: DispatchArchive): ScanResult {
 
 const RUBRIC_SYSTEM_PROMPT = `You score archived dispatch newsletters against a fixed editorial rubric. The dispatch is a 10-item AI/tech digest with an editorial intro and 2-3 sentence commentary per item. The voice target is institutional / CIO-briefing analysis — sharp, varied, grounded in named workflows, actors, and operational mechanics.
 
-You will receive the subject, intro, and the full list of items (source, title, commentary). Return a JSON object with five 0-10 scores and a short note for each (one sentence max).
+You will receive the subject, intro (item 00), and the full list of items 01..N (source, title, commentary). Return a JSON object with five 0-10 scores. For each dimension also return a short note (one sentence max) AND a "worstItems" array of up to 3 items that most hurt this dimension's score — each with the item number (the 2-digit prefix you see; use 0 for the intro) and a short quoted span (≤120 chars, copied verbatim from the offending text) that shows why. If the dimension scores 9+, return an empty worstItems array. The worstItems are the actionable output: an operator should be able to use them to rewrite exactly those items before next send.
 
 DIMENSIONS:
 
-1. introSpecificity (0-10) — Does the intro name a directional claim with specific actors, workflows, governance structures, or buyers? 10 = directional thesis with named actors and connecting thread across multiple items. 5 = vaguely thematic but generic. 0 = "Companies are increasingly reevaluating…" / "today's headlines present a picture…" / interchangeable across any AI news day.
+1. introSpecificity (0-10) — Does the intro name a directional claim with specific actors, workflows, governance structures, or buyers? 10 = directional thesis with named actors and connecting thread across multiple items. 5 = vaguely thematic but generic. 0 = "Companies are increasingly reevaluating…" / "today's headlines present a picture…" / interchangeable across any AI news day. For this dimension, worstItems will typically only flag item 0 (the intro).
 
-2. lensDiversity (0-10) — Do the 10 items rotate analytical lenses (operational / GTM / infrastructure / regulatory / labor / pricing / integration friction / technical limitation / competitive)? 10 = different lens for nearly every item. 5 = repeats one or two lenses across most items. 0 = every item asks "who loses competitively?".
+2. lensDiversity (0-10) — Do the 10 items rotate analytical lenses (operational / GTM / infrastructure / regulatory / labor / pricing / integration friction / technical limitation / competitive)? 10 = different lens for nearly every item. 5 = repeats one or two lenses across most items. 0 = every item asks "who loses competitively?". worstItems should flag items whose lens repeats one already used earlier.
 
-3. cadenceVariety (0-10) — Does the prose vary sentence cadence, or does it repeat the templated formula "X announced Y. This [highlights/signals/underscores/reflects] Z."? 10 = each item structurally different. 5 = noticeable but not dominant template. 0 = same 2-sentence template across most items.
+3. cadenceVariety (0-10) — Does the prose vary sentence cadence, or does it repeat the templated formula "X announced Y. This [highlights/signals/underscores/reflects] Z."? 10 = each item structurally different. 5 = noticeable but not dominant template. 0 = same 2-sentence template across most items. worstItems should flag items whose opening sentence follows the template.
 
-4. sourceTiering (0-10) — Does the editorial weight match source weight? Tier 1 (OpenAI / Microsoft / Google / Anthropic / IPOs / regulation) deserves fuller 3-sentence analytical treatment; Tier 3 (arXiv preprints) should be shorter and name a specific applied audience. 10 = clear weighting differential. 5 = mixed — some flattening visible. 0 = arXiv items get the same editorial weight as Microsoft strategy posts.
+4. sourceTiering (0-10) — Does the editorial weight match source weight? Tier 1 (OpenAI / Microsoft / Google / Anthropic / IPOs / regulation) deserves fuller 3-sentence analytical treatment; Tier 3 (arXiv preprints) should be shorter and name a specific applied audience. 10 = clear weighting differential. 5 = mixed — some flattening visible. 0 = arXiv items get the same editorial weight as Microsoft strategy posts. worstItems should flag items where the weighting is inverted or flat.
 
-5. concreteness (0-10) — Does each item name a subject, a capability, a metric, an environment, or a workflow — or does it float in abstract business nouns ("operational capabilities", "strategic synergies", "growth trajectory", "data-driven insights")? 10 = nearly every item names concrete subjects. 5 = mixed. 0 = abstract throughout.
+5. concreteness (0-10) — Does each item name a subject, a capability, a metric, an environment, or a workflow — or does it float in abstract business nouns ("operational capabilities", "strategic synergies", "growth trajectory", "data-driven insights")? 10 = nearly every item names concrete subjects. 5 = mixed. 0 = abstract throughout. worstItems should quote the most abstract phrase from each offending item.
 
-Return ONLY this JSON, no prose:
+Return ONLY this JSON, no prose. Schema for each dimension is identical:
 {
-  "introSpecificity": { "score": <0-10>, "note": "<one sentence>" },
-  "lensDiversity": { "score": <0-10>, "note": "<one sentence>" },
-  "cadenceVariety": { "score": <0-10>, "note": "<one sentence>" },
-  "sourceTiering": { "score": <0-10>, "note": "<one sentence>" },
-  "concreteness": { "score": <0-10>, "note": "<one sentence>" }
+  "introSpecificity": { "score": <0-10>, "note": "<one sentence>", "worstItems": [{ "item": <0..N>, "quote": "<short quoted span>" }] },
+  "lensDiversity":    { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] },
+  "cadenceVariety":   { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] },
+  "sourceTiering":    { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] },
+  "concreteness":     { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] }
 }
 
 Be strict. The dispatch we're scoring routinely tops out around 6-7 on these dimensions; reserve 9-10 for actually exceptional work.`;
@@ -283,7 +283,9 @@ const DIMENSIONS = [
   "concreteness",
 ] as const;
 
-function isDimensionPayload(v: unknown): v is { score: number; note: string } {
+function isDimensionPayload(
+  v: unknown,
+): v is { score: number; note: string; worstItems?: unknown } {
   if (!v || typeof v !== "object") return false;
   const o = v as { score?: unknown; note?: unknown };
   return (
@@ -291,6 +293,36 @@ function isDimensionPayload(v: unknown): v is { score: number; note: string } {
     Number.isFinite(o.score) &&
     typeof o.note === "string"
   );
+}
+
+// Coerce/validate the per-dimension worstItems array. Tolerant of:
+//   - missing/empty (older prompt versions, or 9+ scores)
+//   - item numbers as numeric strings ("03")
+//   - out-of-range numbers (clamp to 0..itemCount)
+// Caps at 3 entries and truncates quotes to 120 chars.
+function coerceWorstItems(
+  v: unknown,
+  itemCount: number,
+): Array<{ item: number; quote: string }> {
+  if (!Array.isArray(v)) return [];
+  const out: Array<{ item: number; quote: string }> = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== "object") continue;
+    const r = raw as { item?: unknown; quote?: unknown };
+    const itemN =
+      typeof r.item === "number"
+        ? r.item
+        : typeof r.item === "string"
+          ? Number(r.item)
+          : NaN;
+    if (!Number.isFinite(itemN)) continue;
+    const clamped = Math.max(0, Math.min(itemCount, Math.trunc(itemN)));
+    const quote = typeof r.quote === "string" ? r.quote.trim().slice(0, 120) : "";
+    if (!quote) continue;
+    out.push({ item: clamped, quote });
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 function clampScore(n: number): number {
@@ -335,6 +367,7 @@ async function runRubricLlm(row: DispatchArchive): Promise<{
     return { error: "parse_failed" };
   }
 
+  const itemCount = (row.headlinesSnapshot ?? []).length;
   const obj = parsed as Record<string, unknown>;
   const out: Partial<DispatchEvalScores> = {};
   for (const dim of DIMENSIONS) {
@@ -345,6 +378,7 @@ async function runRubricLlm(row: DispatchArchive): Promise<{
     out[dim] = {
       score: clampScore(v.score),
       note: v.note.slice(0, 280),
+      worstItems: coerceWorstItems(v.worstItems, itemCount),
     };
   }
   return { scores: out as DispatchEvalScores, model: setup.model };

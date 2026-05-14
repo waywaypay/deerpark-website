@@ -12,6 +12,12 @@ export type DispatchArchiveItem = {
 export type DispatchEvalDimension = {
   score: number;
   note: string;
+  /** Up to 3 specific items (1-indexed, matching headlinesSnapshot order)
+   *  the LLM flagged as the worst offenders on this dimension, with a short
+   *  quoted span from the offending text. Optional for back-compat with
+   *  rows evaluated before per-item attribution shipped. The intro is
+   *  attributed with `item: 0`. */
+  worstItems?: Array<{ item: number; quote: string }>;
 };
 
 export type DispatchEvalScores = {

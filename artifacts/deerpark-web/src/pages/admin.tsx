@@ -2349,7 +2349,14 @@ type DispatchArchiveItemSnapshot = {
   publishedAt: string;
 };
 
-type DispatchEvalDimension = { score: number; note: string };
+type DispatchEvalDimension = {
+  score: number;
+  note: string;
+  /** Up to 3 items the LLM flagged as the worst offenders on this
+   *  dimension (1-indexed; 0 = intro). Optional for back-compat with
+   *  rows evaluated before per-item attribution shipped. */
+  worstItems?: Array<{ item: number; quote: string }>;
+};
 
 type DispatchEvalScores = {
   introSpecificity: DispatchEvalDimension;
@@ -2528,6 +2535,15 @@ const FORMATTING_ISSUE_LABELS: Record<string, string> = {
   duplicate_link: "Duplicate link",
 };
 
+// Trailing window for the rolling baseline shown on the trend chart. 7 sends
+// is roughly a week of daily dispatches — short enough to track prompt
+// changes, long enough to dampen single-day noise.
+const BASELINE_WINDOW = 7;
+// A point flags as a regression when it falls this far below the baseline
+// computed over the trailing window. 1.0 on a 10-point scale ≈ one rubric
+// letter-grade drop — visible to the eye but unambiguous.
+const REGRESSION_THRESHOLD = 1.0;
+
 const EvalTrendStrip = ({
   trend,
 }: {
@@ -2538,15 +2554,53 @@ const EvalTrendStrip = ({
   // bar list. The aggregate endpoint already returns points in oldest →
   // newest order, so no reverse here.
   const points = useMemo(
-    () => trend.filter((p) => p.composite !== null),
+    () =>
+      trend.filter(
+        (p): p is typeof p & { composite: number } => p.composite !== null,
+      ),
     [trend],
   );
   if (points.length < 2) return null;
+
+  // Trailing baseline: mean of the previous BASELINE_WINDOW points (NOT
+  // including the current one — otherwise a single bad send drags down its
+  // own baseline and never flags as a regression). Undefined until we have
+  // at least 3 priors so the early line isn't visually noisy.
+  type Annotated = (typeof points)[number] & {
+    baseline: number | null;
+    regression: boolean;
+  };
+  const annotated: Annotated[] = points.map((p, i) => {
+    const prior = points.slice(Math.max(0, i - BASELINE_WINDOW), i);
+    if (prior.length < 3) return { ...p, baseline: null, regression: false };
+    const baseline =
+      prior.reduce((s, q) => s + q.composite, 0) / prior.length;
+    const regression = baseline - p.composite >= REGRESSION_THRESHOLD;
+    return { ...p, baseline, regression };
+  });
+
+  const latest = annotated[annotated.length - 1];
+  const regressionCount = annotated.filter((p) => p.regression).length;
   const max = 10;
   const width = 720;
   const height = 80;
   const barWidth = Math.max(2, Math.floor(width / points.length) - 2);
-  const latest = points[points.length - 1]?.composite ?? null;
+  const xFor = (i: number) => i * (width / points.length) + barWidth / 2 + 1;
+  const yFor = (score: number) => height - (score / max) * (height - 4);
+
+  // Build the baseline polyline (skipping undefined segments).
+  const baselineSegments: Array<Array<{ x: number; y: number }>> = [];
+  let current: Array<{ x: number; y: number }> = [];
+  annotated.forEach((p, i) => {
+    if (p.baseline === null) {
+      if (current.length > 0) baselineSegments.push(current);
+      current = [];
+      return;
+    }
+    current.push({ x: xFor(i), y: yFor(p.baseline) });
+  });
+  if (current.length > 0) baselineSegments.push(current);
+
   return (
     <div className="border border-foreground/15 bg-card p-4">
       <div className="flex items-center justify-between mb-3">
@@ -2554,45 +2608,105 @@ const EvalTrendStrip = ({
           <div className="section-label">Composite trend</div>
           <div className="text-[11px] text-muted-foreground font-light mt-0.5">
             Mean of the five rubric scores per dispatch — oldest → newest,
-            full archive.
+            full archive. Dashed line is the trailing {BASELINE_WINDOW}-send
+            baseline; ringed bars dropped ≥{REGRESSION_THRESHOLD.toFixed(1)}{" "}
+            below it.
           </div>
         </div>
-        <div className="text-xs text-muted-foreground">
-          {points.length} evaluated · latest{" "}
-          <span className={scoreColor(latest)}>
-            {latest?.toFixed(2) ?? "—"}
+        <div className="text-xs text-muted-foreground space-x-3">
+          <span>
+            {points.length} evaluated · latest{" "}
+            <span className={scoreColor(latest?.composite ?? null)}>
+              {latest?.composite?.toFixed(2) ?? "—"}
+            </span>
+            /10
           </span>
-          /10
+          {latest?.baseline !== null && latest?.baseline !== undefined && (
+            <span>
+              vs baseline{" "}
+              <span className="font-mono">{latest.baseline.toFixed(2)}</span>
+              <span
+                className={
+                  latest.composite - latest.baseline >= 0
+                    ? "text-emerald-400 ml-1"
+                    : "text-red-400 ml-1"
+                }
+              >
+                ({latest.composite - latest.baseline >= 0 ? "+" : ""}
+                {(latest.composite - latest.baseline).toFixed(2)})
+              </span>
+            </span>
+          )}
+          {regressionCount > 0 && (
+            <span className="text-red-400">
+              {regressionCount} regression{regressionCount === 1 ? "" : "s"}
+            </span>
+          )}
         </div>
       </div>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-20"
+        className="w-full h-20 overflow-visible"
         preserveAspectRatio="none"
       >
         <line
           x1={0}
           x2={width}
-          y1={height - (height * 7) / max}
-          y2={height - (height * 7) / max}
+          y1={yFor(7)}
+          y2={yFor(7)}
           stroke="currentColor"
           strokeOpacity={0.15}
           strokeDasharray="4 4"
         />
-        {points.map((p, i) => {
-          const score = p.composite ?? 0;
+        {annotated.map((p, i) => {
+          const score = p.composite;
           const h = Math.max(2, (score / max) * (height - 4));
           const x = i * (width / points.length) + 1;
           const y = height - h;
           const color =
             score >= 7 ? "#34d399" : score >= 5 ? "#fbbf24" : "#f87171";
+          const tooltip =
+            `#${p.id}\n${score.toFixed(2)}/10 · ${p.banned ?? 0} banned hits` +
+            (p.baseline !== null
+              ? `\nBaseline ${p.baseline.toFixed(2)} (${score - p.baseline >= 0 ? "+" : ""}${(score - p.baseline).toFixed(2)})`
+              : "") +
+            (p.regression ? "\n⚠ regression vs baseline" : "");
           return (
             <g key={p.id}>
-              <title>{`#${p.id}\n${score.toFixed(2)}/10 · ${p.banned ?? 0} banned hits`}</title>
-              <rect x={x} y={y} width={barWidth} height={h} fill={color} fillOpacity={0.75} />
+              <title>{tooltip}</title>
+              <rect
+                x={x}
+                y={y}
+                width={barWidth}
+                height={h}
+                fill={color}
+                fillOpacity={0.75}
+              />
+              {p.regression && (
+                <rect
+                  x={x - 1}
+                  y={y - 1}
+                  width={barWidth + 2}
+                  height={h + 2}
+                  fill="none"
+                  stroke="#f87171"
+                  strokeWidth={1.5}
+                />
+              )}
             </g>
           );
         })}
+        {baselineSegments.map((seg, idx) => (
+          <polyline
+            key={idx}
+            points={seg.map((s) => `${s.x},${s.y}`).join(" ")}
+            fill="none"
+            stroke="currentColor"
+            strokeOpacity={0.55}
+            strokeWidth={1}
+            strokeDasharray="3 3"
+          />
+        ))}
       </svg>
     </div>
   );
@@ -3618,6 +3732,7 @@ const FeedbackTab = ({ token }: { token: string }) => {
                             (Object.keys(RUBRIC_LABELS) as Array<keyof DispatchEvalScores>).map(
                               (key) => {
                                 const dim = it.evalScores?.[key];
+                                const worst = dim?.worstItems ?? [];
                                 return (
                                   <div key={key} className="space-y-1">
                                     <div className="flex items-baseline justify-between">
@@ -3634,6 +3749,25 @@ const FeedbackTab = ({ token }: { token: string }) => {
                                       <div className="text-[11px] text-muted-foreground font-light leading-snug">
                                         {dim.note}
                                       </div>
+                                    )}
+                                    {worst.length > 0 && (
+                                      <ul className="space-y-0.5 pl-2 border-l border-foreground/10">
+                                        {worst.map((w, idx) => (
+                                          <li
+                                            key={`${key}-${idx}`}
+                                            className="text-[10px] leading-snug"
+                                          >
+                                            <span className="text-primary/80 font-mono mr-1.5">
+                                              {w.item === 0
+                                                ? "intro"
+                                                : `item ${String(w.item).padStart(2, "0")}`}
+                                            </span>
+                                            <span className="text-muted-foreground/90 italic">
+                                              "{w.quote}"
+                                            </span>
+                                          </li>
+                                        ))}
+                                      </ul>
                                     )}
                                   </div>
                                 );
