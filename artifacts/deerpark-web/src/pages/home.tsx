@@ -44,7 +44,7 @@ const Hero = () => {
 
           <FadeIn delay={0.2}>
             <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-md mb-10 font-sans font-light">
-              We help organizations get ready for AI, build the applications their teams need, and train their people to run them. From exploring AI to operating it in 90 days.
+              We help organizations get ready for AI, build the applications their teams need, and train their people to run them.
             </p>
           </FadeIn>
 
