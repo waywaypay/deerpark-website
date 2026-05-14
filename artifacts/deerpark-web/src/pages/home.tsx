@@ -607,11 +607,9 @@ const CASE_STUDIES: CaseStudyData[] = [
     headline: "One web app to manage high-volume management schedules.",
     mockup: <SchedulingMockups />,
     intro: [
-      "A services operator was producing high-volume management schedules using Excel, manual research, and PDF delivery. Each schedule required ~4 hours of analyst time to compile attendee profiles from fragmented sources.",
-      "We rebuilt the workflow as a structured system rather than a document process.",
-      "The core shift was treating each attendee as a persistent data object — continuously enriched via automated ingestion (web sources, internal data) and summarized into standardized profiles. Scheduling logic and profile generation were integrated into a single web interface, with outputs rendered in a mobile-first format instead of static PDFs.",
-      "We led the full build: product design, data architecture, AI enrichment layer, and internal training.",
-      "Across production usage, time per schedule dropped from ~4 hours to ~15 minutes (~93% reduction), while increasing profile completeness and consistency. Following an internal demo, the operator deployed the system across a client base of 40+ accounts.",
+      "A services provider was producing high-volume management schedules, with each one requiring ~4 hours of analyst time to compile attendee profiles from fragmented sources.",
+      "We led the full workflow redesign and webapp rebuild: product design, data architecture, AI enrichment layer, and internal training.",
+      "Across production usage, time per schedule dropped from ~4 hours to ~15 minutes while improving profile consistency. Following an internal demo, the services provider deployed the system across a client base of 40+ accounts, with high client satisfaction across the board.",
     ],
     before:
       "Spreadsheets and group chats. Every manager losing hours each week to coverage edits and time-off back-and-forth.",
