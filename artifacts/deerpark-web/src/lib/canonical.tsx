@@ -3,6 +3,57 @@ import { useLocation } from "wouter";
 
 const SITE_ORIGIN = "https://www.deerpark.io";
 
+// Homepage values shipped in index.html. Used as the fallback when a route has
+// no override so we always restore the defaults when navigating back to "/".
+const HOME_TITLE = "DeerPark — From AI curious to AI capable.";
+const HOME_DESCRIPTION =
+  "AI enablement for organizations. We assess your readiness, ship the applications your team needs, and train people to run them — six to eight weeks from kickoff to handoff.";
+const HOME_OG_DESCRIPTION =
+  "We assess, build, deploy, and train — so your team actually uses what we ship. Kickoff to handoff in six to eight weeks.";
+const HOME_TWITTER_DESCRIPTION =
+  "AI enablement for organizations. Kickoff to handoff in six to eight weeks.";
+
+type RouteMeta = {
+  title: string;
+  description: string;
+  ogDescription?: string;
+  twitterDescription?: string;
+};
+
+const ROUTE_META: Record<string, RouteMeta> = {
+  "/dispatch": {
+    title: "Dispatch — Daily AI brief for operators | DeerPark",
+    description:
+      "A curated daily AI brief for operators. The top 10 enterprise-relevant releases and research, with 2–4 sentences of context — in your inbox at 3:30 PM PT.",
+  },
+  "/dispatch/archive": {
+    title: "Dispatch Archive | DeerPark",
+    description:
+      "Past editions of Dispatch — DeerPark's daily AI brief for operators.",
+  },
+  "/privacy": {
+    title: "Privacy | DeerPark",
+    description:
+      "How DeerPark handles personal data, cookies, and email subscriptions.",
+  },
+  "/terms": {
+    title: "Terms of Service | DeerPark",
+    description: "Terms of service for DeerPark.io.",
+  },
+};
+
+function resolveMeta(path: string): RouteMeta | null {
+  if (ROUTE_META[path]) return ROUTE_META[path];
+  if (path.startsWith("/dispatch/") && path !== "/dispatch/archive") {
+    return {
+      title: "Dispatch | DeerPark",
+      description:
+        "An edition of Dispatch — DeerPark's daily AI brief for operators.",
+    };
+  }
+  return null;
+}
+
 function setLinkHref(rel: string, href: string) {
   let el = document.head.querySelector<HTMLLinkElement>(`link[rel="${rel}"]`);
   if (!el) {
@@ -13,16 +64,27 @@ function setLinkHref(rel: string, href: string) {
   el.href = href;
 }
 
-function setMetaContent(property: string, content: string) {
-  let el = document.head.querySelector<HTMLMetaElement>(
-    `meta[property="${property}"]`,
-  );
+function setMetaContent(selector: string, attr: string, content: string) {
+  let el = document.head.querySelector<HTMLMetaElement>(selector);
   if (!el) {
     el = document.createElement("meta");
-    el.setAttribute("property", property);
+    const [key, value] = attr.split("=");
+    el.setAttribute(key, value);
     document.head.appendChild(el);
   }
   el.content = content;
+}
+
+function setOg(property: string, content: string) {
+  setMetaContent(
+    `meta[property="${property}"]`,
+    `property=${property}`,
+    content,
+  );
+}
+
+function setNamed(name: string, content: string) {
+  setMetaContent(`meta[name="${name}"]`, `name=${name}`, content);
 }
 
 export function CanonicalUrl() {
@@ -31,7 +93,22 @@ export function CanonicalUrl() {
     const normalized = path === "/" ? "" : path.replace(/\/+$/, "");
     const url = `${SITE_ORIGIN}${normalized}`;
     setLinkHref("canonical", url);
-    setMetaContent("og:url", url);
+    setOg("og:url", url);
+
+    const meta = resolveMeta(path);
+    const title = meta?.title ?? HOME_TITLE;
+    const description = meta?.description ?? HOME_DESCRIPTION;
+    const ogDescription =
+      meta?.ogDescription ?? meta?.description ?? HOME_OG_DESCRIPTION;
+    const twitterDescription =
+      meta?.twitterDescription ?? meta?.description ?? HOME_TWITTER_DESCRIPTION;
+
+    document.title = title;
+    setNamed("description", description);
+    setOg("og:title", title);
+    setOg("og:description", ogDescription);
+    setNamed("twitter:title", title);
+    setNamed("twitter:description", twitterDescription);
   }, [path]);
   return null;
 }
