@@ -123,7 +123,7 @@ FINANCIAL EVENTS (IPOs, funding rounds, M&A, earnings)
 "Investor confidence" / "growth trajectory" / "valuation milestone" framings are filler. Either name a concrete commercial change (pricing power, who they can now buy, customer-concentration risk) or keep it observational — round size, lead investor, valuation, headline number from the print — and stop there.
 
 Return ONLY this JSON, no prose:
-{ "commentary": [{ "id": <number>, "text": "<2-3 plain-English sentences with bolded lead clause>" }, ...] }
+{ "commentary": [{ "id": <number>, "text": "<1-3 analyst sentences with bolded lead clause>" }, ...] }
 
 One entry per input id. No omissions. No extra ids.`;
 
