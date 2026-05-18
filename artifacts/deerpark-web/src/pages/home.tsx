@@ -951,7 +951,7 @@ const Products = () => (
 const ABOUT_BELIEFS: { title: string; body: string }[] = [
   {
     title: "Operators, not vendors",
-    body: "Every engagement is led by people who have shipped AI in production environments — not consultants flipping decks. We sit in your repo and your standup until the system runs.",
+    body: "Every engagement is led by people who have shipped AI products from 0 to 1. From deciding strategy through a production environment.",
   },
   {
     title: "You own everything",
