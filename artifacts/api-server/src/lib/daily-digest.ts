@@ -77,9 +77,14 @@ function sanitizeEnv(raw: string | undefined): string | undefined {
  */
 function parseDaysOfWeekPt(raw: string | undefined): Set<number> {
   const src = sanitizeEnv(raw) ?? DEFAULT_DAYS_OF_WEEK_PT;
+  // Drop empty/whitespace tokens before numeric coercion — without this,
+  // a trailing comma (`"2,4,"`) becomes `Number("")` = 0, silently adding
+  // Sunday to the schedule.
   const parts = src
     .split(",")
-    .map((p) => Number(p.trim()))
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .map((p) => Number(p))
     .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
   if (parts.length === 0) {
     return new Set(
