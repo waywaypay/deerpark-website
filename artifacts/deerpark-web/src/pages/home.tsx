@@ -56,7 +56,7 @@ const Hero = () => {
               >
                 Free Consult <ArrowRight className="ml-2 w-4 h-4" />
               </ConsultCTA>
-              <a href="#engagements">
+              <a href="#case-studies">
                 <Button variant="outline" size="lg" className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-foreground/25 hover:bg-foreground/5">
                   See Our Work
                 </Button>
@@ -640,8 +640,9 @@ const CASE_STUDIES: CaseStudyData[] = [
     narrativeOnly: true,
     diagram: <PRWorkflowDiagram />,
     intro: [
-      "A team was producing recurring quarterly reports for clients — pulling from kick-off call notes, internal data, and prior-cycle context, then iterating through multiple review rounds. Each cycle consumed roughly 3 hours of senior time before the report went out the door.",
-      "We rebuilt the reporting pipeline as an AI workflow with Skills integrated end-to-end across source ingestion, structured analysis, and draft assembly. Output quality measured 25% higher than the same workflow running on a baseline frontier model, and manual effort dropped by ~90% — 3 hours of hands-on work became 20 minutes of review. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
+      "Every quarter, a client-services team had to write a performance report for each of their clients. Producing one meant pulling together notes from the quarterly review call, internal account data, and the previous quarter's report, then drafting and revising the new report by hand. Each report took a senior reviewer about three hours to finish.",
+      "We replaced the manual drafting with an automated pipeline. It reads the same sources the team used to read, applies the team's own analysis framework, and produces a finished draft in the team's voice. Senior staff now spend about twenty minutes per report — reading, correcting, and approving — instead of three hours writing from scratch.",
+      "In side-by-side blind comparisons, drafts from the tuned pipeline scored 25% higher than the same prompt run against an off-the-shelf frontier model, because the team's standards, structure, and judgment are encoded into the workflow itself. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
     ],
     before:
       "Hours per cycle of source review, structured note-taking, and drafting from scratch. Same shape every time — no leverage.",
@@ -678,7 +679,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
           <div className="min-w-0 lg:col-span-6">
             <div className="flex items-center gap-3 mb-8">
               <div className="h-[1px] w-12 bg-background/40"></div>
-              <span className="section-label !text-background/85">Sample Engagement · {data.eyebrow}</span>
+              <span className="section-label !text-background/85">Case Study · {data.eyebrow}</span>
             </div>
             <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
               {data.headline}
@@ -712,7 +713,7 @@ const CaseStudyBlock = ({ data }: { data: CaseStudyData }) => {
       <div className={`min-w-0 ${hasMockup ? "lg:col-span-7" : "lg:col-span-4"}`}>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-background/40"></div>
-          <span className="section-label !text-background/85">Sample Engagement · {data.eyebrow}</span>
+          <span className="section-label !text-background/85">Case Study · {data.eyebrow}</span>
         </div>
         <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-8 pb-1">
           {data.headline}
@@ -791,20 +792,20 @@ const CaseStudy = () => {
   const next = () => goTo(activeIndex + 1);
 
   return (
-    <section id="engagements" className="py-32 border-t border-foreground/15 bg-foreground text-background overflow-hidden">
+    <section id="case-studies" className="py-32 border-t border-foreground/15 bg-foreground text-background overflow-hidden">
       <div className="max-w-7xl mx-auto px-6">
         <div className="mb-12 pb-10 border-b border-background/15">
           <div className="flex items-center gap-3 mb-6">
             <div className="h-[1px] w-12 bg-background/40" />
-            <span className="section-label !text-background/85">Sample Engagements</span>
+            <span className="section-label !text-background/85">Case Studies</span>
           </div>
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div className="max-w-2xl">
               <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-4">
-                What an engagement can look like.
+                Recent case studies.
               </h2>
               <p className="text-background/65 font-light leading-relaxed">
-                Representative builds — not fixed templates. Your scope, stack, and timeline will vary; we use these as blueprints for the kind of outcome you can expect.
+                Real builds from recent engagements. Your scope, stack, and timeline will vary — we use these as blueprints for the kind of outcome you can expect.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
