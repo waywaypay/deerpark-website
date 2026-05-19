@@ -30,85 +30,10 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { logUsage } from "./llm-usage";
+import { BANNED_PATTERNS, type Severity } from "./banned-phrases";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
-
-// Banned phrase patterns. Word-boundary aware. Case-insensitive.
-//
-// Two severity tiers:
-//   "violation" — specific sentence shapes / LLM-tic phrases that should
-//     never appear. These drive the visible "X violations" count.
-//   "warning"   — bare single-word bans ("increasingly", "transformative",
-//     "leverages", etc) that catch both legitimate and synthetic uses.
-//     Tracked + displayed but NOT counted toward the violations number, so
-//     a clean send can plausibly hit zero violations even when 1-2 of these
-//     show up incidentally.
-type Severity = "violation" | "warning";
-type Pattern = { phrase: string; re: RegExp; severity: Severity };
-
-const BANNED_PATTERNS: Pattern[] = [
-  // Intro shapes that kept leaking — VIOLATIONS
-  { phrase: "increasingly reevaluating", re: /\bincreasingly\s+reevaluating\b/i, severity: "violation" },
-  { phrase: "present(s) a picture", re: /\bpresents?\s+a\s+picture\b/i, severity: "violation" },
-  { phrase: "paints a picture", re: /\bpaints\s+a\s+picture\b/i, severity: "violation" },
-  { phrase: "growing response", re: /\bgrowing\s+response\b/i, severity: "violation" },
-  { phrase: "integration efforts", re: /\bintegration\s+efforts\b/i, severity: "violation" },
-  { phrase: "this technology", re: /\bthis\s+technology\b/i, severity: "violation" },
-  // Generic "this [noun]" references that signal summary mode — VIOLATIONS
-  { phrase: "this development", re: /\bthis\s+development\b/i, severity: "violation" },
-  { phrase: "this initiative", re: /\bthis\s+initiative\b/i, severity: "violation" },
-  { phrase: "this approach", re: /\bthis\s+approach\b/i, severity: "violation" },
-  { phrase: "this expansion", re: /\bthis\s+expansion\b/i, severity: "violation" },
-  { phrase: "this ambitious goal", re: /\bthis\s+ambitious\s+goal\b/i, severity: "violation" },
-  // Hedging templates — VIOLATIONS
-  { phrase: "may need to adapt", re: /\bmay\s+need\s+to\s+adapt\b/i, severity: "violation" },
-  { phrase: "may reshape", re: /\bmay\s+reshape\b/i, severity: "violation" },
-  { phrase: "could reshape", re: /\bcould\s+reshape\b/i, severity: "violation" },
-  { phrase: "could influence", re: /\bcould\s+influence\b/i, severity: "violation" },
-  { phrase: "could enable", re: /\bcould\s+enable\b/i, severity: "violation" },
-  { phrase: "could enhance", re: /\bcould\s+enhance\b/i, severity: "violation" },
-  { phrase: "may prove", re: /\bmay\s+prove\b/i, severity: "violation" },
-  { phrase: "could become", re: /\bcould\s+become\b/i, severity: "violation" },
-  // Vague cautionary endings — VIOLATIONS
-  { phrase: "remains to be seen", re: /\bremains\s+to\s+be\s+seen\b/i, severity: "violation" },
-  { phrase: "questions remain", re: /\bquestions\s+remain\b/i, severity: "violation" },
-  { phrase: "raises concerns", re: /\braises\s+concerns\b/i, severity: "violation" },
-  { phrase: "concerns linger", re: /\bconcerns\s+linger\b/i, severity: "violation" },
-  { phrase: "the path forward is uncertain", re: /\bthe\s+path\s+forward\s+is\s+uncertain\b/i, severity: "violation" },
-  { phrase: "time will tell", re: /\btime\s+will\s+tell\b/i, severity: "violation" },
-  // Speculative competitive framing — VIOLATIONS
-  { phrase: "puts pressure on", re: /\bputs?\s+pressure\s+on\b/i, severity: "violation" },
-  { phrase: "putting pressure on", re: /\bputting\s+pressure\s+on\b/i, severity: "violation" },
-  { phrase: "competitive edge", re: /\bcompetitive\s+edge\b/i, severity: "violation" },
-  { phrase: "direct challenge", re: /\bdirect\s+challenge\b/i, severity: "violation" },
-  { phrase: "intensifying scrutiny", re: /\bintensifying\s+scrutiny\b/i, severity: "violation" },
-  // Cinematic drama — VIOLATIONS
-  { phrase: "watershed moment", re: /\bwatershed\s+moment\b/i, severity: "violation" },
-  { phrase: "seismic shift", re: /\bseismic\s+shift\b/i, severity: "violation" },
-  { phrase: "existential threat", re: /\bexistential\s+threat\b/i, severity: "violation" },
-  // Abstract business nouns — VIOLATIONS
-  { phrase: "operational frameworks", re: /\boperational\s+frameworks?\b/i, severity: "violation" },
-  { phrase: "innovation processes", re: /\binnovation\s+processes\b/i, severity: "violation" },
-  { phrase: "customer engagement strategies", re: /\bcustomer\s+engagement\s+strateg(?:y|ies)\b/i, severity: "violation" },
-  { phrase: "strategic execution", re: /\bstrategic\s+execution\b/i, severity: "violation" },
-  { phrase: "data-driven insights", re: /\bdata[-\s]driven\s+insights\b/i, severity: "violation" },
-  { phrase: "competitive landscape", re: /\bcompetitive\s+landscape\b/i, severity: "violation" },
-  { phrase: "growth trajectory", re: /\bgrowth\s+trajectory\b/i, severity: "violation" },
-  { phrase: "value proposition", re: /\bvalue\s+proposition\b/i, severity: "violation" },
-  // Multi-word LLM-isms — VIOLATIONS
-  { phrase: "positions itself", re: /\bpositions?\s+itself\b/i, severity: "violation" },
-  { phrase: "drives value", re: /\bdrives\s+value\b/i, severity: "violation" },
-  // Bare single-word bans — WARNINGS. These catch both legitimate and
-  // synthetic uses, so they shouldn't drive the visible violations number.
-  { phrase: "underscores", re: /\bunderscores?\b/i, severity: "warning" },
-  { phrase: "thereby", re: /\bthereby\b/i, severity: "warning" },
-  { phrase: "leverages", re: /\bleverag(?:e|es|ed|ing)\b/i, severity: "warning" },
-  { phrase: "formidable", re: /\bformidable\b/i, severity: "warning" },
-  { phrase: "swiftly", re: /\bswiftly\b/i, severity: "warning" },
-  { phrase: "transformative", re: /\btransformative\b/i, severity: "warning" },
-  { phrase: "increasingly (bare)", re: /\bincreasingly\b/i, severity: "warning" },
-];
 
 // "this" pattern that catches the LLM-tic of starting sentence 2 with "This".
 // Detected separately because it's structural — counted as a hit when an

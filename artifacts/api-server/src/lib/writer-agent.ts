@@ -6,7 +6,7 @@ import {
   settingsTable,
   type InsertPost,
 } from "@workspace/db";
-import { gte, desc, eq, sql } from "drizzle-orm";
+import { and, gte, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import {
   SOURCES,
@@ -20,6 +20,8 @@ import {
 } from "./headline-rank";
 import { selectTopHeadlines } from "./top-headlines";
 import { computeCostUsd, logUsage } from "./llm-usage";
+import { findFirstViolation } from "./banned-phrases";
+import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
 
 // Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
 // override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
@@ -726,6 +728,22 @@ const validateDraft = (
       };
     }
   }
+
+  // Banned-phrase gate. Shared catalogue with dispatch-eval — the post-publish
+  // eval was flagging these as violations every send but nothing stopped them
+  // before publish. Anything matching a violation-tier pattern in the title,
+  // dek, or body fails validation so the retry loop re-prompts with the
+  // offending sentence quoted. Mirrors dispatch-eval's BANNED_PATTERNS exactly.
+  const bannedScanText = `${raw.title}\n${raw.dek}\n${raw.bodyMarkdown}`;
+  const violation = findFirstViolation(bannedScanText);
+  if (violation) {
+    const offending = extractSentence(bannedScanText, violation.match.index);
+    return {
+      error: `Banned phrase: "${violation.pattern.phrase}". Rewrite the sentence to name the specific actor, capability, or consequence instead of using the generic pattern.`,
+      offendingSentence: offending,
+    };
+  }
+
   if (!Array.isArray(raw.citations) || raw.citations.length === 0) {
     return { error: "Missing citations" };
   }
@@ -812,6 +830,11 @@ const formatRecentPosts = (posts: RecentPost[]): string => {
 
 export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  // Mirror the public /api/headlines?mode=top gate: drop rows the judge
+  // scored below MIN_TOP_RELEVANCE_SCORE; let NULL (un-judged) rows through
+  // so a misconfigured judge doesn't empty the corpus. Without this,
+  // ensurePapersInSelection below was force-inserting arXiv items that the
+  // judge had already dismissed (e.g. an unrelated cs.AI paper about drones).
   const rows = await db
     .select({
       id: headlinesTable.id,
@@ -822,7 +845,15 @@ export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
       publishedAt: headlinesTable.publishedAt,
     })
     .from(headlinesTable)
-    .where(gte(headlinesTable.publishedAt, since))
+    .where(
+      and(
+        gte(headlinesTable.publishedAt, since),
+        or(
+          isNull(headlinesTable.relevanceScore),
+          gte(headlinesTable.relevanceScore, MIN_TOP_RELEVANCE_SCORE),
+        ),
+      ),
+    )
     .orderBy(desc(headlinesTable.publishedAt));
 
   // Per-source cap first so high-volume feeds (arXiv, HN) can't crowd out
