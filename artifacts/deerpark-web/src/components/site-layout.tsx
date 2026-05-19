@@ -23,7 +23,11 @@ export const FadeIn = ({
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     whileInView={{ opacity: 1, y: 0 }}
-    viewport={{ once: true, margin: "-100px" }}
+    // Positive margin extends the IntersectionObserver root, so content just
+    // below the fold (e.g. the dispatch headlines on phones) fades in on first
+    // paint instead of waiting for a scroll that the user has no reason to make
+    // — and so headless renderers / SEO crawlers see the content.
+    viewport={{ once: true, margin: "400px" }}
     transition={{ duration: 0.7, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
     className={className}
   >
