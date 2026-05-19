@@ -113,9 +113,10 @@ app.listen(port, (err) => {
         {
           hourPt: process.env["DAILY_DIGEST_HOUR_PT"] ?? "15",
           minutePt: process.env["DAILY_DIGEST_MINUTE_PT"] ?? "30",
+          daysOfWeekPt: process.env["DAILY_DIGEST_DAYS_PT"] ?? "2,4",
           timezone: "America/Los_Angeles",
         },
-        "Daily digest scheduler started (daily 3:30 PM PT, sends best post directly to subscribers)",
+        "Dispatch scheduler started (Tue + Thu 3:30 PM PT by default, sends best post directly to subscribers)",
       );
     } else {
       logger.warn(

@@ -692,6 +692,14 @@ const formatUsd = (s: string | number | null | undefined) => {
   return `$${n.toFixed(2)}`;
 };
 
+const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function formatDigestDays(days: number[]): string {
+  if (!days || days.length === 0) return "no days";
+  if (days.length === 7) return "every day";
+  return [...days].sort().map((d) => DAY_ABBR[d] ?? "?").join(" + ");
+}
+
 type DigestState = {
   config: {
     hasFromEmail: boolean;
@@ -699,6 +707,7 @@ type DigestState = {
     hasLlmKey: boolean;
     hourPt: number;
     minutePt: number;
+    daysOfWeekPt: number[];
     timezone: string;
     ready: boolean;
   } | null;
@@ -2156,7 +2165,11 @@ const EmailAgentsTab = ({ token }: { token: string }) => {
             <div className="text-xl font-serif mt-1">
               {cfg ? `${String(cfg.hourPt).padStart(2, "0")}:${String(cfg.minutePt).padStart(2, "0")}` : "—"}
             </div>
-            <div className="text-[10px] text-muted-foreground mt-1">{cfg?.timezone ?? ""}</div>
+            <div className="text-[10px] text-muted-foreground mt-1">
+              {cfg
+                ? `${formatDigestDays(cfg.daysOfWeekPt)} · ${cfg.timezone}`
+                : ""}
+            </div>
           </div>
           <div className="border border-foreground/15 bg-card px-4 py-3">
             <div className="section-label text-[10px]">Last sent</div>

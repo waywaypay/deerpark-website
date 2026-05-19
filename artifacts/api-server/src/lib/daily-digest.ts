@@ -41,6 +41,8 @@ type DigestConfig = {
    */
   hourPt: number;
   minutePt: number;
+  /** Days of week (PT) on which the digest may send. 0 = Sun, 6 = Sat. */
+  daysOfWeekPt: Set<number>;
   /** Public archive link in the email footer. */
   archiveUrl: string;
   /** Base URL for the unsubscribe link. */
@@ -50,6 +52,9 @@ type DigestConfig = {
 const DIGEST_TIMEZONE = "America/Los_Angeles";
 const DEFAULT_HOUR_PT = 15;
 const DEFAULT_MINUTE_PT = 30;
+// Send days in PT — 0 = Sun, 1 = Mon, ..., 6 = Sat. Tue + Thu cadence so
+// subscribers get two dispatches a week instead of one a day.
+const DEFAULT_DAYS_OF_WEEK_PT = "2,4";
 
 /**
  * Trim whitespace and strip outer quotes from a config value. Common failure
@@ -65,6 +70,30 @@ function sanitizeEnv(raw: string | undefined): string | undefined {
   return v;
 }
 
+/**
+ * Parse a CSV like "2,4" into a set of valid 0–6 day indices. Anything
+ * unparseable falls back to the default cadence so a typo in env can't
+ * accidentally disable all sends.
+ */
+function parseDaysOfWeekPt(raw: string | undefined): Set<number> {
+  const src = sanitizeEnv(raw) ?? DEFAULT_DAYS_OF_WEEK_PT;
+  // Drop empty/whitespace tokens before numeric coercion — without this,
+  // a trailing comma (`"2,4,"`) becomes `Number("")` = 0, silently adding
+  // Sunday to the schedule.
+  const parts = src
+    .split(",")
+    .map((p) => p.trim())
+    .filter((p) => p.length > 0)
+    .map((p) => Number(p))
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+  if (parts.length === 0) {
+    return new Set(
+      DEFAULT_DAYS_OF_WEEK_PT.split(",").map((p) => Number(p.trim())),
+    );
+  }
+  return new Set(parts);
+}
+
 /** Public-safe view of config state. */
 export function digestConfigStatus(): {
   hasFromEmail: boolean;
@@ -72,6 +101,7 @@ export function digestConfigStatus(): {
   hasLlmKey: boolean;
   hourPt: number;
   minutePt: number;
+  daysOfWeekPt: number[];
   timezone: string;
   ready: boolean;
 } {
@@ -84,6 +114,7 @@ export function digestConfigStatus(): {
     hasLlmKey,
     hourPt: Number(process.env["DAILY_DIGEST_HOUR_PT"] ?? String(DEFAULT_HOUR_PT)),
     minutePt: Number(process.env["DAILY_DIGEST_MINUTE_PT"] ?? String(DEFAULT_MINUTE_PT)),
+    daysOfWeekPt: [...parseDaysOfWeekPt(process.env["DAILY_DIGEST_DAYS_PT"])].sort(),
     timezone: DIGEST_TIMEZONE,
     // Resend + from-email are required to send. LLM_API_KEY is optional —
     // missing it just disables image gen + polish (fallback subject/intro).
@@ -111,6 +142,7 @@ function readConfig(): DigestConfig | { error: string } {
     resendApiKey,
     hourPt,
     minutePt,
+    daysOfWeekPt: parseDaysOfWeekPt(process.env["DAILY_DIGEST_DAYS_PT"]),
     archiveUrl: sanitizeEnv(process.env["SUBSTACK_URL"]) ?? "https://deerparkai.substack.com",
     publicBaseUrl: sanitizeEnv(process.env["PUBLIC_API_BASE_URL"]) ?? "https://deerpark-api.fly.dev",
   };
@@ -140,6 +172,24 @@ function ptMinutesOfDay(now: Date = new Date()): number {
   const hour = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
   const minute = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
   return hour * 60 + minute;
+}
+
+/** Current Pacific-time day-of-week (0 = Sun, 6 = Sat). */
+function ptDayOfWeek(now: Date = new Date()): number {
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone: DIGEST_TIMEZONE,
+    weekday: "short",
+  }).format(now);
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return map[weekday] ?? 0;
 }
 
 async function getLastSentPtDate(): Promise<string | null> {
@@ -567,6 +617,8 @@ export function startDailyDigestScheduler(intervalMs = 5 * 60 * 1000): void {
   const tick = async () => {
     const cfg = readConfig();
     if ("error" in cfg) return;
+
+    if (!cfg.daysOfWeekPt.has(ptDayOfWeek())) return; // not a send day
 
     const targetMin = cfg.hourPt * 60 + cfg.minutePt;
     const nowMin = ptMinutesOfDay();
