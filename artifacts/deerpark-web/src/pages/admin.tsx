@@ -2458,7 +2458,6 @@ type DispatchLlmCall = {
 const PROMPT_SLOTS: { id: DispatchPromptSlot; label: string }[] = [
   { id: "polish", label: "Polish" },
   { id: "fallback", label: "Fallback" },
-  { id: "commentator", label: "Commentator" },
   { id: "banner", label: "Banner" },
 ];
 
@@ -2727,7 +2726,7 @@ const EvalTrendStrip = ({
 
 const DatasetDownloadControls = ({ token }: { token: string }) => {
   const [minComposite, setMinComposite] = useState("");
-  const [kind, setKind] = useState<"" | "polish" | "fallback" | "commentator">("");
+  const [kind, setKind] = useState<"" | "polish" | "fallback">("");
   const [feedbackOnly, setFeedbackOnly] = useState(false);
   const [withMeta, setWithMeta] = useState(true);
   const [downloading, setDownloading] = useState(false);
@@ -2841,14 +2840,13 @@ const DatasetDownloadControls = ({ token }: { token: string }) => {
           <select
             value={kind}
             onChange={(e) =>
-              setKind(e.target.value as "" | "polish" | "fallback" | "commentator")
+              setKind(e.target.value as "" | "polish" | "fallback")
             }
             className="bg-background/40 border border-foreground/20 px-2 py-1 text-xs focus:border-primary focus:outline-none"
           >
             <option value="">All</option>
             <option value="polish">Polish</option>
             <option value="fallback">Fallback</option>
-            <option value="commentator">Commentator</option>
           </select>
         </label>
         <label className="flex items-center gap-2 pb-1">
@@ -2899,14 +2897,14 @@ const EvalAggregatePanel = ({
   // hashes since one composite isn't signal). The server already orders by
   // composite_mean desc within each slot.
   const bestPromptPerSlot = (
-    ["polish", "fallback", "commentator", "banner"] as const
+    ["polish", "fallback", "banner"] as const
   )
     .map((slot) => {
       const list = byPromptVersion[slot];
       const candidate = list.find((p) => p.n >= 2 && p.compositeMean !== null) ?? list[0];
       return candidate ? { slot, agg: candidate } : null;
     })
-    .filter((v): v is { slot: "polish" | "fallback" | "commentator" | "banner"; agg: DispatchEvalPromptVersionAgg } => v !== null);
+    .filter((v): v is { slot: "polish" | "fallback" | "banner"; agg: DispatchEvalPromptVersionAgg } => v !== null);
   return (
     <div className="space-y-4">
       <div className="border border-foreground/15 bg-card p-4 space-y-2">
