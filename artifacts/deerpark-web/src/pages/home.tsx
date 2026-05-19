@@ -948,39 +948,37 @@ const Products = () => (
   </section>
 );
 
-const ABOUT_BELIEFS: { title: string; body: string }[] = [
-  {
-    title: "Operators, not vendors",
-    body: "Every engagement is led by people who have shipped AI products from 0 to 1. From deciding strategy through a production environment.",
-  },
-  {
-    title: "You own everything",
-    body: "Code, prompts, evals, and data live in your accounts. We don't lock you into a runtime, a license, or a per-seat tax. The day we leave, your team is the system's owner.",
-  },
-  {
-    title: "Outcomes, not output",
-    body: "We measure ourselves on the metric that matters to you — cycle time, throughput, quality, cost — and tune the build until it moves. Activity is not the goal.",
-  },
-];
-
 const About = () => (
   <section id="about" className="py-32 border-t border-foreground/10">
-    <div className="max-w-7xl mx-auto px-6">
-      <div className="grid lg:grid-cols-12 gap-12">
-        <FadeIn className="lg:col-span-5">
-          <div className="flex items-center gap-3 mb-8">
-            <div className="h-[1px] w-12 bg-primary" />
-            <span className="section-label">About DeerPark</span>
-          </div>
-          <h2 className="text-4xl md:text-5xl font-serif leading-[1.05] mb-6">
-            We were the AI team inside operating companies before we were a firm.
-          </h2>
-          <p className="text-lg text-muted-foreground font-light leading-relaxed mb-6">
-            DeerPark builds AI inside organizations the way an internal team would — close to the workflow, accountable to the metric, transparent on cost. We started this firm to do that work end-to-end for teams who don't have a frontier-AI bench in-house.
-          </p>
-          <p className="text-base text-muted-foreground font-light leading-relaxed mb-8">
-            <span className="text-foreground/80 italic">[Founders / team bio paragraph — TBD]</span>
-          </p>
+    <div className="max-w-4xl mx-auto px-6">
+      <FadeIn>
+        <div className="flex items-center gap-3 mb-10 justify-center">
+          <div className="h-[1px] w-12 bg-primary" />
+          <span className="section-label">About DeerPark</span>
+          <div className="h-[1px] w-12 bg-primary" />
+        </div>
+      </FadeIn>
+
+      <FadeIn delay={0.05}>
+        <h2 className="text-4xl md:text-6xl font-serif leading-[1.05] mb-10 text-center">
+          We exist to put real AI inside the organizations doing real work.
+        </h2>
+      </FadeIn>
+
+      <FadeIn delay={0.1}>
+        <p className="text-xl md:text-2xl text-muted-foreground font-light leading-relaxed mb-8 text-center">
+          The frontier of AI shouldn't belong only to the companies that can afford a hundred-person ML team. We build production systems inside operating companies — close to the workflow, accountable to the metric, owned by the people who run the business.
+        </p>
+      </FadeIn>
+
+      <FadeIn delay={0.15}>
+        <p className="text-lg text-muted-foreground font-light leading-relaxed mb-12 text-center">
+          We are operators, not vendors. We sit in your repo and your standup until the system runs, hand over the code and the keys, and measure ourselves on the outcome that matters to you — not the hours we billed.
+        </p>
+      </FadeIn>
+
+      <FadeIn delay={0.2}>
+        <div className="flex justify-center">
           <a
             href="mailto:contact@deerpark.io"
             className="inline-flex items-center gap-2 text-sm text-foreground hover:text-foreground/70 transition-colors"
@@ -988,26 +986,8 @@ const About = () => (
             <span className="underline underline-offset-4">Get in touch</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </a>
-        </FadeIn>
-
-        <FadeIn delay={0.1} className="lg:col-span-7">
-          <div className="border border-foreground/15 bg-card divide-y divide-foreground/10">
-            {ABOUT_BELIEFS.map((b, i) => (
-              <div key={b.title} className="p-8 md:p-10 grid grid-cols-[auto_1fr] gap-6">
-                <span className="font-sans text-xs font-semibold tabular-nums text-muted-foreground tracking-[0.18em] pt-2">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div>
-                  <h3 className="text-xl md:text-2xl font-serif mb-3">{b.title}</h3>
-                  <p className="text-muted-foreground font-light leading-relaxed">
-                    {b.body}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </FadeIn>
-      </div>
+        </div>
+      </FadeIn>
     </div>
   </section>
 );

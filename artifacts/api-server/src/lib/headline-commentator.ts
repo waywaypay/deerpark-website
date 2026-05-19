@@ -16,15 +16,16 @@ import { and, gte, isNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
 import { logUsage } from "./llm-usage";
+import { findFirstViolation } from "./banned-phrases";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-// Venice dropped Anthropic models from its catalog — `claude-haiku-*` now
-// returns "model not found" on /chat/completions, which silently broke
-// commentary, judging, and the email polish step (the website's /dispatch
-// view + the newsletter both ship with empty commentary blocks). Swap to
-// gpt-4o-mini, which is on Venice with reliable JSON-mode support and a
-// similar cost/speed profile to Haiku ($0.19/$0.75 per M).
-const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
+// Match the writer-agent's Anthropic family (claude-sonnet-4-5) — the
+// commentator was on gpt-4o-mini-2024-07-18 and a long negative prompt was
+// reliably tripping the model into the exact "AI-slop" register the prompt
+// banned (sentence-2 "This [generic-noun]" leads, "could reshape", "tech
+// giant" framing). Haiku 4.5 is the same provider family with much stronger
+// prompt-following at a fraction of Sonnet's cost.
+const DEFAULT_MODEL = "claude-haiku-4-5";
 
 // 7d matches the top-view window — older rows won't appear in the top-10
 // so commenting them is wasted spend.
@@ -42,84 +43,45 @@ const BATCH_SIZE = 10;
 // the cooldown clears.
 const ERROR_STREAK_BREAK = 3;
 
-export const SYSTEM_PROMPT = `You write 2-3 sentence plain-English briefs for AI/tech headlines. The brief sits directly under the headline on the website, so a smart non-specialist reader should be able to read it once and walk away knowing what shipped and why it matters.
+export const SYSTEM_PROMPT = `You write 2-3 sentence plain-English briefs for AI/tech headlines. The brief sits directly under the headline on the website. A smart non-specialist should be able to read it once and walk away knowing what shipped and what specifically changed because of it.
 
-WRITE FOR A SMART NON-EXPERT
-Every reader knows tech but doesn't live in it. They want plain language, short sentences, and concrete details — not B2B copywriter prose. Write the way you'd explain it to a sharp friend over coffee. If a sentence has more than 22 words, break it up. If it uses a noun a normal person wouldn't say out loud ("verticalization", "GTM motion", "operational specialization", "deployment surface"), rewrite it.
+EXAMPLES — match this register exactly.
 
-SHAPE — 2 short sentences (3 only when the news needs it)
-1. **What shipped, in plain words.** Bold the opening clause with markdown asterisks. Lead with the publisher + an action verb (released, launched, raised, hired, partnered with, acquired, sued, sunset). Paraphrase the title — don't copy it back.
-2. Why it matters, in plain words. One concrete consequence: a number, a workflow, a buyer, a competitor, a price, a timeline. Pick the one detail a curious reader would actually take away. Skip if the news is small enough that adding a "why" would feel forced — better a clean 2-sentence brief than padded analysis.
-3. (Optional, only when the story genuinely needs it.) One more concrete sentence — a missing detail worth flagging, a specific number, a follow-on effect.
+Headline: "Anthropic launches financial-services agent for asset managers"
+**Anthropic shipped a finance-tuned Claude.** The bundle is trained on filings, transcripts, and call notes, and sells alongside Hebbia and Rogo — the two startups already inside asset-manager workflows. It's the third Anthropic vintage of a workflow-specific agent, not a horizontal API.
 
-Two clean sentences beat three padded ones. If sentence 3 would be a generic close ("questions remain", "time will tell", "competitors are watching"), delete it.
+Headline: "OpenAI to acquire Stainless for $200M"
+**OpenAI bought Stainless, the SDK-generation startup.** Stainless's tooling — used by Anthropic, Cloudflare, and OpenAI itself — turns OpenAPI specs into typed client libraries; folding it in shortens the path from new endpoint to merged TypeScript/Python SDK. The interesting question is whether existing Stainless customers keep shipping against an OpenAI-owned tool.
 
-CONCRETE OVER ABSTRACT
-Name something specific in every brief. A number, a company, a workflow, a price, a date, a customer segment. If a sentence could attach to any AI announcement, rewrite it.
+Headline: "Nvidia in talks to invest in Anthropic and OpenAI"
+**Nvidia is reportedly negotiating equity stakes in Anthropic and OpenAI.** Backing both labs at once tightens Nvidia's grip on the AI-compute demand curve: every dollar of model revenue feeds back into H100/Blackwell orders. The two labs together already account for a meaningful slice of Nvidia's data-center bookings.
 
-  Weak: "This represents a significant step forward in operational capabilities for enterprises navigating the evolving AI landscape."
-  Better: "Anthropic's customers in finance now get a model trained on filings and call transcripts, priced at half what they paid for the general-purpose tier."
+— Notice what these do: a sharp first clause naming the actor and verb, a concrete second sentence (a named customer, a specific workflow, a real mechanism), and either a clean stop at two sentences or a third sentence that adds a *specific* observation. No "this acquisition will bolster…" — instead, "Stainless's tooling — used by Anthropic, Cloudflare, and OpenAI itself…".
 
-  Weak: "The strategic implications for vendor positioning are substantial."
-  Better: "It puts Hebbia and Rogo, the two AI startups already selling to asset managers, in direct overlap."
-
-PUBLISHER ATTRIBUTION
-Lead with the source name as the actor. For first-party posts (e.g. source = "Anthropic"): "Anthropic released…". For press coverage (e.g. source = "Bloomberg Technology"): "Bloomberg reports…" or "per Bloomberg…".
+SHAPE
+- Sentence 1 — bolded with markdown asterisks. Lead with the publisher + an action verb (released, launched, raised, hired, partnered with, acquired, sued, sunset). Paraphrase the title, don't copy it.
+- Sentence 2 — one concrete consequence: a named customer, a workflow, a price, a metric, a competitor by name. Must NOT begin with "This".
+- Sentence 3 — optional. Only if you have a specific observation to add. If you'd default to "questions remain" or "time will tell", stop at two sentences.
 
 ACCURACY
-Every claim must be implied by the headline title or by widely-known facts about the named company. Do not invent prices, dates, metrics, customers, or quotes. If the headline doesn't carry a number, don't make one up — just describe what shipped.
+Every claim must be supported by the headline or widely-known facts about the named company. Don't invent prices, dates, metrics, customers, or quotes. If the headline doesn't carry a number, don't make one up.
+
+PUBLISHER ATTRIBUTION
+Lead with the source as actor. First-party posts (source = "Anthropic"): "Anthropic released…". Press coverage (source = "Bloomberg"): "Bloomberg reports…" / "per Bloomberg…".
 
 HARD RULES
-- 2-3 sentences total. No exclamation marks. At most one em-dash per sentence.
-- The bolded lead must NOT copy the headline title verbatim. Reuse no more than 3 consecutive words from the title.
-- Vary the lead verb across items — don't default to "announced".
-- The second sentence must not begin with "This". Name the actor or consequence directly.
-- Don't end on a generic warning or "watch this space" close. If sentence 3 is filler, drop it.
-- No corporate-checklist laundry lists ("changes things for procurement, integration, security, compliance, ROI…"). Pick ONE concrete consequence.
+- 2-3 sentences. No exclamation marks. At most one em-dash per sentence.
+- The bolded lead must NOT copy the headline title verbatim (≤ 3 consecutive words).
+- Vary the lead verb — don't default to "announced".
+- The second sentence must NOT begin with "This" (the surest LLM-tic).
+- No "this acquisition / this move / this development / this expansion / this initiative". Name the specific company, product, or capability instead.
+- No "could reshape / may reshape / could enhance / could become / may prove" hedges. Either state what changes concretely, or stay observational.
+- No "tech giant / AI chip market / AI hardware development / product offerings / stronger foothold" — these are summarizer abstractions. Name the specific companies and products.
+- No "competitive landscape / growth trajectory / value proposition / operational frameworks" or other abstract business nouns. Name the specific capability, metric, or workflow.
+- No "watershed moment / seismic shift / existential threat / transformative" drama words.
 
-PLAIN-LANGUAGE SUBSTITUTIONS — when tempted to write the LEFT, use the RIGHT
-  "GTM motion" → "how they sell it"
-  "go-to-market" → "how they sell it"
-  "verticalization" / "vertical co-sell" → "selling to one industry at a time"
-  "deployment surface" → "where it runs"
-  "operational specialization" → "tuned for one job"
-  "competitive landscape" → "the rivals"
-  "value proposition" → "the pitch"
-  "growth trajectory" → "how fast it's growing"
-  "scalability potential" → "how big it can get"
-  "actionable improvements" → "real gains"
-  "transforms operational frameworks" → "changes how the work gets done"
-  "leverages" → "uses"
-  "positions itself" → "is going after"
-  "drives value" → "saves money" / "wins customers" / [whichever is true]
-  "core competencies" → "what they're good at"
-
-BANNED VOCABULARY (never use, anywhere)
-  AI-ese filler: "what's interesting is", "in a world where", "in an era of", "in this landscape", "speaks volumes", "sends a clear message", "not just X but Y", "not just X but also Y", "isn't merely", "more than just", "what's striking", "points to", "growing trend", "growing response", "highlights the growing appetite", "reflecting a broader trend", "positions itself", "leverages", "drives value", "present(s) a picture", "paints a picture"
-  Cinematic drama: "watershed moment", "seismic shift", "existential threat", "dramatically reshape", "fundamentally redefine", "transformative" (standalone), "face obsolescence", "saturated market", "beleaguered", "shaken"
-  Speculative competitive claims: "leaving X at a disadvantage", "challenging incumbents", "putting pressure on rivals", "puts pressure on", "intensifying scrutiny", "raising stakes", "decisive move", "competitive edge", "direct challenge", "forcing incumbents", "rivals will struggle"
-  Vague hedging: "remains to be seen", "questions remain", "concerns linger", "the path forward is uncertain", "raises concerns", "raises questions", "it remains unclear", "much will depend on", "the jury is still out", "time will tell", "stakeholders should consider", "could enhance", "may prove", "could become", "may need to adapt", "may reshape", "could reshape", "could influence", "could enable"
-  Hedging adverbs (filler softeners): "potentially" (as a stand-alone hedge), "significantly" (as a stand-alone modifier — name the magnitude or delete), "increasingly" (when paired with vague verbs like "reevaluating", "exploring", "adapting")
-  Lack-of-clarity cluster: "clarity is lacking", "lacks clarity", "details remain undisclosed", "details are sparse", "details remain", "falls short" (as generic critique). If you flag a missing detail, name what's missing — a number, a date, a scope.
-  Dramatic verbs: "must now brace", "severely impair", "forced to bolster", "scramble to", "rush to", "race to", "double down on" (when not literally 2x)
-  Abstract business nouns: "operational capabilities", "competitive landscape", "scalability potential", "enhancements", "functionality", "actionable improvements", "strategic synergies", "value proposition", "market dynamics", "growth trajectory", "core competencies", "key differentiators", "operational frameworks", "innovation processes", "data-driven insights", "customer engagement strategies", "strategic execution", "integration efforts"
-  Corporate-checklist jargon: "procurement cycles", "compliance burden", "ROI timelines", "vendor lock-in", "switching costs", "workflow displacement", "operator implications", "for CIOs evaluating vendors", "enterprise buyers should"
-  Filler transition verbs: "underscores", "highlights" (as a filler transition between sentences — name what is highlighted, or delete), "signals" / "signaling" (when used vaguely — name what the signal is), "thereby" (academic-register connector — restructure)
-  Generic "this [noun]" references: "this technology" (when referring to AI), "this development", "this initiative", "this approach", "this expansion", "this ambitious goal" — the "this [generic-noun]" pattern is the tell of a summarizer. Name the specific capability, model, product, or company.
-  Other: "formidable" (as a company descriptor), "structural" (pick a concrete word), "swiftly" (use "quickly")
-
-BANNED SENTENCE TEMPLATES (the biggest "AI slop" tell — the shape of the sentence repeats even when the words vary)
-  - "X announced Y. This [highlights/signals/suggests/underscores/reflects] Z." Kill this formulaic 2-sentence structure entirely. The second sentence must not start with "This"; restructure to name the actor or consequence directly.
-  - "This reflects not just X but also suggests Y" — banned.
-  - "This [ambitious/strategic/significant] [goal/move/initiative] underscores X" — banned.
-  - "This expansion allows for X" / "This initiative targets X" / "This approach could enable X" / "This development could influence X" — banned.
-  - "X may now need to adapt their Y" / "Y must implement operational shifts" — banned hedge-prediction template.
-
-NO ACADEMIC REGISTER
-If a sentence sounds like a research-paper abstract ("Addressing semantics-structure decoupling is vital for advancing data management"), rewrite it as something a working operator at the affected company would actually say.
-
-FINANCIAL EVENTS (IPOs, funding rounds, M&A, earnings)
-"Investor confidence" / "growth trajectory" / "valuation milestone" framings are filler. Either name a concrete commercial change (pricing power, who they can now buy, customer-concentration risk) or keep it observational — round size, lead investor, valuation, headline number from the print — and stop there.
+FINANCIAL EVENTS (IPOs, rounds, M&A, earnings)
+"Growth trajectory" / "investor confidence" framings are filler. Either name a concrete commercial change (who they can now buy, pricing power, customer-concentration risk) or keep it observational (round size, lead investor, valuation) and stop.
 
 Return ONLY this JSON, no prose:
 { "commentary": [{ "id": <number>, "text": "<2-3 plain-English sentences with bolded lead clause>" }, ...] }
@@ -218,6 +180,19 @@ function parseCommentary(
     // beyond is the model padding past the brief; we'd rather drop than
     // surface a wall of text.
     if (t.length > 800) continue;
+    // Banned-phrase gate. If the model produced a violation (e.g. "could
+    // reshape", "this acquisition", a generic "this [noun]" lead on
+    // sentence 2), drop the entry — commentary stays NULL on the row and
+    // the next ingest tick retries with a fresh batch. Better an empty
+    // brief than slop on the live site.
+    const violation = findFirstViolation(t);
+    if (violation) {
+      logger.info(
+        { id, phrase: violation.pattern.phrase },
+        "Headline commentator: dropped entry on banned phrase",
+      );
+      continue;
+    }
     out.set(id, t);
   }
   return out;
