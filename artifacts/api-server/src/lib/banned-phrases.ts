@@ -99,3 +99,27 @@ export function findFirstViolation(text: string): { pattern: Pattern; match: Reg
   }
   return null;
 }
+
+/**
+ * Drop sentences containing any severity="violation" banned phrase. Used to
+ * sanitize input commentary before it's pasted back into an LLM polish
+ * prompt — without this, the model sycophantically mirrors the banned
+ * phrasing from previous-pass commentary into the supposedly-cleaned output.
+ * Sentence-level granularity preserves usable context while removing the
+ * offending clause. Returns empty string if every sentence violates.
+ */
+export function stripViolationSentences(text: string): string {
+  if (!text) return text;
+  // Split on sentence-terminator boundary. The lookahead requires whitespace
+  // or end-of-string after the terminator so we don't break decimal numbers
+  // ("$3.5B" → one sentence) or abbreviations followed by lowercase.
+  const parts = text.split(/(?<=[.!?])\s+(?=[A-Z(])/);
+  const kept: string[] = [];
+  for (const raw of parts) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    if (findFirstViolation(trimmed)) continue;
+    kept.push(trimmed);
+  }
+  return kept.join(" ").trim();
+}
