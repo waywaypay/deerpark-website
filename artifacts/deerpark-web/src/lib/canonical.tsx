@@ -42,14 +42,17 @@ const ROUTE_META: Record<string, RouteMeta> = {
   },
 };
 
-function resolveMeta(path: string): RouteMeta | null {
+// "defer" means: don't override title/description here. The page component
+// (e.g. DispatchPost) owns the title and will set it once it has its data.
+// Without this, /dispatch/:id would always show "Dispatch | DeerPark" in the
+// browser tab because the canonical effect ran before the post data was in
+// hand, clobbering the per-post title that /api/og injected into the SPA shell.
+type MetaResolution = RouteMeta | "defer" | null;
+
+function resolveMeta(path: string): MetaResolution {
   if (ROUTE_META[path]) return ROUTE_META[path];
   if (path.startsWith("/dispatch/") && path !== "/dispatch/archive") {
-    return {
-      title: "Dispatch | DeerPark",
-      description:
-        "An edition of Dispatch — DeerPark's daily AI brief for operators.",
-    };
+    return "defer";
   }
   return null;
 }
@@ -96,6 +99,8 @@ export function CanonicalUrl() {
     setOg("og:url", url);
 
     const meta = resolveMeta(path);
+    if (meta === "defer") return;
+
     const title = meta?.title ?? HOME_TITLE;
     const description = meta?.description ?? HOME_DESCRIPTION;
     const ogDescription =

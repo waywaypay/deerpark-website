@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useRoute } from "wouter";
 import ReactMarkdown from "react-markdown";
 import { ArrowLeft, ExternalLink } from "lucide-react";
@@ -11,11 +12,63 @@ const POST_DATE_FMT = new Intl.DateTimeFormat("en-US", {
   year: "numeric",
 });
 
+const FALLBACK_TITLE = "Dispatch | DeerPark";
+const FALLBACK_DESCRIPTION =
+  "An edition of Dispatch — DeerPark's daily AI brief for operators.";
+
+function setMeta(selector: string, attr: string, content: string) {
+  let el = document.head.querySelector<HTMLMetaElement>(selector);
+  if (!el) {
+    el = document.createElement("meta");
+    const [key, value] = attr.split("=");
+    el.setAttribute(key, value);
+    document.head.appendChild(el);
+  }
+  el.content = content;
+}
+
 export default function DispatchPost() {
   const [, params] = useRoute("/dispatch/:id");
   const postId = params?.id ? Number(params.id) : null;
   const postsQuery = usePosts();
   const post = postsQuery.data?.find((p) => p.id === postId) ?? null;
+
+  // CanonicalUrl defers title/description on /dispatch/:id so we can set the
+  // per-post values once the post is in hand. While the data is loading we
+  // leave the title alone — for a hard navigation that's the per-post title
+  // /api/og already injected into the SPA shell; for an SPA navigation it's
+  // whatever the previous page set, which is closer to right than a generic
+  // fallback flash. We only write the fallback if the post genuinely doesn't
+  // exist after the query resolves.
+  useEffect(() => {
+    if (post) {
+      const title = `${post.title} — DeerPark Dispatch`;
+      const description = post.dek || FALLBACK_DESCRIPTION;
+      document.title = title;
+      setMeta('meta[property="og:title"]', "property=og:title", title);
+      setMeta('meta[name="twitter:title"]', "name=twitter:title", title);
+      setMeta('meta[name="description"]', "name=description", description);
+      setMeta('meta[property="og:description"]', "property=og:description", description);
+      setMeta('meta[name="twitter:description"]', "name=twitter:description", description);
+      return;
+    }
+    if (!postsQuery.isLoading) {
+      document.title = FALLBACK_TITLE;
+      setMeta('meta[property="og:title"]', "property=og:title", FALLBACK_TITLE);
+      setMeta('meta[name="twitter:title"]', "name=twitter:title", FALLBACK_TITLE);
+      setMeta('meta[name="description"]', "name=description", FALLBACK_DESCRIPTION);
+      setMeta(
+        'meta[property="og:description"]',
+        "property=og:description",
+        FALLBACK_DESCRIPTION,
+      );
+      setMeta(
+        'meta[name="twitter:description"]',
+        "name=twitter:description",
+        FALLBACK_DESCRIPTION,
+      );
+    }
+  }, [post, postsQuery.isLoading]);
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-foreground selection:text-background">
