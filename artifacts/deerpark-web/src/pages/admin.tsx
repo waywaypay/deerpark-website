@@ -4821,7 +4821,10 @@ const SubsystemStatusGrid = ({ token }: { token: string }) => {
               ? "idle"
               : writersOnline === 0
                 ? "fault"
-                : stateForAge(writerLast, 30, 96),
+                // Dispatch publishes Tue + Thu PT, so the longest healthy gap
+                // is Thu → next Tue (~96h). Warn only after that window is
+                // overrun, fault after a full extra cycle.
+                : stateForAge(writerLast, 96, 168),
           primary: `${totalPosts}`,
           detail: `posts published · ${writersOnline}/${writers.length} online`,
           lastAt: writerLast,
