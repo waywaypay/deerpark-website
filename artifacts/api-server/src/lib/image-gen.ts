@@ -11,12 +11,15 @@ import type { HeadlineRow } from "./top-headlines";
 import { logUsage } from "./llm-usage";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-// flux-dev follows long, restriction-heavy prompts noticeably better than
-// venice-sd35 — it actually honors the "abstract, non-representational,
-// no landscapes" clauses our template depends on. SD 3.5 routinely drifted
-// back to mountains/sunsets regardless of the negative list. Override with
-// IMAGE_GEN_MODEL if a future Venice release moves the bar (e.g. hidream).
-const DEFAULT_MODEL = "flux-dev";
+// hidream replaces flux-dev: Venice deprecated flux-dev on 2025-10-22
+// (aliased to qwen-image), then removed qwen-image in their 2026-04-21 →
+// 2026-05-05 changelog, so requests with model="flux-dev" now 4xx and we
+// silently ship without a banner. hidream is the current Venice model
+// that honors the long restriction-heavy "abstract, non-representational,
+// no landscapes" clauses our template depends on — venice-sd35 (still
+// supported) drifts back to mountains/sunsets regardless of the negative
+// list. Override with IMAGE_GEN_MODEL when Venice next moves the bar.
+const DEFAULT_MODEL = "hidream";
 const DEFAULT_WIDTH = 1200;
 const DEFAULT_HEIGHT = 400;
 const TIMEOUT_MS = 90_000;
