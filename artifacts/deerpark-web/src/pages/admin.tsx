@@ -18,6 +18,10 @@ import {
   Eye,
   MessageSquare,
   FileText,
+  Activity,
+  Cpu,
+  Signal,
+  Zap,
 } from "lucide-react";
 
 const TOKEN_KEY = "deerpark.admin.token";
@@ -4562,17 +4566,425 @@ const VeniceUsageCard = ({ token }: { token: string }) => {
   );
 };
 
-const Home = ({ token, onSelect }: { token: string; onSelect: (view: "products" | "leads") => void }) => (
-  <div className="space-y-8">
-    <div>
-      <div className="section-label">Admin</div>
-      <h1 className="text-3xl font-serif mt-1">Control room</h1>
-      <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
-        Pick a surface to manage.
-      </p>
+// Re-renders the caller every `intervalMs`. Used to keep the mission-control
+// clocks and "last run X ago" labels ticking without re-fetching data.
+const useTick = (intervalMs = 1000) => {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+};
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+const formatUtcClock = (d: Date): string =>
+  `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())} ` +
+  `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}:${pad2(d.getUTCSeconds())}Z`;
+
+const formatPtClock = (d: Date): string => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")} ${get("hour")}:${get("minute")}:${get("second")} PT`;
+};
+
+const ageMs = (iso: string | null | undefined): number | null => {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Date.now() - t;
+};
+
+const ageLabel = (iso: string | null | undefined): string => {
+  const ms = ageMs(iso);
+  if (ms === null) return "no data";
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  return `${d}d ago`;
+};
+
+type SubsystemState = "nominal" | "warn" | "fault" | "idle" | "unknown";
+
+const stateForAge = (
+  iso: string | null | undefined,
+  warnAfterH: number,
+  faultAfterH: number,
+): SubsystemState => {
+  const ms = ageMs(iso);
+  if (ms === null) return "unknown";
+  const h = ms / 3_600_000;
+  if (h >= faultAfterH) return "fault";
+  if (h >= warnAfterH) return "warn";
+  return "nominal";
+};
+
+const STATE_DOT: Record<SubsystemState, string> = {
+  nominal: "bg-primary",
+  warn: "bg-amber-400",
+  fault: "bg-red-400",
+  idle: "bg-foreground/40",
+  unknown: "bg-foreground/30",
+};
+
+const STATE_LABEL: Record<SubsystemState, string> = {
+  nominal: "Nominal",
+  warn: "Stale",
+  fault: "Fault",
+  idle: "Idle",
+  unknown: "—",
+};
+
+const STATE_TEXT: Record<SubsystemState, string> = {
+  nominal: "text-primary",
+  warn: "text-amber-400",
+  fault: "text-red-400",
+  idle: "text-muted-foreground",
+  unknown: "text-muted-foreground",
+};
+
+const MissionHeader = () => {
+  useTick(1000);
+  const now = new Date();
+  return (
+    <div className="border border-foreground/15 bg-card">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-px bg-foreground/10">
+        <div className="bg-card px-4 py-3 flex items-center gap-3">
+          <span className="relative inline-flex w-2.5 h-2.5">
+            <span className="inline-block w-2.5 h-2.5 bg-primary rounded-full" />
+            <span className="absolute inset-0 inline-block w-2.5 h-2.5 bg-primary rounded-full animate-ping opacity-60" />
+          </span>
+          <div className="min-w-0">
+            <div className="section-label">All systems operational</div>
+            <div className="text-[10px] text-muted-foreground mt-0.5 font-mono truncate">
+              deerpark.io // mission control
+            </div>
+          </div>
+        </div>
+        <div className="bg-card px-4 py-3">
+          <div className="section-label text-[10px] inline-flex items-center gap-1.5">
+            <Signal className="w-3 h-3" /> UTC
+          </div>
+          <div className="text-sm font-mono mt-1 tracking-wider">{formatUtcClock(now)}</div>
+        </div>
+        <div className="bg-card px-4 py-3">
+          <div className="section-label text-[10px] inline-flex items-center gap-1.5">
+            <Signal className="w-3 h-3" /> Pacific
+          </div>
+          <div className="text-sm font-mono mt-1 tracking-wider">{formatPtClock(now)}</div>
+        </div>
+      </div>
     </div>
+  );
+};
+
+type SubsystemSnapshot = {
+  key: string;
+  label: string;
+  Icon: typeof Bot;
+  state: SubsystemState;
+  primary: string;
+  detail: string;
+  lastAt: string | null;
+  href: "products" | "leads" | null;
+};
+
+const SubsystemPanel = ({ s }: { s: SubsystemSnapshot }) => {
+  useTick(15_000);
+  const Icon = s.Icon;
+  return (
+    <div className="bg-card px-4 py-4 flex flex-col">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon className="w-4 h-4 text-foreground/70 shrink-0" />
+          <div className="section-label text-[10px] truncate">{s.label}</div>
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className={`inline-block w-2 h-2 rounded-full ${STATE_DOT[s.state]}`} />
+          <span className={`text-[10px] uppercase tracking-widest ${STATE_TEXT[s.state]}`}>
+            {STATE_LABEL[s.state]}
+          </span>
+        </div>
+      </div>
+      <div className="text-xl font-serif mt-3">{s.primary}</div>
+      <div className="text-[10px] text-muted-foreground mt-1 font-mono">{s.detail}</div>
+      <div className="text-[10px] text-muted-foreground mt-3 font-mono">
+        last: {ageLabel(s.lastAt)}
+      </div>
+    </div>
+  );
+};
+
+type DigestStateLite = {
+  config: { ready: boolean } | null;
+  alreadySentToday: boolean;
+  activeSubscribers: number;
+  lastSentPtDate: string | null;
+};
+
+const SubsystemStatusGrid = ({ token }: { token: string }) => {
+  const [snapshots, setSnapshots] = useState<SubsystemSnapshot[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [aRes, wRes, jRes, dRes] = await Promise.all([
+        apiFetch(token, "/admin/agents"),
+        apiFetch(token, "/admin/writers"),
+        apiFetch(token, "/admin/judge/spec"),
+        apiFetch(token, "/admin/digest/state"),
+      ]);
+
+      const agents = aRes.ok ? ((await aRes.json()) as { items: Agent[] }).items : [];
+      const writers = wRes.ok ? ((await wRes.json()) as { items: WriterAgent[] }).items : [];
+      const judge = jRes.ok ? ((await jRes.json()) as JudgeSpec) : null;
+      const digest = dRes.ok ? ((await dRes.json()) as DigestStateLite) : null;
+
+      const enabledAgents = agents.filter((a) => a.enabled);
+      const ingestLast = enabledAgents
+        .map((a) => a.latestIngestedAt)
+        .filter((v): v is string => !!v)
+        .sort()
+        .at(-1) ?? null;
+      const totalHeadlines = agents.reduce((sum, a) => sum + a.headlineCount, 0);
+
+      const judgeLast = judge?.lastRun?.finishedAt ?? null;
+      const judgeScored = judge?.stats?.scored ?? 0;
+      const judgeTotal = judge?.stats?.total ?? 0;
+
+      const writerLast = writers
+        .map((w) => w.latestPublishedAt)
+        .filter((v): v is string => !!v)
+        .sort()
+        .at(-1) ?? null;
+      const totalPosts = writers.reduce((sum, w) => sum + w.postCount, 0);
+      const writersOnline = writers.filter((w) => w.enabled && w.configured).length;
+
+      // Email: derive last-sent from digest state. lastSentPtDate is a YYYY-MM-DD
+      // string in Pacific time — convert to a roughly-correct ISO at noon PT so
+      // ageLabel can show "Xh/d ago" without claiming sub-hour precision.
+      const emailLastIso = digest?.lastSentPtDate
+        ? new Date(`${digest.lastSentPtDate}T20:00:00Z`).toISOString()
+        : null;
+      const emailReady = digest?.config?.ready === true;
+      const emailState: SubsystemState = !emailReady
+        ? "fault"
+        : digest?.alreadySentToday
+          ? "nominal"
+          : stateForAge(emailLastIso, 36, 96);
+
+      const next: SubsystemSnapshot[] = [
+        {
+          key: "ingest",
+          label: "Ingest",
+          Icon: Radio,
+          state: enabledAgents.length === 0 ? "idle" : stateForAge(ingestLast, 1, 6),
+          primary: `${enabledAgents.length}/${agents.length}`,
+          detail: `${totalHeadlines.toLocaleString()} headlines · sources online`,
+          lastAt: ingestLast,
+          href: "products",
+        },
+        {
+          key: "judge",
+          label: "Judge",
+          Icon: Gavel,
+          state: !judge?.judge.configured
+            ? "fault"
+            : stateForAge(judgeLast, 24, 96),
+          primary: `${judgeScored.toLocaleString()}`,
+          detail: `of ${judgeTotal.toLocaleString()} scored · ${judge?.judge.model ?? "—"}`,
+          lastAt: judgeLast,
+          href: "products",
+        },
+        {
+          key: "writers",
+          label: "Writers",
+          Icon: Bot,
+          state:
+            writers.length === 0
+              ? "idle"
+              : writersOnline === 0
+                ? "fault"
+                : stateForAge(writerLast, 30, 96),
+          primary: `${totalPosts}`,
+          detail: `posts published · ${writersOnline}/${writers.length} online`,
+          lastAt: writerLast,
+          href: "products",
+        },
+        {
+          key: "email",
+          label: "Email",
+          Icon: Mail,
+          state: emailState,
+          primary: `${digest?.activeSubscribers ?? 0}`,
+          detail: emailReady
+            ? digest?.alreadySentToday
+              ? "subs · sent today"
+              : "subs · pending"
+            : "subs · not configured",
+          lastAt: emailLastIso,
+          href: "products",
+        },
+      ];
+
+      setSnapshots(next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load subsystem status");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void load();
+    const id = setInterval(() => void load(), 30_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  return (
+    <div className="border border-foreground/15 bg-card">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/10">
+        <div>
+          <div className="section-label inline-flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5" /> Subsystems
+          </div>
+          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+            Live state of every AI agent. Auto-refreshes every 30s.
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => void load()}
+          disabled={loading}
+          className="rounded-none text-[10px] uppercase tracking-widest"
+        >
+          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
+        </Button>
+      </div>
+      {error && <div className="px-4 py-3 text-xs text-red-400">{error}</div>}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-foreground/10">
+        {snapshots
+          ? snapshots.map((s) => <SubsystemPanel key={s.key} s={s} />)
+          : Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-card px-4 py-4">
+                <div className="section-label text-[10px] text-muted-foreground">Loading…</div>
+                <div className="h-5 mt-3 bg-foreground/5" />
+                <div className="h-3 mt-2 bg-foreground/5 w-2/3" />
+              </div>
+            ))}
+      </div>
+    </div>
+  );
+};
+
+const Transmissions = ({ token }: { token: string }) => {
+  const [posts, setPosts] = useState<AdminPost[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await apiFetch(token, "/admin/posts");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { items: AdminPost[] };
+      setPosts(json.items.slice(0, 5));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load transmissions");
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void load();
+    const id = setInterval(() => void load(), 60_000);
+    return () => clearInterval(id);
+  }, [load]);
+
+  useTick(15_000);
+
+  return (
+    <div className="border border-foreground/15 bg-card">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/10">
+        <div>
+          <div className="section-label inline-flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5" /> Transmissions
+          </div>
+          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
+            Latest posts pushed out of the writer agents.
+          </div>
+        </div>
+      </div>
+      {error && <div className="px-4 py-3 text-xs text-red-400">{error}</div>}
+      {posts && posts.length === 0 && (
+        <div className="px-4 py-10 text-center text-muted-foreground text-sm">
+          No transmissions yet.
+        </div>
+      )}
+      <ul className="divide-y divide-foreground/10">
+        {posts?.map((p) => (
+          <li key={p.id} className="px-4 py-3 flex items-start gap-4">
+            <div className="text-[10px] text-muted-foreground font-mono w-32 shrink-0 pt-1">
+              <div>{ageLabel(p.publishedAt)}</div>
+              <div className="opacity-70">{p.mode} · {p.tag}</div>
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-serif truncate">{p.title}</div>
+              <div className="text-[11px] text-muted-foreground font-light line-clamp-1 mt-0.5">
+                {p.dek}
+              </div>
+            </div>
+            <div className="text-right shrink-0 text-[10px] font-mono text-muted-foreground">
+              <div>{formatUsd(p.costUsd)}</div>
+              <div className="opacity-70">{formatTokens(p.totalTokens)} tok</div>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+const Home = ({ token, onSelect }: { token: string; onSelect: (view: "products" | "leads") => void }) => (
+  <div className="space-y-6">
+    <div className="flex items-end justify-between gap-3 flex-wrap">
+      <div>
+        <div className="section-label inline-flex items-center gap-2">
+          <Cpu className="w-3.5 h-3.5" /> DeerPark // Mission Control
+        </div>
+        <h1 className="text-3xl font-serif mt-1">All systems</h1>
+        <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
+          Real-time status of every AI agent in the pipeline — ingest, judge,
+          writers, email. Auto-refreshes in the background.
+        </p>
+      </div>
+    </div>
+
+    <MissionHeader />
+    <SubsystemStatusGrid token={token} />
     <VeniceUsageCard token={token} />
-    <TileGrid tiles={HOME_TILES} onSelect={onSelect} />
+    <Transmissions token={token} />
+
+    <div>
+      <div className="section-label mb-3 inline-flex items-center gap-2">
+        <ChevronRight className="w-3.5 h-3.5" /> Consoles
+      </div>
+      <TileGrid tiles={HOME_TILES} onSelect={onSelect} />
+    </div>
   </div>
 );
 
