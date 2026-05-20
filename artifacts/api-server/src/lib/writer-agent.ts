@@ -33,9 +33,9 @@ const DEFAULT_MODEL = "claude-sonnet-4-5";
 // Venice caller (writer, judge, commentator, polish, sms-bot, image-gen)
 // shares one table.
 
-// Corpus capping. The 7-day window can hold hundreds of items (arXiv alone
-// fires ~50/day); shipping all of them as input bloats per-call cost. Cap
-// at 2 per source for diversity, then top N by tier × recency.
+// Corpus capping. The 7-day window can hold hundreds of items; shipping all
+// of them as input bloats per-call cost. Cap at 2 per source for diversity,
+// then top N by tier × recency.
 const CORPUS_MAX_ITEMS = 30;
 const CORPUS_PER_SOURCE_CAP = 2;
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
@@ -833,8 +833,8 @@ export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
   // Mirror the public /api/headlines?mode=top gate: drop rows the judge
   // scored below MIN_TOP_RELEVANCE_SCORE; let NULL (un-judged) rows through
   // so a misconfigured judge doesn't empty the corpus. Without this,
-  // ensurePapersInSelection below was force-inserting arXiv items that the
-  // judge had already dismissed (e.g. an unrelated cs.AI paper about drones).
+  // ensurePapersInSelection below was force-inserting paper items that the
+  // judge had already dismissed.
   const rows = await db
     .select({
       id: headlinesTable.id,
@@ -856,7 +856,7 @@ export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
     )
     .orderBy(desc(headlinesTable.publishedAt));
 
-  // Per-source cap first so high-volume feeds (arXiv, HN) can't crowd out
+  // Per-source cap first so high-volume feeds (e.g. HN) can't crowd out
   // weekly-cadence labs.
   const perSourceCount = new Map<string, number>();
   const candidates: CorpusItem[] = [];
@@ -881,8 +881,8 @@ export async function loadCorpus(days = 7): Promise<CorpusItem[]> {
   // Drop near-duplicate stories (e.g. an Anthropic release + Bloomberg's
   // coverage of the same release) so the agent doesn't end up with two slots
   // in the top-10 covering the same news, and reserve at least 2 slots for
-  // academic papers (arXiv / HF Papers) so research isn't crowded out by an
-  // active lab-publishing week.
+  // academic papers (HF Papers) so research isn't crowded out by an active
+  // lab-publishing week.
   const deduped = dedupeNearDuplicates(candidates);
   const initialTop = deduped.slice(0, CORPUS_MAX_ITEMS);
   return ensurePapersInSelection(initialTop, deduped, 2)

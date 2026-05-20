@@ -63,15 +63,6 @@ export const SOURCES: SourceConfig[] = [
     tier: 2,
   },
   {
-    id: "arxiv",
-    displayName: "arXiv cs.AI",
-    category: "Research",
-    kind: "rss",
-    url: process.env["ARXIV_FEED_URL"] ?? "https://rss.arxiv.org/rss/cs.AI",
-    enabled: true,
-    tier: 2,
-  },
-  {
     id: "anthropic",
     displayName: "Anthropic",
     category: "Lab",
