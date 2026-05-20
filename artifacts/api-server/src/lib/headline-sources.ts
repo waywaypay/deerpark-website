@@ -31,10 +31,12 @@ export type SourceConfig = {
 
 // URLs can be overridden via env vars. Anthropic and Mistral don't publish
 // stable RSS, so they use custom scrapers (Anthropic = HTML listing, Mistral
-// = sitemap + per-article SSR titles). Meta AI and xAI are intentionally
-// omitted: ai.meta.com returns 400 and x.ai returns 403 even with a real
-// browser UA — they actively block server-to-server scrapers and would
-// silently return zero items.
+// = sitemap + per-article SSR titles). Meta AI, xAI, and Thinking Machines
+// Lab are intentionally omitted: ai.meta.com returns 400, x.ai returns 403,
+// and thinkingmachines.ai 403s every path (/, /feed, /feed.xml, /rss,
+// /blog/feed, /atom.xml) even with a real browser UA — they actively block
+// server-to-server scrapers and would silently return zero items. TML
+// would need a headless-browser fetch or a third-party mirror to ingest.
 //
 // `earnings-transcripts` pulls a broad equities RSS (default Seeking Alpha)
 // then keeps transcript-style headlines that mention mega-cap tech / AI
