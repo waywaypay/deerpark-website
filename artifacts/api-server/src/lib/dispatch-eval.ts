@@ -784,11 +784,18 @@ function evaluateFormatting(row: DispatchArchive): DispatchFormattingResult {
   const issues = new Map<DispatchFormattingIssueType, DispatchFormattingIssue>();
 
   // 1. Empty paragraphs in body or intro — visible vertical-gap bugs.
-  const emptyP = (body + intro).match(/<p[^>]*>\s*(?:&nbsp;| |\s)*<\/p>/gi);
+  // The middle alternative is U+00A0 written as a Unicode escape (an actual
+  // NBSP byte) so the source stays pure-ASCII; behaviorally redundant with
+  // \s on the current JS engine but kept explicit so intent survives future
+  // edits.
+  const emptyP = (body + intro).match(/<p[^>]*>\s*(?:&nbsp;|\u00a0|\s)*<\/p>/gi);
   if (emptyP) pushIssue(issues, "empty_paragraph", emptyP.length, emptyP[0]);
 
   // 2. Runs of consecutive &nbsp; (3+) — usually a copy-paste artifact.
-  const nbspRun = body.match(/(?:&nbsp;| ){3,}/gi);
+  // Matches either the entity OR a literal NBSP byte (\u00a0); a plain
+  // space here would over-match ordinary indentation and conflict with the
+  // double_space check below.
+  const nbspRun = body.match(/(?:&nbsp;|\u00a0){3,}/gi);
   if (nbspRun) pushIssue(issues, "nbsp_run", nbspRun.length, nbspRun[0]);
 
   // 3. Double spaces inside text content (between a letter and a letter,
