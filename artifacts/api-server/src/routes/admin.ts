@@ -58,7 +58,7 @@ import {
   listDispatchArchive,
   updateDispatchFeedback,
 } from "../lib/dispatch-archive";
-import { evaluateDispatch } from "../lib/dispatch-eval";
+import { evaluateDispatch, computeEngagementForDispatch } from "../lib/dispatch-eval";
 import {
   getDispatchPrompt,
   listDispatchPrompts,
@@ -882,9 +882,35 @@ router.post("/admin/dispatch-archive/:id/eval", async (req, res) => {
       evalFormattingScore: row?.evalFormattingScore ?? null,
       evalRunAt: row?.evalRunAt ?? null,
       evalModel: row?.evalModel ?? null,
+      evalJudgeModels: row?.evalJudgeModels ?? null,
+      evalRubricVersion: row?.evalRubricVersion ?? null,
+      evalPairwise: row?.evalPairwise ?? null,
     });
   } catch (err) {
     req.log.error({ err, id }, "Dispatch eval failed");
+    return res.status(500).json({
+      ok: false,
+      error: err instanceof Error ? err.message : "Internal server error",
+    });
+  }
+});
+
+// Manually trigger the engagement signal computation (unsubs in the 24h
+// after send). The scheduler runs this hourly, but this lets the admin UI
+// kick a backfill on demand — useful when staring at a fresh dispatch and
+// wanting the number as soon as the window closes.
+router.post("/admin/dispatch-archive/:id/engagement", async (req, res) => {
+  const id = Number(req.params["id"]);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "Invalid id" });
+  try {
+    const result = await computeEngagementForDispatch(id);
+    if (!result.ok) {
+      const status = result.reason === "not_found" ? 404 : 409;
+      return res.status(status).json(result);
+    }
+    return res.json(result);
+  } catch (err) {
+    req.log.error({ err, id }, "Dispatch engagement compute failed");
     return res.status(500).json({
       ok: false,
       error: err instanceof Error ? err.message : "Internal server error",
