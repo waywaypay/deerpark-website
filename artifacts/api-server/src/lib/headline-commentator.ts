@@ -19,13 +19,17 @@ import { logUsage } from "./llm-usage";
 import { findFirstViolation } from "./banned-phrases";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-// Match the writer-agent's Anthropic family (claude-sonnet-4-5) — the
-// commentator was on gpt-4o-mini-2024-07-18 and a long negative prompt was
-// reliably tripping the model into the exact "AI-slop" register the prompt
-// banned (sentence-2 "This [generic-noun]" leads, "could reshape", "tech
-// giant" framing). Haiku 4.5 is the same provider family with much stronger
-// prompt-following at a fraction of Sonnet's cost.
-const DEFAULT_MODEL = "claude-haiku-4-5";
+// Venice removed Anthropic models from its catalog, so `claude-haiku-*` no
+// longer resolves on /chat/completions — the commentator was silently
+// failing every batch (caught in the try/catch in generateMissingCommentary,
+// streak hits ERROR_STREAK_BREAK, bails), leaving `commentary` NULL on
+// every new top-eligible row. The judge hit the same wall and swapped to
+// gpt-4o-mini; we follow it here so dispatch headlines get their briefs
+// back. The previous concern with gpt-4o-mini was AI-slop register
+// ("This [noun]" leads, "could reshape"); the banned-phrase gate at
+// parseCommentary now drops those entries, so the prompt-following gap is
+// covered at the output filter instead of the model choice.
+const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
 
 // 7d matches the top-view window — older rows won't appear in the top-10
 // so commenting them is wasted spend.

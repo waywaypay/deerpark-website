@@ -234,7 +234,7 @@ ${RUBRIC_OUTPUT_INSTRUCTIONS}`,
 
   concreteness: `${RUBRIC_SHARED_PREAMBLE}
 
-DIMENSION: concreteness (0-10)
+
 
 Does each item name a subject, a capability, a metric, an environment, or a workflow — or does it float in abstract business nouns ("operational capabilities", "strategic synergies", "growth trajectory", "data-driven insights")? 10 = nearly every item names concrete subjects. 5 = mixed. 0 = abstract throughout.
 
