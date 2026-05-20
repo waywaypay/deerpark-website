@@ -12,6 +12,10 @@ import { runDataMigrations } from "./lib/migrate";
 import { ensureJudgeSchema } from "./lib/headline-judge";
 import { ensureCommentatorSchema } from "./lib/headline-commentator";
 import { ensureLlmUsageSchema } from "./lib/llm-usage";
+import {
+  ensureDispatchEvalSchema,
+  startDispatchEngagementScheduler,
+} from "./lib/dispatch-eval";
 
 const rawPort = process.env["PORT"];
 
@@ -62,6 +66,9 @@ app.listen(port, (err) => {
     ensureLlmUsageSchema().catch((err) => {
       logger.error({ err }, "LLM usage: ensureSchema failed");
     }),
+    ensureDispatchEvalSchema().catch((err) => {
+      logger.error({ err }, "Dispatch eval: ensureSchema failed");
+    }),
   ]).finally(() => {
     if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
       const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
@@ -102,6 +109,12 @@ app.listen(port, (err) => {
     } else {
       logger.warn("LLM_API_KEY not set — weekly recap scheduler disabled");
     }
+  }
+
+  if (process.env["DISABLE_DISPATCH_ENGAGEMENT_TICK"] !== "1") {
+    const intervalMin = Number(process.env["DISPATCH_ENGAGEMENT_TICK_MIN"] ?? "60");
+    startDispatchEngagementScheduler(intervalMin * 60 * 1000);
+    logger.info({ intervalMin }, "Dispatch engagement scheduler started");
   }
 
   if (process.env["DISABLE_DAILY_DIGEST"] !== "1") {

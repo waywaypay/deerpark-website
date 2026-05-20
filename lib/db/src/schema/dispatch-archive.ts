@@ -9,15 +9,32 @@ export type DispatchArchiveItem = {
   publishedAt: string;
 };
 
-export type DispatchEvalDimension = {
+export type DispatchEvalDimensionSample = {
+  /** Judge model that produced this sample. */
+  model: string;
+  /** Raw 0-10 score from this judge. */
   score: number;
+  /** Judge's one-sentence note. */
+  note: string;
+  /** Up to 3 worst-item flags from this judge. */
+  worstItems?: Array<{ item: number; quote: string }>;
+};
+
+export type DispatchEvalDimension = {
+  /** Mean across `samples` (or the single judge's score, on legacy rows). */
+  score: number;
+  /** Note from the sample closest to the mean — the "median" voice. */
   note: string;
   /** Up to 3 specific items (1-indexed, matching headlinesSnapshot order)
    *  the LLM flagged as the worst offenders on this dimension, with a short
    *  quoted span from the offending text. Optional for back-compat with
    *  rows evaluated before per-item attribution shipped. The intro is
-   *  attributed with `item: 0`. */
+   *  attributed with `item: 0`. Merged across judges when an ensemble ran. */
   worstItems?: Array<{ item: number; quote: string }>;
+  /** Per-judge raw samples that produced the aggregated `score` above.
+   *  Populated by the multi-judge ensemble (rubric v2+). Absent on legacy
+   *  single-judge rows; readers must tolerate that. */
+  samples?: DispatchEvalDimensionSample[];
 };
 
 export type DispatchEvalScores = {
@@ -92,6 +109,23 @@ export type DispatchPromptVersionMap = {
   banner?: string;
 };
 
+/** Pairwise specificity comparison against the previous dispatch of the
+ *  same kind. Single LLM call, separate from the absolute rubric — absolute
+ *  0-10 scoring is noisy across runs, but pairwise "is today's intro more
+ *  specific than the previous send's?" is a much more reliable signal. */
+export type DispatchPairwiseSpecificity = {
+  /** dispatch_archive.id of the dispatch this one was compared against. */
+  comparedToId: number;
+  /** Which intro won. "tie" when the judge couldn't decide. */
+  winner: "current" | "previous" | "tie";
+  /** 0..3 — how decisive the win was. 0 only valid when winner === "tie". */
+  margin: 0 | 1 | 2 | 3;
+  /** Short rationale, one to two sentences. */
+  rationale: string;
+  /** The single judge model used for this pairwise call. */
+  model: string;
+};
+
 export const dispatchArchiveTable = pgTable(
   "dispatch_archive",
   {
@@ -128,6 +162,30 @@ export const dispatchArchiveTable = pgTable(
     evalBannerScores: jsonb("eval_banner_scores").$type<DispatchBannerEvalScores>(),
     evalBannerCompositeScore: numeric("eval_banner_composite_score", { precision: 4, scale: 2 }),
     evalBannerModel: text("eval_banner_model"),
+    /** sha256 (first 16 chars) of the rubric prompt set in use at eval time.
+     *  Lets historical comparison stay valid when the rubric prompt is
+     *  edited — old rows keep their old version and the admin UI can
+     *  segment scores by rubric_version before averaging. */
+    evalRubricVersion: text("eval_rubric_version"),
+    /** Array of judge model strings that scored this row (rubric v2+).
+     *  evalModel keeps a flat string for back-compat (joined "|") while
+     *  this preserves the structured list. */
+    evalJudgeModels: jsonb("eval_judge_models").$type<string[]>(),
+    /** Pairwise specificity result against the previous dispatch of the
+     *  same kind. Null on the first dispatch ever, or when the pairwise
+     *  call failed. */
+    evalPairwise: jsonb("eval_pairwise").$type<DispatchPairwiseSpecificity>(),
+    /** Unsubscribes in the 24h window after createdAt. Filled by a delayed
+     *  engagement job (not at eval time — at eval time this is always 0
+     *  because the dispatch just went out). */
+    evalUnsubs24h: integer("eval_unsubs_24h"),
+    /** Unsub rate as a fraction (0..1), evalUnsubs24h / recipientCount.
+     *  Null when recipientCount is null or zero. */
+    evalUnsubRate24h: numeric("eval_unsub_rate_24h", { precision: 6, scale: 4 }),
+    /** When the engagement job last ran for this row. Used to dedupe the
+     *  scheduled backfill — once set and the dispatch is ≥24h old, the
+     *  unsub count is final. */
+    evalEngagementRunAt: timestamp("eval_engagement_run_at", { withTimezone: true }),
     /** Per-slot prompt hashes (sha256, first 16 chars) used at compose
      *  time. Joins to dispatch_prompts for the full content. Lets the
      *  Feedback log color-band and filter by prompt version without

@@ -1,39 +1,83 @@
-// Regression-guard eval for archived dispatches. Two stages:
+// Regression-guard eval for archived dispatches. Four tracks:
 //
 //   1. Regex sweep — detects the specific banned phrases we've been
-//      hardening the prompt against (sentence templates, filler verbs,
-//      generic "this [noun]" references, hedging adverbs, etc.). Deterministic
-//      and cheap — runs every time. The leak count is the most actionable
-//      signal because it's grounded in concrete failures.
+//      hardening the prompt against. Deterministic and cheap; runs every
+//      time. The leak count is the most actionable signal because it's
+//      grounded in concrete failures.
 //
-//   2. LLM rubric — scores five qualitative dimensions 0-10 with a short
-//      note each: intro specificity, lens diversity, cadence variety, source
-//      tiering, and concreteness. One call per dispatch on a small Haiku-class
-//      model.
+//   2. Formatting check — deterministic HTML/structure issues. Free.
 //
-// The composite (mean of the five rubric scores) lands in a numeric column
-// so the admin Feedback view can sort/trend without unpacking jsonb. Stored
-// alongside the regex hit count so an operator can see at a glance "this
-// send dropped from 7.4 to 5.1 — what changed?"
+//   3. LLM rubric (v2) — five qualitative dimensions, decomposed into one
+//      call per dimension, run in parallel against THREE judge models from
+//      different families (default: Claude Sonnet 4.6 / GPT-5.5 / Gemini
+//      3.1 Pro). Each judge call pins `temperature: 0` plus a deterministic
+//      `seed` so re-running gives the same score. The per-judge samples
+//      land inside `evalScores.<dim>.samples[]`; the persisted top-level
+//      `score` is the mean, the `note` is the sample closest to the mean,
+//      and `worstItems` is the merged union (dedup by item+quote prefix).
+//      Most recent operator feedback notes are folded into each prompt as
+//      calibration anchors — anchors the judges against the operator's
+//      taste without requiring a labeled golden set.
+//
+//   4. Pairwise specificity — one extra LLM call comparing this dispatch's
+//      intro against the most recent previous dispatch of the same kind on
+//      introSpecificity alone. Absolute 0-10 scoring is noisy across runs;
+//      pairwise "is this intro more specific than the last one?" is far
+//      more reliable as a regression signal. Result lands in `evalPairwise`.
+//
+// Engagement signal (`evalUnsubs24h`, `evalUnsubRate24h`) is filled by a
+// separate delayed job — at eval time the dispatch has just gone out, so
+// the only honest value is "not yet known." See `computeEngagementForDispatch`
+// and `startDispatchEngagementScheduler` below.
 
+import { createHash } from "node:crypto";
 import OpenAI from "openai";
 import {
   db,
   dispatchArchiveTable,
+  subscribersTable,
   type DispatchArchive,
   type DispatchEvalScores,
+  type DispatchEvalDimension,
+  type DispatchEvalDimensionSample,
   type DispatchBannedPhraseHit,
   type DispatchFormattingIssue,
   type DispatchFormattingIssueType,
   type DispatchFormattingResult,
+  type DispatchPairwiseSpecificity,
 } from "@workspace/db";
-import { eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { logUsage } from "./llm-usage";
 import { BANNED_PATTERNS, type Severity } from "./banned-phrases";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
-const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
+
+// Default judge roster — three judges from three different model families
+// to mitigate self-bias (Claude grading Claude prose) and reduce reliance
+// on any single judge's idiosyncrasies. Cost on twice-weekly dispatches is
+// ~$0.15/send, ~$15/year. Override via DISPATCH_EVAL_JUDGE_MODELS (comma-
+// separated). The legacy DISPATCH_EVAL_MODEL env var is honored as a
+// single-judge override for cheap-mode runs.
+const DEFAULT_JUDGE_MODELS = [
+  "claude-sonnet-4-6",
+  "openai-gpt-55",
+  "gemini-3-1-pro-preview",
+] as const;
+
+// Pinned generation params for every rubric call. temperature=0 makes a
+// single judge deterministic; seed is the second belt-and-braces in case
+// the upstream provider treats 0 as "near-zero" rather than greedy. The
+// seed is derived per (dispatchId, dimension, model) so the score is
+// reproducible AND different judges still produce independent samples.
+const JUDGE_TEMPERATURE = 0;
+const JUDGE_TOP_P = 1;
+const JUDGE_MAX_TOKENS = 768;
+
+// Most recent K dispatches with operator feedback that get folded into
+// each rubric prompt as calibration anchors. Two is enough to nudge the
+// judge toward the operator's taste without blowing the context budget.
+const CALIBRATION_ANCHOR_COUNT = 2;
 
 // "this" pattern that catches the LLM-tic of starting sentence 2 with "This".
 // Detected separately because it's structural — counted as a hit when an
@@ -124,53 +168,162 @@ function scanForBannedPhrases(row: DispatchArchive): ScanResult {
   return { hits, violationCount, warningCount };
 }
 
-// LLM rubric ----------------------------------------------------------------
+// LLM rubric (v2) -----------------------------------------------------------
 
-const RUBRIC_SYSTEM_PROMPT = `You score archived dispatch newsletters against a fixed editorial rubric. The dispatch is a 10-item AI/tech digest with an editorial intro and 2-3 sentence commentary per item. The voice target is institutional / CIO-briefing analysis — sharp, varied, grounded in named workflows, actors, and operational mechanics.
+// Shared framing every per-dimension judge sees. Kept here (not inside each
+// dimension prompt) because changing this is what should bump the rubric
+// version hash — it's the "what we're scoring" definition shared across
+// dimensions. Per-dimension definitions live below as separate constants.
+const RUBRIC_SHARED_PREAMBLE = `You are scoring an archived "dispatch" newsletter against a fixed editorial rubric. The dispatch is a 10-item AI/tech digest with an editorial intro and 2-3 sentence commentary per item. The voice target is institutional / CIO-briefing analysis — sharp, varied, grounded in named workflows, actors, and operational mechanics.
 
-You will receive the subject, intro (item 00), and the full list of items 01..N (source, title, commentary). Return a JSON object with five 0-10 scores. For each dimension also return a short note (one sentence max) AND a "worstItems" array of up to 3 items that most hurt this dimension's score — each with the item number (the 2-digit prefix you see; use 0 for the intro) and a short quoted span (≤120 chars, copied verbatim from the offending text) that shows why. If the dimension scores 9+, return an empty worstItems array. The worstItems are the actionable output: an operator should be able to use them to rewrite exactly those items before next send.
+You will receive the subject line, intro text (item 0), and the full list of items 01..N (source, title, commentary).
 
-DIMENSIONS:
-
-1. introSpecificity (0-10) — Does the intro name a directional claim with specific actors, workflows, governance structures, or buyers? 10 = directional thesis with named actors and connecting thread across multiple items. 5 = vaguely thematic but generic. 0 = "Companies are increasingly reevaluating…" / "today's headlines present a picture…" / interchangeable across any AI news day. For this dimension, worstItems will typically only flag item 0 (the intro).
-
-2. lensDiversity (0-10) — Do the 10 items rotate analytical lenses (operational / GTM / infrastructure / regulatory / labor / pricing / integration friction / technical limitation / competitive)? 10 = different lens for nearly every item. 5 = repeats one or two lenses across most items. 0 = every item asks "who loses competitively?". worstItems should flag items whose lens repeats one already used earlier.
-
-3. cadenceVariety (0-10) — Does the prose vary sentence cadence, or does it repeat the templated formula "X announced Y. This [highlights/signals/underscores/reflects] Z."? 10 = each item structurally different. 5 = noticeable but not dominant template. 0 = same 2-sentence template across most items. worstItems should flag items whose opening sentence follows the template.
-
-4. sourceTiering (0-10) — Does the editorial weight match source weight? Tier 1 (OpenAI / Microsoft / Google / Anthropic / IPOs / regulation) deserves fuller 3-sentence analytical treatment; Tier 3 (academic preprints) should be shorter and name a specific applied audience. 10 = clear weighting differential. 5 = mixed — some flattening visible. 0 = paper items get the same editorial weight as Microsoft strategy posts. worstItems should flag items where the weighting is inverted or flat.
-
-5. concreteness (0-10) — Does each item name a subject, a capability, a metric, an environment, or a workflow — or does it float in abstract business nouns ("operational capabilities", "strategic synergies", "growth trajectory", "data-driven insights")? 10 = nearly every item names concrete subjects. 5 = mixed. 0 = abstract throughout. worstItems should quote the most abstract phrase from each offending item.
-
-Return ONLY this JSON, no prose. Schema for each dimension is identical:
-{
-  "introSpecificity": { "score": <0-10>, "note": "<one sentence>", "worstItems": [{ "item": <0..N>, "quote": "<short quoted span>" }] },
-  "lensDiversity":    { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] },
-  "cadenceVariety":   { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] },
-  "sourceTiering":    { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] },
-  "concreteness":     { "score": <0-10>, "note": "<one sentence>", "worstItems": [...] }
-}
+You will also receive recent OPERATOR FEEDBACK from the human who runs this dispatch on previous sends, where available. These are not labeled with scores — treat them as anchors for what this operator cares about and considers good vs bad. Use them to calibrate your strictness, NOT to override the rubric.
 
 Be strict. The dispatch we're scoring routinely tops out around 6-7 on these dimensions; reserve 9-10 for actually exceptional work.`;
 
-function buildEvalUserMessage(row: DispatchArchive): string {
-  const introText = stripHtml(row.introHtml);
-  const itemBlocks = (row.headlinesSnapshot ?? [])
-    .map((it, i) => {
-      const num = String(i + 1).padStart(2, "0");
-      return `${num}. [${it.source}] ${it.title}\n${(it.commentary ?? "(no commentary)").trim()}`;
-    })
-    .join("\n\n");
-  return `SUBJECT: ${row.subject}\n\nINTRO: ${introText}\n\nITEMS:\n\n${itemBlocks}`;
+const RUBRIC_OUTPUT_INSTRUCTIONS = `Return ONLY this JSON, no prose:
+{
+  "score": <0-10, one decimal allowed>,
+  "note": "<one sentence, max 280 chars>",
+  "worstItems": [{ "item": <0..N>, "quote": "<≤120 chars, copied verbatim from the offending text>" }]
 }
 
-function getClient(): { client: OpenAI; model: string } | null {
+worstItems should contain up to 3 entries flagging the items that most hurt the score. If the score is 9+, return an empty worstItems array. The intro is item 0.`;
+
+const DIMENSION_PROMPTS: Record<keyof DispatchEvalScores, string> = {
+  introSpecificity: `${RUBRIC_SHARED_PREAMBLE}
+
+DIMENSION: introSpecificity (0-10)
+
+Does the intro name a directional claim with specific actors, workflows, governance structures, or buyers? 10 = directional thesis with named actors and a connecting thread across multiple items. 5 = vaguely thematic but generic. 0 = "Companies are increasingly reevaluating…" / "today's headlines present a picture…" / interchangeable across any AI news day.
+
+For this dimension, worstItems will typically only flag item 0 (the intro itself).
+
+${RUBRIC_OUTPUT_INSTRUCTIONS}`,
+
+  lensDiversity: `${RUBRIC_SHARED_PREAMBLE}
+
+DIMENSION: lensDiversity (0-10)
+
+Do the 10 items rotate analytical lenses (operational / GTM / infrastructure / regulatory / labor / pricing / integration friction / technical limitation / competitive)? 10 = different lens for nearly every item. 5 = repeats one or two lenses across most items. 0 = every item asks "who loses competitively?".
+
+worstItems should flag items whose lens repeats one already used earlier in the dispatch.
+
+${RUBRIC_OUTPUT_INSTRUCTIONS}`,
+
+  cadenceVariety: `${RUBRIC_SHARED_PREAMBLE}
+
+DIMENSION: cadenceVariety (0-10)
+
+Does the prose vary sentence cadence, or does it repeat the templated formula "X announced Y. This [highlights/signals/underscores/reflects] Z."? 10 = each item structurally different. 5 = noticeable but not dominant template. 0 = same 2-sentence template across most items.
+
+worstItems should flag items whose opening sentence follows the template.
+
+${RUBRIC_OUTPUT_INSTRUCTIONS}`,
+
+  sourceTiering: `${RUBRIC_SHARED_PREAMBLE}
+
+DIMENSION: sourceTiering (0-10)
+
+Does the editorial weight match source weight? Tier 1 (OpenAI / Microsoft / Google / Anthropic / IPOs / regulation) deserves fuller 3-sentence analytical treatment; Tier 3 (arXiv preprints) should be shorter and name a specific applied audience. 10 = clear weighting differential. 5 = mixed — some flattening visible. 0 = arXiv items get the same editorial weight as Microsoft strategy posts.
+
+worstItems should flag items where the weighting is inverted or flat.
+
+${RUBRIC_OUTPUT_INSTRUCTIONS}`,
+
+  concreteness: `${RUBRIC_SHARED_PREAMBLE}
+
+
+
+Does each item name a subject, a capability, a metric, an environment, or a workflow — or does it float in abstract business nouns ("operational capabilities", "strategic synergies", "growth trajectory", "data-driven insights")? 10 = nearly every item names concrete subjects. 5 = mixed. 0 = abstract throughout.
+
+worstItems should quote the most abstract phrase from each offending item.
+
+${RUBRIC_OUTPUT_INSTRUCTIONS}`,
+};
+
+const PAIRWISE_SPECIFICITY_PROMPT = `${RUBRIC_SHARED_PREAMBLE}
+
+TASK: pairwise comparison on introSpecificity ONLY.
+
+You will be given TWO dispatch intros: "CURRENT" (today's send) and "PREVIOUS" (the prior send). Decide which intro is more specific by the definition above (directional claim with named actors / workflows / structures, vs. generic AI-news framing).
+
+Pairwise scoring is more reliable than absolute scoring — be decisive. Tie only when the two are genuinely indistinguishable on this dimension.
+
+Return ONLY this JSON, no prose:
+{
+  "winner": "current" | "previous" | "tie",
+  "margin": <0..3>,    // 0 only when winner = "tie"; 1 = slight, 2 = clear, 3 = decisive
+  "rationale": "<one to two sentences, max 280 chars>"
+}`;
+
+const DIMENSIONS = [
+  "introSpecificity",
+  "lensDiversity",
+  "cadenceVariety",
+  "sourceTiering",
+  "concreteness",
+] as const;
+
+/** Content-addressed identifier for the rubric prompt set. Hashes ONLY the
+ *  static templates (preamble + per-dim prompts + output schema + pairwise
+ *  prompt). Calibration anchors are excluded because they change every send;
+ *  including them would invalidate the version on every dispatch and defeat
+ *  the point of versioning. */
+function computeRubricVersion(): string {
+  const parts: string[] = [
+    "v2",
+    RUBRIC_SHARED_PREAMBLE,
+    RUBRIC_OUTPUT_INSTRUCTIONS,
+    ...DIMENSIONS.map((d) => `${d}::${DIMENSION_PROMPTS[d]}`),
+    `pairwise::${PAIRWISE_SPECIFICITY_PROMPT}`,
+  ];
+  return createHash("sha256")
+    .update(parts.join("\n----\n"))
+    .digest("hex")
+    .slice(0, 16);
+}
+
+const RUBRIC_VERSION = computeRubricVersion();
+
+// --- Judge roster ---------------------------------------------------------
+
+type Judge = { model: string };
+
+function getJudgeRoster(): Judge[] {
+  const envRoster = process.env["DISPATCH_EVAL_JUDGE_MODELS"]?.trim();
+  if (envRoster) {
+    const models = envRoster
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (models.length > 0) return models.map((model) => ({ model }));
+  }
+  // Legacy single-judge override — keeps old runs reproducible if an
+  // operator was relying on DISPATCH_EVAL_MODEL.
+  const legacy = process.env["DISPATCH_EVAL_MODEL"]?.trim();
+  if (legacy) return [{ model: legacy }];
+  return DEFAULT_JUDGE_MODELS.map((model) => ({ model }));
+}
+
+function getClient(): OpenAI | null {
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) return null;
   const baseURL = process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL;
-  const model = process.env["DISPATCH_EVAL_MODEL"] ?? DEFAULT_MODEL;
-  const client = new OpenAI({ apiKey, baseURL, timeout: 4 * 60_000, maxRetries: 0 });
-  return { client, model };
+  return new OpenAI({ apiKey, baseURL, timeout: 4 * 60_000, maxRetries: 0 });
+}
+
+// Deterministic seed per (dispatchId, dimension, model) so re-runs are
+// reproducible. 32-bit unsigned int from a sha256 prefix — fits Node's
+// integer range and the OpenAI SDK's `seed` param. Different judges get
+// different seeds naturally because the model name is in the hash.
+function seedFor(dispatchId: number, dimension: string, model: string): number {
+  const h = createHash("sha256")
+    .update(`${dispatchId}::${dimension}::${model}::${RUBRIC_VERSION}`)
+    .digest();
+  // First 4 bytes → uint32. >>> 0 forces unsigned in JS.
+  return (h.readUInt32BE(0) >>> 0);
 }
 
 function parseJson(text: string): unknown {
@@ -200,31 +353,13 @@ function parseJson(text: string): unknown {
   }
 }
 
-const DIMENSIONS = [
-  "introSpecificity",
-  "lensDiversity",
-  "cadenceVariety",
-  "sourceTiering",
-  "concreteness",
-] as const;
-
-function isDimensionPayload(
-  v: unknown,
-): v is { score: number; note: string; worstItems?: unknown } {
-  if (!v || typeof v !== "object") return false;
-  const o = v as { score?: unknown; note?: unknown };
-  return (
-    typeof o.score === "number" &&
-    Number.isFinite(o.score) &&
-    typeof o.note === "string"
-  );
+function clampScore(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  if (n < 0) return 0;
+  if (n > 10) return 10;
+  return Math.round(n * 10) / 10;
 }
 
-// Coerce/validate the per-dimension worstItems array. Tolerant of:
-//   - missing/empty (older prompt versions, or 9+ scores)
-//   - item numbers as numeric strings ("03")
-//   - out-of-range numbers (clamp to 0..itemCount)
-// Caps at 3 entries and truncates quotes to 120 chars.
 function coerceWorstItems(
   v: unknown,
   itemCount: number,
@@ -250,63 +385,361 @@ function coerceWorstItems(
   return out;
 }
 
-function clampScore(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  if (n < 0) return 0;
-  if (n > 10) return 10;
-  return Math.round(n * 10) / 10;
+// --- Calibration anchors --------------------------------------------------
+//
+// Fetch the most recent K dispatches that have operator feedback. These get
+// folded into every rubric prompt to anchor the judge's strictness against
+// the operator's actual taste. We intentionally include feedback only (not
+// the full intro/items of each anchor) because the prompts are already
+// long, and the feedback text is the part that conveys the operator's
+// preferences. The composite score of the anchor dispatch is included so
+// the judge can correlate "feedback this critical → score around X".
+
+type CalibrationAnchor = {
+  dispatchId: number;
+  subject: string;
+  composite: number | null;
+  feedback: string;
+};
+
+async function getCalibrationAnchors(
+  excludeId: number,
+  limit = CALIBRATION_ANCHOR_COUNT,
+): Promise<CalibrationAnchor[]> {
+  if (limit <= 0) return [];
+  const rows = await db
+    .select({
+      id: dispatchArchiveTable.id,
+      subject: dispatchArchiveTable.subject,
+      composite: dispatchArchiveTable.evalCompositeScore,
+      feedback: dispatchArchiveTable.feedback,
+    })
+    .from(dispatchArchiveTable)
+    .where(
+      and(
+        ne(dispatchArchiveTable.id, excludeId),
+        isNotNull(dispatchArchiveTable.feedback),
+        sql`length(${dispatchArchiveTable.feedback}) > 0`,
+      ),
+    )
+    .orderBy(desc(dispatchArchiveTable.createdAt))
+    .limit(limit);
+  return rows.map((r) => ({
+    dispatchId: r.id,
+    subject: r.subject,
+    composite: r.composite === null ? null : Number(r.composite),
+    feedback: (r.feedback ?? "").trim().slice(0, 2000),
+  }));
 }
 
-async function runRubricLlm(row: DispatchArchive): Promise<{
-  scores: DispatchEvalScores;
-  model: string;
-} | { error: string }> {
-  const setup = getClient();
-  if (!setup) return { error: "no_api_key" };
+function buildCalibrationBlock(anchors: CalibrationAnchor[]): string {
+  if (anchors.length === 0) {
+    return "OPERATOR FEEDBACK ON PRIOR SENDS: (none yet — score against the rubric definition above)";
+  }
+  const blocks = anchors.map((a) => {
+    const score =
+      a.composite === null ? "no prior eval" : `prior rubric composite: ${a.composite.toFixed(2)}/10`;
+    return `--- Prior dispatch #${a.dispatchId} ("${a.subject}") — ${score} ---\nOperator wrote:\n${a.feedback}`;
+  });
+  return `OPERATOR FEEDBACK ON PRIOR SENDS (use as calibration anchors, not as rubric overrides):\n\n${blocks.join("\n\n")}`;
+}
+
+// --- Per-dimension user message -------------------------------------------
+
+function buildDimensionUserMessage(
+  row: DispatchArchive,
+  calibrationBlock: string,
+): string {
+  const introText = stripHtml(row.introHtml);
+  const itemBlocks = (row.headlinesSnapshot ?? [])
+    .map((it, i) => {
+      const num = String(i + 1).padStart(2, "0");
+      return `${num}. [${it.source}] ${it.title}\n${(it.commentary ?? "(no commentary)").trim()}`;
+    })
+    .join("\n\n");
+  return `${calibrationBlock}\n\n--- DISPATCH UNDER REVIEW ---\n\nSUBJECT: ${row.subject}\n\nINTRO: ${introText}\n\nITEMS:\n\n${itemBlocks}`;
+}
+
+// --- One (dimension × judge) call -----------------------------------------
+
+type JudgeCallResult =
+  | { ok: true; sample: DispatchEvalDimensionSample }
+  | { ok: false; error: string };
+
+async function runDimensionAgainstJudge(
+  client: OpenAI,
+  judge: Judge,
+  dimension: keyof DispatchEvalScores,
+  row: DispatchArchive,
+  calibrationBlock: string,
+): Promise<JudgeCallResult> {
+  const itemCount = (row.headlinesSnapshot ?? []).length;
+  const userMessage = buildDimensionUserMessage(row, calibrationBlock);
+  const seed = seedFor(row.id, dimension, judge.model);
 
   let text = "";
   try {
-    const response = await setup.client.chat.completions.create({
-      model: setup.model,
-      max_tokens: 2048,
+    const response = await client.chat.completions.create({
+      model: judge.model,
+      temperature: JUDGE_TEMPERATURE,
+      top_p: JUDGE_TOP_P,
+      seed,
+      max_tokens: JUDGE_MAX_TOKENS,
       messages: [
-        { role: "system", content: RUBRIC_SYSTEM_PROMPT },
-        { role: "user", content: buildEvalUserMessage(row) },
+        { role: "system", content: DIMENSION_PROMPTS[dimension] },
+        { role: "user", content: userMessage },
       ],
       response_format: { type: "json_object" },
     });
     await logUsage({
       caller: "dispatch_eval",
       callKind: "chat",
-      model: setup.model,
+      model: judge.model,
       promptTokens: response.usage?.prompt_tokens ?? 0,
       completionTokens: response.usage?.completion_tokens ?? 0,
     });
     text = response.choices[0]?.message?.content ?? "";
   } catch (err) {
-    return { error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 
   const parsed = parseJson(text);
   if (!parsed || typeof parsed !== "object") {
-    return { error: "parse_failed" };
+    return { ok: false, error: "parse_failed" };
+  }
+  const obj = parsed as { score?: unknown; note?: unknown; worstItems?: unknown };
+  if (typeof obj.score !== "number" || !Number.isFinite(obj.score)) {
+    return { ok: false, error: "missing score" };
+  }
+  if (typeof obj.note !== "string") {
+    return { ok: false, error: "missing note" };
+  }
+  return {
+    ok: true,
+    sample: {
+      model: judge.model,
+      score: clampScore(obj.score),
+      note: obj.note.slice(0, 280),
+      worstItems: coerceWorstItems(obj.worstItems, itemCount),
+    },
+  };
+}
+
+// --- Aggregate per-dimension samples into the persisted DispatchEvalDimension
+
+function aggregateDimensionSamples(
+  samples: DispatchEvalDimensionSample[],
+): DispatchEvalDimension {
+  // Mean for the headline score. We trust the ensemble; we don't outlier-
+  // reject because n=3 is too small for that to be reliable.
+  const mean = samples.reduce((s, x) => s + x.score, 0) / samples.length;
+  const score = clampScore(mean);
+
+  // Pick the note from the sample closest to the mean — the "median voice"
+  // — so the displayed rationale matches the displayed score. Ties broken
+  // by the first sample (deterministic given the roster order).
+  let bestIdx = 0;
+  let bestDelta = Math.abs(samples[0]!.score - mean);
+  for (let i = 1; i < samples.length; i++) {
+    const d = Math.abs(samples[i]!.score - mean);
+    if (d < bestDelta) {
+      bestDelta = d;
+      bestIdx = i;
+    }
+  }
+  const note = samples[bestIdx]!.note;
+
+  // Merge worstItems across judges. Dedup by (item, first 40 chars of the
+  // quote) so the same complaint phrased slightly differently doesn't
+  // appear three times. Cap at 3 to match the original UI affordance.
+  const seen = new Set<string>();
+  const merged: Array<{ item: number; quote: string }> = [];
+  for (const sample of samples) {
+    for (const wi of sample.worstItems ?? []) {
+      const key = `${wi.item}::${wi.quote.slice(0, 40).toLowerCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(wi);
+      if (merged.length >= 3) break;
+    }
+    if (merged.length >= 3) break;
   }
 
-  const itemCount = (row.headlinesSnapshot ?? []).length;
-  const obj = parsed as Record<string, unknown>;
+  return { score, note, worstItems: merged, samples };
+}
+
+// --- Full rubric: 5 dimensions × N judges, all in parallel ----------------
+
+type RubricResult =
+  | {
+      ok: true;
+      scores: DispatchEvalScores;
+      judgeModels: string[];
+    }
+  | { ok: false; error: string };
+
+async function runFullRubric(
+  client: OpenAI,
+  judges: Judge[],
+  row: DispatchArchive,
+): Promise<RubricResult> {
+  const anchors = await getCalibrationAnchors(row.id);
+  const calibrationBlock = buildCalibrationBlock(anchors);
+
+  // 5 × N calls in parallel. At 3 judges, that's 15 calls — fine to
+  // promise.all because each provider tolerates the concurrency and any
+  // individual failure just drops a sample, doesn't fail the dispatch.
+  const callPlan: Array<{
+    dimension: keyof DispatchEvalScores;
+    judge: Judge;
+  }> = [];
+  for (const dimension of DIMENSIONS) {
+    for (const judge of judges) callPlan.push({ dimension, judge });
+  }
+
+  const results = await Promise.all(
+    callPlan.map((p) =>
+      runDimensionAgainstJudge(client, p.judge, p.dimension, row, calibrationBlock).then(
+        (r) => ({ ...p, result: r }),
+      ),
+    ),
+  );
+
+  // Bucket samples by dimension. If a dimension has zero successful samples
+  // across all judges we fail the rubric — the row stays without a v2 score
+  // and the deterministic tracks still persist.
+  const bucketed: Partial<Record<keyof DispatchEvalScores, DispatchEvalDimensionSample[]>> = {};
+  for (const r of results) {
+    if (r.result.ok) {
+      const arr = bucketed[r.dimension] ?? [];
+      arr.push(r.result.sample);
+      bucketed[r.dimension] = arr;
+    } else {
+      logger.warn(
+        { dispatchId: row.id, dimension: r.dimension, model: r.judge.model, error: r.result.error },
+        "Dispatch eval: judge call failed",
+      );
+    }
+  }
+
   const out: Partial<DispatchEvalScores> = {};
   for (const dim of DIMENSIONS) {
-    const v = obj[dim];
-    if (!isDimensionPayload(v)) {
-      return { error: `missing dimension: ${dim}` };
+    const samples = bucketed[dim] ?? [];
+    if (samples.length === 0) {
+      return { ok: false, error: `all judges failed on ${dim}` };
     }
-    out[dim] = {
-      score: clampScore(v.score),
-      note: v.note.slice(0, 280),
-      worstItems: coerceWorstItems(v.worstItems, itemCount),
-    };
+    out[dim] = aggregateDimensionSamples(samples);
   }
-  return { scores: out as DispatchEvalScores, model: setup.model };
+
+  // Use the union of judge models that produced at least one sample. If a
+  // judge crashed on every dimension it doesn't get credit on the row.
+  const usedJudges = new Set<string>();
+  for (const r of results) {
+    if (r.result.ok) usedJudges.add(r.judge.model);
+  }
+
+  return {
+    ok: true,
+    scores: out as DispatchEvalScores,
+    judgeModels: Array.from(usedJudges),
+  };
+}
+
+// --- Pairwise specificity -------------------------------------------------
+
+async function findPreviousDispatch(
+  row: DispatchArchive,
+): Promise<DispatchArchive | null> {
+  const [prev] = await db
+    .select()
+    .from(dispatchArchiveTable)
+    .where(
+      and(
+        eq(dispatchArchiveTable.kind, row.kind),
+        ne(dispatchArchiveTable.id, row.id),
+        lt(dispatchArchiveTable.createdAt, row.createdAt),
+      ),
+    )
+    .orderBy(desc(dispatchArchiveTable.createdAt))
+    .limit(1);
+  return prev ?? null;
+}
+
+async function runPairwiseSpecificity(
+  client: OpenAI,
+  judges: Judge[],
+  current: DispatchArchive,
+  previous: DispatchArchive,
+): Promise<DispatchPairwiseSpecificity | null> {
+  // Pairwise uses a SINGLE judge (the first in the roster) — three-judge
+  // ensemble on a pairwise call would just majority-vote, and the pairwise
+  // signal is already noise-resistant relative to absolute scoring. Saves
+  // 2 calls per dispatch.
+  const judge = judges[0];
+  if (!judge) return null;
+
+  const currentIntro = stripHtml(current.introHtml);
+  const previousIntro = stripHtml(previous.introHtml);
+  const userMessage =
+    `CURRENT (dispatch #${current.id}, "${current.subject}"):\n${currentIntro}\n\n` +
+    `PREVIOUS (dispatch #${previous.id}, "${previous.subject}"):\n${previousIntro}`;
+  const seed = seedFor(current.id, "pairwise:introSpecificity", judge.model);
+
+  let text = "";
+  try {
+    const response = await client.chat.completions.create({
+      model: judge.model,
+      temperature: JUDGE_TEMPERATURE,
+      top_p: JUDGE_TOP_P,
+      seed,
+      max_tokens: JUDGE_MAX_TOKENS,
+      messages: [
+        { role: "system", content: PAIRWISE_SPECIFICITY_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+      response_format: { type: "json_object" },
+    });
+    await logUsage({
+      caller: "dispatch_eval",
+      callKind: "chat",
+      model: judge.model,
+      promptTokens: response.usage?.prompt_tokens ?? 0,
+      completionTokens: response.usage?.completion_tokens ?? 0,
+    });
+    text = response.choices[0]?.message?.content ?? "";
+  } catch (err) {
+    logger.warn(
+      { dispatchId: current.id, error: err instanceof Error ? err.message : String(err) },
+      "Dispatch eval: pairwise call failed",
+    );
+    return null;
+  }
+
+  const parsed = parseJson(text);
+  if (!parsed || typeof parsed !== "object") return null;
+  const obj = parsed as { winner?: unknown; margin?: unknown; rationale?: unknown };
+  const winner =
+    obj.winner === "current" || obj.winner === "previous" || obj.winner === "tie"
+      ? obj.winner
+      : null;
+  if (!winner) return null;
+  const marginRaw = typeof obj.margin === "number" ? obj.margin : Number(obj.margin);
+  if (!Number.isFinite(marginRaw)) return null;
+  const margin = Math.max(0, Math.min(3, Math.trunc(marginRaw))) as 0 | 1 | 2 | 3;
+  // Coherence: a tie must have margin 0, and a non-tie must have margin ≥ 1.
+  if (winner === "tie" && margin !== 0) return null;
+  if (winner !== "tie" && margin === 0) return null;
+  const rationale =
+    typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 280) : "";
+  if (!rationale) return null;
+
+  return {
+    comparedToId: previous.id,
+    winner,
+    margin,
+    rationale,
+    model: judge.model,
+  };
 }
 
 // Formatting eval -----------------------------------------------------------
@@ -351,11 +784,18 @@ function evaluateFormatting(row: DispatchArchive): DispatchFormattingResult {
   const issues = new Map<DispatchFormattingIssueType, DispatchFormattingIssue>();
 
   // 1. Empty paragraphs in body or intro — visible vertical-gap bugs.
-  const emptyP = (body + intro).match(/<p[^>]*>\s*(?:&nbsp;| |\s)*<\/p>/gi);
+  // The middle alternative is U+00A0 written as a Unicode escape (an actual
+  // NBSP byte) so the source stays pure-ASCII; behaviorally redundant with
+  // \s on the current JS engine but kept explicit so intent survives future
+  // edits.
+  const emptyP = (body + intro).match(/<p[^>]*>\s*(?:&nbsp;|\u00a0|\s)*<\/p>/gi);
   if (emptyP) pushIssue(issues, "empty_paragraph", emptyP.length, emptyP[0]);
 
   // 2. Runs of consecutive &nbsp; (3+) — usually a copy-paste artifact.
-  const nbspRun = body.match(/(?:&nbsp;| ){3,}/gi);
+  // Matches either the entity OR a literal NBSP byte (\u00a0); a plain
+  // space here would over-match ordinary indentation and conflict with the
+  // double_space check below.
+  const nbspRun = body.match(/(?:&nbsp;|\u00a0){3,}/gi);
   if (nbspRun) pushIssue(issues, "nbsp_run", nbspRun.length, nbspRun[0]);
 
   // 3. Double spaces inside text content (between a letter and a letter,
@@ -447,13 +887,21 @@ export type EvalOutcome = {
   bannedCount?: number;
   formattingScore?: number;
   formattingIssues?: number;
+  /** Pairwise winner against the previous dispatch on introSpecificity.
+   *  Absent on the first dispatch or when the pairwise call failed. */
+  pairwise?: { winner: "current" | "previous" | "tie"; margin: number };
+  rubricVersion?: string;
+  judgeModels?: string[];
   error?: string;
 };
 
 /**
- * Run regex scan + LLM rubric for one archived dispatch. Persists results on
- * the dispatch_archive row. Idempotent — re-running overwrites. Safe to call
+ * Run regex scan + formatting check + multi-judge LLM rubric + pairwise
+ * specificity for one archived dispatch. Persists results on the
+ * dispatch_archive row. Idempotent — re-running overwrites. Safe to call
  * fire-and-forget after archiveDispatch (does its own error handling).
+ *
+ * Engagement signal is NOT computed here — see computeEngagementForDispatch.
  */
 export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
   const [row] = await db
@@ -467,10 +915,11 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
   const formatting = evaluateFormatting(row);
   const formattingScore = formattingScoreFrom(formatting);
 
-  const rubric = await runRubricLlm(row);
-  if ("error" in rubric) {
-    // Persist deterministic results even if the LLM failed — regex + HTML
-    // checks are the most actionable signals and never cost anything.
+  const client = getClient();
+  if (!client) {
+    // No LLM key — persist the deterministic tracks and bail. This is the
+    // same fallback path as the legacy code: regex + formatting are the
+    // most actionable signals and never cost anything.
     await db
       .update(dispatchArchiveTable)
       .set({
@@ -479,14 +928,59 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
         evalFormatting: formatting,
         evalFormattingScore: formattingScore.toFixed(2),
         evalRunAt: new Date(),
+        evalRubricVersion: RUBRIC_VERSION,
       })
       .where(eq(dispatchArchiveTable.id, id));
-    logger.warn({ id, error: rubric.error }, "Dispatch eval: rubric LLM failed");
     return {
       ok: false,
       bannedCount: scan.violationCount,
       formattingScore,
       formattingIssues: formatting.totalIssues,
+      rubricVersion: RUBRIC_VERSION,
+      error: "no_api_key",
+    };
+  }
+
+  const judges = getJudgeRoster();
+
+  // Run the full multi-judge rubric and the pairwise call in parallel.
+  // findPreviousDispatch is a 1-row select on an indexed column — cheap
+  // and not worth deferring. If there's no previous dispatch (first send
+  // ever, or first of a kind), the pairwise just resolves to null.
+  const previousPromise = findPreviousDispatch(row);
+  const [rubric, previous] = await Promise.all([
+    runFullRubric(client, judges, row),
+    previousPromise,
+  ]);
+
+  let pairwise: DispatchPairwiseSpecificity | null = null;
+  if (previous) {
+    pairwise = await runPairwiseSpecificity(client, judges, row, previous);
+  }
+
+  if (!rubric.ok) {
+    // Persist deterministic tracks + pairwise (if it succeeded) even if the
+    // rubric failed wholesale. Don't poison evalScores with a partial run.
+    await db
+      .update(dispatchArchiveTable)
+      .set({
+        evalBannedPhrasesCount: scan.violationCount,
+        evalBannedPhrases: scan.hits,
+        evalFormatting: formatting,
+        evalFormattingScore: formattingScore.toFixed(2),
+        evalPairwise: pairwise,
+        evalRubricVersion: RUBRIC_VERSION,
+        evalRunAt: new Date(),
+      })
+      .where(eq(dispatchArchiveTable.id, id));
+    logger.warn({ id, error: rubric.error }, "Dispatch eval: rubric failed");
+    return {
+      ok: false,
+      bannedCount: scan.violationCount,
+      formattingScore,
+      formattingIssues: formatting.totalIssues,
+      rubricVersion: RUBRIC_VERSION,
+      ...(pairwise ? { pairwise: { winner: pairwise.winner, margin: pairwise.margin } } : {}),
       error: rubric.error,
     };
   }
@@ -512,7 +1006,13 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
       evalBannedPhrases: scan.hits,
       evalFormatting: formatting,
       evalFormattingScore: formattingScore.toFixed(2),
-      evalModel: rubric.model,
+      // evalModel keeps a flat back-compat string ("|"-joined) for old UI
+      // code that reads it as a single value. The structured list lives in
+      // evalJudgeModels.
+      evalModel: rubric.judgeModels.join("|"),
+      evalJudgeModels: rubric.judgeModels,
+      evalRubricVersion: RUBRIC_VERSION,
+      evalPairwise: pairwise,
       evalRunAt: new Date(),
     })
     .where(eq(dispatchArchiveTable.id, id));
@@ -525,6 +1025,9 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
       warningCount: scan.warningCount,
       formattingScore,
       formattingIssues: formatting.totalIssues,
+      judges: rubric.judgeModels,
+      pairwise: pairwise ? { winner: pairwise.winner, margin: pairwise.margin, vs: pairwise.comparedToId } : null,
+      rubricVersion: RUBRIC_VERSION,
     },
     "Dispatch eval: complete",
   );
@@ -534,6 +1037,9 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
     bannedCount: scan.violationCount,
     formattingScore,
     formattingIssues: formatting.totalIssues,
+    rubricVersion: RUBRIC_VERSION,
+    judgeModels: rubric.judgeModels,
+    ...(pairwise ? { pairwise: { winner: pairwise.winner, margin: pairwise.margin } } : {}),
   };
 }
 
@@ -547,9 +1053,145 @@ export function evaluateDispatchInBackground(id: number): void {
   });
 }
 
+// --- Engagement signal ----------------------------------------------------
+//
+// The only engagement data the schema currently captures is
+// `subscribers.unsubscribed_at`. There's no open or click tracking, so the
+// honest "did this dispatch land" signal is "how many recipients unsubbed
+// in the N hours after we sent it." Computed lazily by a periodic tick:
+//
+//   * Runs at most once per row (idempotent via evalEngagementRunAt).
+//   * Skips rows under the window (createdAt > now - 24h) — the value would
+//     be incomplete.
+//   * Divides by recipientCount when available; otherwise stores the raw
+//     count but leaves rate NULL.
+
+const ENGAGEMENT_WINDOW_HOURS = 24;
+
+export type EngagementOutcome = {
+  ok: boolean;
+  unsubs?: number;
+  rate?: number | null;
+  reason?: "too_recent" | "not_found" | "no_recipients" | "computed";
+};
+
+export async function computeEngagementForDispatch(
+  id: number,
+): Promise<EngagementOutcome> {
+  const [row] = await db
+    .select({
+      id: dispatchArchiveTable.id,
+      createdAt: dispatchArchiveTable.createdAt,
+      recipientCount: dispatchArchiveTable.recipientCount,
+    })
+    .from(dispatchArchiveTable)
+    .where(eq(dispatchArchiveTable.id, id))
+    .limit(1);
+  if (!row) return { ok: false, reason: "not_found" };
+
+  const windowEnd = new Date(row.createdAt.getTime() + ENGAGEMENT_WINDOW_HOURS * 3_600_000);
+  if (windowEnd.getTime() > Date.now()) {
+    // Window hasn't closed yet — refuse to write a partial value.
+    return { ok: false, reason: "too_recent" };
+  }
+
+  const [{ unsubs }] = await db
+    .select({ unsubs: sql<number>`count(*)::int` })
+    .from(subscribersTable)
+    .where(
+      and(
+        isNotNull(subscribersTable.unsubscribedAt),
+        gte(subscribersTable.unsubscribedAt, row.createdAt),
+        lte(subscribersTable.unsubscribedAt, windowEnd),
+      ),
+    );
+
+  const recipients = row.recipientCount ?? 0;
+  const rate = recipients > 0 ? unsubs / recipients : null;
+
+  await db
+    .update(dispatchArchiveTable)
+    .set({
+      evalUnsubs24h: unsubs,
+      evalUnsubRate24h: rate === null ? null : rate.toFixed(4),
+      evalEngagementRunAt: new Date(),
+    })
+    .where(eq(dispatchArchiveTable.id, id));
+
+  return {
+    ok: true,
+    unsubs,
+    rate,
+    reason: recipients > 0 ? "computed" : "no_recipients",
+  };
+}
+
+/** Find dispatches that have closed their 24h window but haven't had the
+ *  engagement signal computed yet, and run it for them. Called by the
+ *  scheduler tick below. */
+async function backfillEngagementSignals(limit = 20): Promise<number> {
+  const cutoff = new Date(Date.now() - ENGAGEMENT_WINDOW_HOURS * 3_600_000);
+  const rows = await db
+    .select({ id: dispatchArchiveTable.id })
+    .from(dispatchArchiveTable)
+    .where(
+      and(
+        isNull(dispatchArchiveTable.evalEngagementRunAt),
+        lt(dispatchArchiveTable.createdAt, cutoff),
+      ),
+    )
+    .orderBy(desc(dispatchArchiveTable.createdAt))
+    .limit(limit);
+  let done = 0;
+  for (const r of rows) {
+    try {
+      const result = await computeEngagementForDispatch(r.id);
+      if (result.ok) done++;
+    } catch (err) {
+      logger.warn(
+        { id: r.id, err: err instanceof Error ? err.message : String(err) },
+        "Dispatch engagement: backfill iteration failed",
+      );
+    }
+  }
+  return done;
+}
+
+let engagementTimer: NodeJS.Timeout | null = null;
+
+/** Start the periodic engagement backfill tick. Hourly is plenty — the
+ *  signal only changes when a dispatch crosses the 24h mark, and we have
+ *  at most a couple of dispatches per week. */
+export function startDispatchEngagementScheduler(intervalMs = 3_600_000): void {
+  if (engagementTimer) return;
+  const tick = async (): Promise<void> => {
+    try {
+      const count = await backfillEngagementSignals();
+      if (count > 0) {
+        logger.info({ count }, "Dispatch engagement: backfilled");
+      }
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "Dispatch engagement: tick failed",
+      );
+    }
+  };
+  // Run once on boot, then on interval.
+  void tick();
+  engagementTimer = setInterval(() => void tick(), intervalMs);
+}
+
+export function stopDispatchEngagementScheduler(): void {
+  if (engagementTimer) {
+    clearInterval(engagementTimer);
+    engagementTimer = null;
+  }
+}
+
 /**
  * Idempotent self-heal — adds the eval columns if a prod DB predates the
- * migration. Safe to call on every boot. Mirrors migrations/0004 + 0007.
+ * migration. Safe to call on every boot. Mirrors migrations/0004 + 0007 + 0008.
  */
 export async function ensureDispatchEvalSchema(): Promise<void> {
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_scores JSONB`);
@@ -564,4 +1206,19 @@ export async function ensureDispatchEvalSchema(): Promise<void> {
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_banner_scores JSONB`);
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_banner_composite_score NUMERIC(4, 2)`);
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_banner_model TEXT`);
+  // Rubric v2 + pairwise + engagement (migrations/0008).
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_rubric_version TEXT`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_judge_models JSONB`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_pairwise JSONB`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_unsubs_24h INTEGER`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_unsub_rate_24h NUMERIC(6, 4)`);
+  await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_engagement_run_at TIMESTAMPTZ`);
+  await db.execute(sql`
+    CREATE INDEX IF NOT EXISTS dispatch_archive_eval_engagement_run_at_idx
+      ON dispatch_archive (eval_engagement_run_at)
+  `);
 }
+
+/** Exposed for tests / admin so the current rubric version can be displayed
+ *  alongside historical rows. */
+export const CURRENT_RUBRIC_VERSION = RUBRIC_VERSION;
