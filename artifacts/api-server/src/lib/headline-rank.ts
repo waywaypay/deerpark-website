@@ -3,11 +3,10 @@
 //   1) Cross-source duplication — Anthropic releases X, then Bloomberg covers
 //      the same release. Per-source caps don't catch this; we need title-token
 //      similarity across the candidate pool.
-//   2) Academic papers (arXiv, HF Papers) get crowded out by the tier-1 labs
-//      when the labs publish frequently — a top-10 with zero research items
-//      isn't representative of the AI week. We reserve a minimum slot count
-//      and swap in the top-scored papers if natural ranking doesn't include
-//      them.
+//   2) Academic papers (HF Papers) get crowded out by the tier-1 labs when
+//      the labs publish frequently — a top-10 with zero research items isn't
+//      representative of the AI week. We reserve a minimum slot count and
+//      swap in the top-scored papers if natural ranking doesn't include them.
 
 // Common English filler + AI-domain noise that shouldn't drive Jaccard.
 // Keep this conservative — too aggressive and "Claude" / "GPT" stop carrying
@@ -239,7 +238,6 @@ export function dedupeNearDuplicates<
 // at least N of these in the leading slot count so the feed stays
 // representative of the AI week as a whole, not just frontier-lab marketing.
 export const PAPER_SOURCES: ReadonlySet<string> = new Set([
-  "arXiv cs.AI",
   "Hugging Face",
 ]);
 
