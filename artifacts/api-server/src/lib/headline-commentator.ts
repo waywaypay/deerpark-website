@@ -17,6 +17,7 @@ import { logger } from "./logger";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
 import { logUsage } from "./llm-usage";
 import { findFirstViolation } from "./banned-phrases";
+import { recordPromptVersion } from "./dispatch-prompts";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 // Venice removed Anthropic models from its catalog, so `claude-haiku-*` no
@@ -311,6 +312,13 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
 
   summary.candidates = candidates.length;
   if (candidates.length === 0) return summary;
+
+  // Register the active commentator prompt before the first batch fires —
+  // this is what makes the version show up in the admin Prompts tab. Per-item
+  // attribution to dispatches isn't tracked (items can be written under
+  // different versions over time); the registry just records "this version
+  // ran at least once."
+  await recordPromptVersion("commentator", SYSTEM_PROMPT);
 
   let errorStreak = 0;
   for (let i = 0; i < candidates.length; i += BATCH_SIZE) {

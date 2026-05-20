@@ -125,6 +125,38 @@ export async function getDispatchPrompt(hash: string): Promise<DispatchPrompt | 
 }
 
 /**
+ * Pre-register the currently-active prompts at boot so they show up in
+ * the admin Prompts tab immediately, instead of only after the relevant
+ * pipeline runs once. Idempotent — each call is a hash-keyed no-op upsert
+ * unless a prompt was edited since last boot.
+ *
+ * Slot ↔ source mapping (kept here so there's one place to update when a
+ * new slot lands):
+ *   polish      → top10-email.POLISH_SYSTEM_PROMPT
+ *   fallback    → top10-email.COMMENTARY_FALLBACK_PROMPT
+ *   commentator → headline-commentator.SYSTEM_PROMPT
+ *   banner      → image-gen.DEFAULT_BANNER_PROMPT_TEMPLATE (raw template
+ *                 with {{motif}} unrendered — the rendered prompt varies
+ *                 per send, but the template is the operator-editable unit)
+ *   judge       → dispatch-eval.RUBRIC_SYSTEM_PROMPT
+ */
+export async function seedActivePrompts(prompts: {
+  polish: string;
+  fallback: string;
+  commentator: string;
+  banner: string;
+  judge: string;
+}): Promise<void> {
+  await Promise.all([
+    recordPromptVersion("polish", prompts.polish),
+    recordPromptVersion("fallback", prompts.fallback),
+    recordPromptVersion("commentator", prompts.commentator),
+    recordPromptVersion("banner", prompts.banner),
+    recordPromptVersion("judge", prompts.judge),
+  ]);
+}
+
+/**
  * Self-heal — mirrors lib/db/migrations/0005. Safe to call on boot.
  */
 export async function ensureDispatchPromptsSchema(): Promise<void> {

@@ -237,6 +237,7 @@ export type DispatchEvalAggregates = {
     fallback: DispatchEvalPromptVersionAgg[];
     commentator: DispatchEvalPromptVersionAgg[];
     banner: DispatchEvalPromptVersionAgg[];
+    judge: DispatchEvalPromptVersionAgg[];
   };
   topBannedPhrases: DispatchEvalBannedPhraseAgg[];
   /** Formatting track (deterministic). Score is 10 - issues, clamped. */
@@ -418,7 +419,7 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
   // Per-prompt-version aggregates. One query unioned across the four slots
   // so the route doesn't fire 4 round trips.
   const promptRows = await db.execute<{
-    slot: "polish" | "fallback" | "commentator" | "banner";
+    slot: "polish" | "fallback" | "commentator" | "banner" | "judge";
     hash: string;
     n: string;
     composite_mean: string | null;
@@ -440,6 +441,10 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
       SELECT 'banner', prompt_versions->>'banner',
              eval_composite_score, eval_banned_phrases_count
         FROM dispatch_archive WHERE prompt_versions ? 'banner'
+      UNION ALL
+      SELECT 'judge', prompt_versions->>'judge',
+             eval_composite_score, eval_banned_phrases_count
+        FROM dispatch_archive WHERE prompt_versions ? 'judge'
     )
     SELECT
       slot,
@@ -458,6 +463,7 @@ export async function getDispatchEvalAggregates(): Promise<DispatchEvalAggregate
     fallback: [],
     commentator: [],
     banner: [],
+    judge: [],
   };
   for (const r of promptRows.rows) {
     const agg: DispatchEvalPromptVersionAgg = {

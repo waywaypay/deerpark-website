@@ -31,6 +31,7 @@ import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { logUsage } from "./llm-usage";
 import { BANNED_PATTERNS, type Severity } from "./banned-phrases";
+import { recordPromptVersion } from "./dispatch-prompts";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
@@ -126,7 +127,7 @@ function scanForBannedPhrases(row: DispatchArchive): ScanResult {
 
 // LLM rubric ----------------------------------------------------------------
 
-const RUBRIC_SYSTEM_PROMPT = `You score archived dispatch newsletters against a fixed editorial rubric. The dispatch is a 10-item AI/tech digest with an editorial intro and 2-3 sentence commentary per item. The voice target is institutional / CIO-briefing analysis — sharp, varied, grounded in named workflows, actors, and operational mechanics.
+export const RUBRIC_SYSTEM_PROMPT = `You score archived dispatch newsletters against a fixed editorial rubric. The dispatch is a 10-item AI/tech digest with an editorial intro and 2-3 sentence commentary per item. The voice target is institutional / CIO-briefing analysis — sharp, varied, grounded in named workflows, actors, and operational mechanics.
 
 You will receive the subject, intro (item 00), and the full list of items 01..N (source, title, commentary). Return a JSON object with five 0-10 scores. For each dimension also return a short note (one sentence max) AND a "worstItems" array of up to 3 items that most hurt this dimension's score — each with the item number (the 2-digit prefix you see; use 0 for the intro) and a short quoted span (≤120 chars, copied verbatim from the offending text) that shows why. If the dimension scores 9+, return an empty worstItems array. The worstItems are the actionable output: an operator should be able to use them to rewrite exactly those items before next send.
 
@@ -260,9 +261,14 @@ function clampScore(n: number): number {
 async function runRubricLlm(row: DispatchArchive): Promise<{
   scores: DispatchEvalScores;
   model: string;
+  promptHash: string;
 } | { error: string }> {
   const setup = getClient();
   if (!setup) return { error: "no_api_key" };
+
+  // Register the active judge prompt every eval. First time a version is
+  // seen this writes a row; subsequent runs are a no-op upsert.
+  const promptHash = await recordPromptVersion("judge", RUBRIC_SYSTEM_PROMPT);
 
   let text = "";
   try {
@@ -306,7 +312,7 @@ async function runRubricLlm(row: DispatchArchive): Promise<{
       worstItems: coerceWorstItems(v.worstItems, itemCount),
     };
   }
-  return { scores: out as DispatchEvalScores, model: setup.model };
+  return { scores: out as DispatchEvalScores, model: setup.model, promptHash };
 }
 
 // Formatting eval -----------------------------------------------------------
@@ -500,6 +506,14 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
       scores.concreteness.score) /
     DIMENSIONS.length;
 
+  // Merge the judge hash into prompt_versions without clobbering the
+  // compose-time entries (polish/fallback/banner). Eval runs post-archive,
+  // so the row already has those keys set.
+  const mergedPromptVersions = {
+    ...(row.promptVersions ?? {}),
+    judge: rubric.promptHash,
+  };
+
   await db
     .update(dispatchArchiveTable)
     .set({
@@ -514,6 +528,7 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
       evalFormattingScore: formattingScore.toFixed(2),
       evalModel: rubric.model,
       evalRunAt: new Date(),
+      promptVersions: mergedPromptVersions,
     })
     .where(eq(dispatchArchiveTable.id, id));
 

@@ -14,15 +14,25 @@ import {
   composeDailyEmail,
   loadTopHeadlinesForEmail,
   BANNER_CID,
+  POLISH_SYSTEM_PROMPT,
+  COMMENTARY_FALLBACK_PROMPT,
   type ComposedEmail,
 } from "./top10-email";
 import {
   archiveDispatch,
   ensureDispatchArchiveSchema,
 } from "./dispatch-archive";
-import { ensureDispatchEvalSchema } from "./dispatch-eval";
-import { ensureDispatchPromptsSchema } from "./dispatch-prompts";
+import {
+  ensureDispatchEvalSchema,
+  RUBRIC_SYSTEM_PROMPT,
+} from "./dispatch-eval";
+import {
+  ensureDispatchPromptsSchema,
+  seedActivePrompts,
+} from "./dispatch-prompts";
 import { ensureDispatchLlmCallsSchema } from "./dispatch-llm-calls";
+import { SYSTEM_PROMPT as COMMENTATOR_SYSTEM_PROMPT } from "./headline-commentator";
+import { DEFAULT_BANNER_PROMPT_TEMPLATE } from "./image-gen";
 
 const RESEND_API = "https://api.resend.com/emails";
 
@@ -598,6 +608,22 @@ export async function ensureSchema(): Promise<void> {
   await ensureDispatchEvalSchema();
   await ensureDispatchPromptsSchema();
   await ensureDispatchLlmCallsSchema();
+  // Seed every active prompt into the registry so all five slots are
+  // visible in the admin Prompts tab even on a fresh DB or right after a
+  // prompt edit — without waiting for the next dispatch / commentator /
+  // eval run to lazily record them.
+  await seedActivePrompts({
+    polish: POLISH_SYSTEM_PROMPT,
+    fallback: COMMENTARY_FALLBACK_PROMPT,
+    commentator: COMMENTATOR_SYSTEM_PROMPT,
+    banner: DEFAULT_BANNER_PROMPT_TEMPLATE,
+    judge: RUBRIC_SYSTEM_PROMPT,
+  }).catch((err) => {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "Dispatch prompts: seed at boot failed",
+    );
+  });
 }
 
 let digestHandle: NodeJS.Timeout | null = null;

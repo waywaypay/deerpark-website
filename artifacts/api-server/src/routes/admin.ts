@@ -912,7 +912,13 @@ router.get("/admin/dispatch-archive/:id/llm-calls", async (req, res) => {
 
 router.get("/admin/dispatch-prompts", async (req, res) => {
   const slotParam = typeof req.query["slot"] === "string" ? req.query["slot"] : "";
-  const allowed: DispatchPromptSlot[] = ["polish", "fallback", "commentator", "banner"];
+  const allowed: DispatchPromptSlot[] = [
+    "polish",
+    "fallback",
+    "commentator",
+    "banner",
+    "judge",
+  ];
   const slot = (allowed as string[]).includes(slotParam)
     ? (slotParam as DispatchPromptSlot)
     : undefined;

@@ -2425,7 +2425,7 @@ type DispatchArchiveSummary = {
   itemCount: number;
 };
 
-type DispatchPromptSlot = "polish" | "fallback" | "commentator" | "banner";
+type DispatchPromptSlot = "polish" | "fallback" | "commentator" | "banner" | "judge";
 
 type DispatchPromptVersionMap = Partial<Record<DispatchPromptSlot, string>>;
 
@@ -2464,6 +2464,7 @@ const PROMPT_SLOTS: { id: DispatchPromptSlot; label: string }[] = [
   { id: "fallback", label: "Fallback" },
   { id: "commentator", label: "Commentator" },
   { id: "banner", label: "Banner" },
+  { id: "judge", label: "Judge" },
 ];
 
 type DispatchArchiveDetail = DispatchArchiveSummary & {
@@ -2523,6 +2524,7 @@ type DispatchEvalAggregates = {
     fallback: DispatchEvalPromptVersionAgg[];
     commentator: DispatchEvalPromptVersionAgg[];
     banner: DispatchEvalPromptVersionAgg[];
+    judge: DispatchEvalPromptVersionAgg[];
   };
   topBannedPhrases: DispatchEvalBannedPhraseAgg[];
   formatting: {
@@ -2903,14 +2905,14 @@ const EvalAggregatePanel = ({
   // hashes since one composite isn't signal). The server already orders by
   // composite_mean desc within each slot.
   const bestPromptPerSlot = (
-    ["polish", "fallback", "commentator", "banner"] as const
+    ["polish", "fallback", "commentator", "banner", "judge"] as const
   )
     .map((slot) => {
       const list = byPromptVersion[slot];
       const candidate = list.find((p) => p.n >= 2 && p.compositeMean !== null) ?? list[0];
       return candidate ? { slot, agg: candidate } : null;
     })
-    .filter((v): v is { slot: "polish" | "fallback" | "commentator" | "banner"; agg: DispatchEvalPromptVersionAgg } => v !== null);
+    .filter((v): v is { slot: "polish" | "fallback" | "commentator" | "banner" | "judge"; agg: DispatchEvalPromptVersionAgg } => v !== null);
   return (
     <div className="space-y-4">
       <div className="border border-foreground/15 bg-card p-4 space-y-2">
@@ -4014,10 +4016,12 @@ const PromptsTab = ({ token }: { token: string }) => {
         <div>
           <h2 className="text-2xl font-serif">Prompts</h2>
           <p className="text-sm text-muted-foreground font-light mt-1 max-w-2xl">
-            Content-addressed registry of every prompt that has ever driven a
-            dispatch composition. Identical prompts across deploys collapse to
-            one version automatically. Each archived dispatch references the
-            hashes that were active when it composed.
+            Content-addressed registry of every prompt that drives a
+            dispatch — composition (polish, fallback, commentator, banner)
+            and evaluation (judge). Identical prompts across deploys
+            collapse to one version automatically. Each archived dispatch
+            references the hashes that were active when it composed and
+            was evaluated.
           </p>
         </div>
         <Button
@@ -4056,8 +4060,8 @@ const PromptsTab = ({ token }: { token: string }) => {
 
       {items.length === 0 && !loading && (
         <div className="border border-foreground/15 bg-card px-4 py-6 text-sm text-muted-foreground">
-          No {slot} prompts seen yet. Once a dispatch composes, the active
-          prompt is hashed and recorded here.
+          No {slot} prompts recorded yet. The active prompt is registered
+          on the next api-server boot or pipeline run.
         </div>
       )}
 

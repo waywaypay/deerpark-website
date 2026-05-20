@@ -84,12 +84,16 @@ export type DispatchBannerEvalScores = {
 
 /** Content-addressed prompt versions in use at compose time.
  *  Hash → dispatchPromptsTable.hash. Per slot so the operator can see
- *  which polish prompt vs which fallback vs which commentator was active. */
+ *  which polish prompt vs which fallback vs which commentator vs which
+ *  judge rubric was active. `judge` is filled in after eval runs (which
+ *  happens post-archive), so older rows may have everything else but no
+ *  judge hash. */
 export type DispatchPromptVersionMap = {
   polish?: string;
   fallback?: string;
   commentator?: string;
   banner?: string;
+  judge?: string;
 };
 
 export const dispatchArchiveTable = pgTable(
