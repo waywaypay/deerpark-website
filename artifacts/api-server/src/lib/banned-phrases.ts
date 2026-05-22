@@ -11,6 +11,19 @@
 //     "leverages", etc) that catch both legitimate and synthetic uses.
 //     Tracked + displayed but NOT treated as failures by the gates, so
 //     incidental uses don't blow up the pipeline.
+//
+// Dynamic patterns: the eval-mining loop (dispatch-phrase-mining.ts)
+// writes auto-mined n-grams from worstItems quotes into
+// dispatch_phrase_proposals. Those rows are merged with the static list
+// at runtime via a process-local cache that reloads on a 5 min interval
+// and on demand after each mining run. The cache must be hydrated
+// asynchronously (loadDynamicBannedPatterns) before the sync gates have
+// the full picture; on boot the cache is empty and the gates fall back
+// to the static list only, which is safe.
+
+import { logger } from "./logger";
+import { db, dispatchPhraseProposalsTable } from "@workspace/db";
+import { isNull } from "drizzle-orm";
 
 export type Severity = "violation" | "warning";
 export type Pattern = { phrase: string; re: RegExp; severity: Severity };
@@ -85,13 +98,101 @@ export const BANNED_PATTERNS: Pattern[] = [
   { phrase: "increasingly (bare)", re: /\bincreasingly\b/i, severity: "warning" },
 ];
 
+// Process-local cache of patterns mined from prior dispatch evals. Hydrated
+// by loadDynamicBannedPatterns on boot and reloaded periodically (or on
+// demand after a mining run). Empty until the first successful load; the
+// gates degrade gracefully to static-only when empty.
+let dynamicPatternsCache: Pattern[] = [];
+let lastDynamicReloadAt = 0;
+const DYNAMIC_RELOAD_INTERVAL_MS = 5 * 60_000;
+
+/** Snapshot of the patterns the runtime gate currently checks against.
+ *  Static catalogue plus any mined proposals not flagged as dismissed.
+ *  Returned as a new array so callers can iterate without worrying
+ *  about cache mutation during reload. */
+export function getAllBannedPatterns(): Pattern[] {
+  return BANNED_PATTERNS.concat(dynamicPatternsCache);
+}
+
+/** Force a reload of the dynamic-patterns cache. Called by
+ *  dispatch-phrase-mining after each mining run so the next compose
+ *  sees the new patterns without waiting for the periodic refresh. */
+export async function reloadDynamicBannedPatterns(): Promise<void> {
+  try {
+    const rows = await db
+      .select({
+        phrase: dispatchPhraseProposalsTable.phrase,
+        regexSource: dispatchPhraseProposalsTable.regexSource,
+        severity: dispatchPhraseProposalsTable.severity,
+      })
+      .from(dispatchPhraseProposalsTable)
+      .where(isNull(dispatchPhraseProposalsTable.dismissedAt));
+    const next: Pattern[] = [];
+    for (const r of rows) {
+      const sev = r.severity === "violation" ? "violation" : "warning";
+      try {
+        next.push({
+          phrase: r.phrase,
+          re: new RegExp(r.regexSource, "i"),
+          severity: sev,
+        });
+      } catch (err) {
+        logger.warn(
+          { phrase: r.phrase, regexSource: r.regexSource, err: String(err) },
+          "Banned phrases: skipping invalid dynamic pattern",
+        );
+      }
+    }
+    dynamicPatternsCache = next;
+    lastDynamicReloadAt = Date.now();
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err) },
+      "Banned phrases: dynamic reload failed (keeping previous cache)",
+    );
+  }
+}
+
+/** Hydrate the cache if it hasn't been loaded recently. Cheap no-op if
+ *  the previous reload was within the interval. */
+export async function loadDynamicBannedPatterns(force = false): Promise<void> {
+  if (!force && Date.now() - lastDynamicReloadAt < DYNAMIC_RELOAD_INTERVAL_MS && lastDynamicReloadAt > 0) {
+    return;
+  }
+  await reloadDynamicBannedPatterns();
+}
+
+/** Start a periodic reload. The eval-mining path also calls
+ *  reloadDynamicBannedPatterns directly after each run for liveness; the
+ *  interval is the safety net for processes that didn't run mining
+ *  themselves. */
+let dynamicReloadTimer: NodeJS.Timeout | null = null;
+export function startDynamicBannedPatternsReload(intervalMs = DYNAMIC_RELOAD_INTERVAL_MS): void {
+  if (dynamicReloadTimer) return;
+  // Fire once immediately so first compose after boot has a non-empty
+  // dynamic cache when proposals exist.
+  void reloadDynamicBannedPatterns();
+  dynamicReloadTimer = setInterval(() => {
+    void reloadDynamicBannedPatterns();
+  }, intervalMs);
+}
+
+export function stopDynamicBannedPatternsReload(): void {
+  if (dynamicReloadTimer) {
+    clearInterval(dynamicReloadTimer);
+    dynamicReloadTimer = null;
+  }
+}
+
 /**
  * Find the first severity="violation" pattern matching `text`. Returns the
  * matched pattern + the regex match (so callers can extract the offending
- * sentence). Returns null when clean.
+ * sentence). Returns null when clean. Reads from the merged static +
+ * dynamic catalogue so auto-mined violations gate the writer/commentator
+ * the same way hand-coded ones do.
  */
 export function findFirstViolation(text: string): { pattern: Pattern; match: RegExpExecArray } | null {
-  for (const pat of BANNED_PATTERNS) {
+  for (const pat of getAllBannedPatterns()) {
     if (pat.severity !== "violation") continue;
     const re = new RegExp(pat.re.source, pat.re.flags.replace("g", ""));
     const m = re.exec(text);
@@ -101,12 +202,13 @@ export function findFirstViolation(text: string): { pattern: Pattern; match: Reg
 }
 
 /**
- * Drop sentences containing any severity="violation" banned phrase. Used to
- * sanitize input commentary before it's pasted back into an LLM polish
- * prompt — without this, the model sycophantically mirrors the banned
- * phrasing from previous-pass commentary into the supposedly-cleaned output.
- * Sentence-level granularity preserves usable context while removing the
- * offending clause. Returns empty string if every sentence violates.
+ * Drop sentences containing any severity="violation" banned phrase
+ * (static or dynamically mined). Used to sanitize input commentary
+ * before it's pasted back into an LLM polish prompt — without this, the
+ * model sycophantically mirrors the banned phrasing from previous-pass
+ * commentary into the supposedly-cleaned output. Sentence-level
+ * granularity preserves usable context while removing the offending
+ * clause. Returns empty string if every sentence violates.
  */
 export function stripViolationSentences(text: string): string {
   if (!text) return text;
