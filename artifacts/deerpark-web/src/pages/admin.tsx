@@ -18,6 +18,7 @@ import {
   Eye,
   MessageSquare,
   FileText,
+  ShieldAlert,
   Activity,
   Cpu,
   Signal,
@@ -3931,6 +3932,273 @@ const FeedbackTab = ({ token }: { token: string }) => {
   );
 };
 
+type PhraseProposal = {
+  phrase: string;
+  regexSource: string;
+  severity: "warning" | "violation";
+  hitCount: number;
+  hitDispatchIds: number[];
+  sample: string | null;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  promotedAt: string | null;
+  dismissedAt: string | null;
+};
+
+type MiningSummary = {
+  rowsScanned: number;
+  candidates: number;
+  upserted: number;
+  promotedToViolation: number;
+  skippedCoveredByStatic: number;
+};
+
+const PhraseProposalsTab = ({ token }: { token: string }) => {
+  const [items, setItems] = useState<PhraseProposal[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [mining, setMining] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [actionPhrase, setActionPhrase] = useState<string | null>(null);
+  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await apiFetch(token, "/admin/dispatch-phrase-proposals");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = (await res.json()) as { items: PhraseProposal[] };
+      setItems(json.items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load proposals");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const act = async (phrase: string, action: "dismiss" | "restore") => {
+    setActionPhrase(phrase);
+    setStatus(null);
+    try {
+      const res = await apiFetch(
+        token,
+        `/admin/dispatch-phrase-proposals/${encodeURIComponent(phrase)}/${action}`,
+        { method: "POST" },
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      setStatus({
+        ok: true,
+        message: action === "dismiss" ? `Dismissed "${phrase}"` : `Restored "${phrase}"`,
+      });
+      await load();
+    } catch (err) {
+      setStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Action failed",
+      });
+    } finally {
+      setActionPhrase(null);
+    }
+  };
+
+  const runMining = async () => {
+    setMining(true);
+    setStatus(null);
+    try {
+      const res = await apiFetch(token, "/admin/dispatch-phrase-proposals/mine", {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const summary = (await res.json()) as MiningSummary;
+      setStatus({
+        ok: true,
+        message:
+          `Scanned ${summary.rowsScanned} dispatches · ` +
+          `${summary.candidates} candidates · ` +
+          `${summary.upserted} upserted · ` +
+          `${summary.promotedToViolation} promoted to violation · ` +
+          `${summary.skippedCoveredByStatic} already covered`,
+      });
+      await load();
+    } catch (err) {
+      setStatus({
+        ok: false,
+        message: err instanceof Error ? err.message : "Mining failed",
+      });
+    } finally {
+      setMining(false);
+    }
+  };
+
+  const active = items.filter((it) => it.dismissedAt === null);
+  const violations = active.filter((it) => it.severity === "violation");
+  const warnings = active.filter((it) => it.severity === "warning");
+  const dismissed = items.filter((it) => it.dismissedAt !== null);
+
+  const Row = ({ it }: { it: PhraseProposal }) => {
+    const isAction = actionPhrase === it.phrase;
+    const isDismissed = it.dismissedAt !== null;
+    return (
+      <div className="border border-foreground/15 bg-card">
+        <div className="px-4 py-3 flex items-start gap-4 flex-wrap">
+          <div className="flex-1 min-w-[220px]">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span
+                className={`text-[10px] uppercase tracking-widest px-1.5 py-0.5 border ${
+                  it.severity === "violation"
+                    ? "border-red-500/40 text-red-300"
+                    : "border-amber-500/40 text-amber-300"
+                }`}
+              >
+                {it.severity}
+              </span>
+              <span className="font-mono text-sm text-foreground">{it.phrase}</span>
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                {it.hitCount} {it.hitCount === 1 ? "hit" : "hits"}
+              </span>
+            </div>
+            {it.sample && (
+              <p className="text-xs text-muted-foreground mt-1.5 italic line-clamp-2">
+                “{it.sample}”
+              </p>
+            )}
+            <div className="text-[10px] text-muted-foreground/80 font-mono mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5">
+              <span>first {formatDate(it.firstSeenAt)}</span>
+              <span>last {formatDate(it.lastSeenAt)}</span>
+              {it.promotedAt && <span>promoted {formatDate(it.promotedAt)}</span>}
+              {it.dismissedAt && <span>dismissed {formatDate(it.dismissedAt)}</span>}
+            </div>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void act(it.phrase, isDismissed ? "restore" : "dismiss")}
+            disabled={isAction}
+            className="rounded-none text-[10px] uppercase tracking-widest"
+          >
+            {isAction ? "…" : isDismissed ? "Restore" : "Dismiss"}
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-serif">Phrase proposals</h2>
+          <p className="text-sm text-muted-foreground font-light mt-1 max-w-2xl">
+            Auto-mined banned-phrase candidates from the eval's worst-item
+            quotes. A phrase that recurs across 2 dispatches becomes a
+            warning; 4 promotes to violation and the runtime gate blocks it
+            on the next send. Dismiss false positives — they'll be ignored
+            by the gate immediately.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void runMining()}
+            disabled={mining}
+            className="rounded-none text-[10px] uppercase tracking-widest"
+          >
+            <Play className={`w-3 h-3 ${mining ? "animate-pulse" : ""}`} />
+            {mining ? "Mining…" : "Mine now"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading}
+            className="rounded-none text-[10px] uppercase tracking-widest"
+          >
+            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {status && (
+        <div
+          className={`border px-4 py-3 text-xs ${
+            status.ok
+              ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-300"
+              : "border-red-500/30 bg-red-500/5 text-red-300"
+          }`}
+        >
+          {status.message}
+        </div>
+      )}
+
+      {error && (
+        <div className="border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="border border-foreground/15 bg-card px-3 py-2">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Violations (active)
+          </div>
+          <div className="text-2xl font-serif text-red-300 mt-0.5">{violations.length}</div>
+        </div>
+        <div className="border border-foreground/15 bg-card px-3 py-2">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Warnings (active)
+          </div>
+          <div className="text-2xl font-serif text-amber-300 mt-0.5">{warnings.length}</div>
+        </div>
+        <div className="border border-foreground/15 bg-card px-3 py-2">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Dismissed
+          </div>
+          <div className="text-2xl font-serif text-muted-foreground mt-0.5">
+            {dismissed.length}
+          </div>
+        </div>
+      </div>
+
+      {items.length === 0 && !loading && (
+        <div className="border border-foreground/15 bg-card px-4 py-6 text-sm text-muted-foreground">
+          No proposals yet. Once a few dispatches have been eval'd, recurring
+          phrases from worst-item quotes will surface here.
+        </div>
+      )}
+
+      {violations.length > 0 && (
+        <div className="space-y-2">
+          <div className="section-label">Active violations</div>
+          {violations.map((it) => (
+            <Row key={it.phrase} it={it} />
+          ))}
+        </div>
+      )}
+
+      {warnings.length > 0 && (
+        <div className="space-y-2">
+          <div className="section-label">Active warnings</div>
+          {warnings.map((it) => (
+            <Row key={it.phrase} it={it} />
+          ))}
+        </div>
+      )}
+
+      {dismissed.length > 0 && (
+        <div className="space-y-2">
+          <div className="section-label">Dismissed</div>
+          {dismissed.map((it) => (
+            <Row key={it.phrase} it={it} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PromptsTab = ({ token }: { token: string }) => {
   const [slot, setSlot] = useState<DispatchPromptSlot>("polish");
   const [items, setItems] = useState<DispatchPromptSummary[]>([]);
@@ -4145,7 +4413,7 @@ const PromptsTab = ({ token }: { token: string }) => {
   );
 };
 
-type DispatchSection = "headlines" | "judge" | "writers" | "emails" | "feedback" | "prompts";
+type DispatchSection = "headlines" | "judge" | "writers" | "emails" | "feedback" | "phrases" | "prompts";
 
 type WorkflowNodeSpec = {
   id: DispatchSection;
@@ -4190,6 +4458,13 @@ const WORKFLOW_NODES: WorkflowNodeSpec[] = [
     Icon: MessageSquare,
     description: "Rubric scores, banned-phrase scan, and operator feedback",
     io: "sends → scored dataset",
+  },
+  {
+    id: "phrases",
+    label: "Phrase proposals",
+    Icon: ShieldAlert,
+    description: "Auto-mined banned-phrase candidates from worst-item quotes",
+    io: "eval → gate corpus",
   },
   {
     id: "prompts",
@@ -4344,6 +4619,7 @@ const DispatchView = ({ token }: { token: string }) => {
         {section === "writers" && <WriterAgentsTab token={token} />}
         {section === "emails" && <EmailAgentsTab token={token} />}
         {section === "feedback" && <FeedbackTab token={token} />}
+        {section === "phrases" && <PhraseProposalsTab token={token} />}
         {section === "prompts" && <PromptsTab token={token} />}
       </div>
     );

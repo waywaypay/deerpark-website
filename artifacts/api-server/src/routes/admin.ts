@@ -60,6 +60,12 @@ import {
 } from "../lib/dispatch-archive";
 import { evaluateDispatch, computeEngagementForDispatch } from "../lib/dispatch-eval";
 import {
+  dismissPhraseProposal,
+  listPhraseProposals,
+  mineBannedPhraseProposals,
+  restorePhraseProposal,
+} from "../lib/dispatch-phrase-mining";
+import {
   getDispatchPrompt,
   listDispatchPrompts,
   type DispatchPromptSlot,
@@ -962,6 +968,73 @@ router.get("/admin/dispatch-prompts/:hash", async (req, res) => {
     return res.json({ item: row });
   } catch (err) {
     req.log.error({ err, hash }, "Failed to load dispatch prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Auto-mined banned-phrase proposals surfaced by dispatch-phrase-mining.
+// Operator surface: list, dismiss false positives, restore previously
+// dismissed rows, or kick off a manual mining pass. All mutations call
+// reloadDynamicBannedPatterns under the hood (in the mining lib) so
+// the runtime gate picks up the change on the next compose.
+router.get("/admin/dispatch-phrase-proposals", async (req, res) => {
+  try {
+    const items = await listPhraseProposals();
+    return res.json({
+      items: items.map((r) => ({
+        phrase: r.phrase,
+        regexSource: r.regexSource,
+        severity: r.severity,
+        hitCount: r.hitCount,
+        hitDispatchIds: r.hitDispatchIds,
+        sample: r.sample,
+        firstSeenAt: r.firstSeenAt.toISOString(),
+        lastSeenAt: r.lastSeenAt.toISOString(),
+        promotedAt: r.promotedAt ? r.promotedAt.toISOString() : null,
+        dismissedAt: r.dismissedAt ? r.dismissedAt.toISOString() : null,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to list phrase proposals");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/admin/dispatch-phrase-proposals/:phrase/dismiss", async (req, res) => {
+  const phrase = decodeURIComponent(String(req.params["phrase"] ?? "")).trim();
+  if (!phrase) return res.status(400).json({ error: "Missing phrase" });
+  try {
+    const ok = await dismissPhraseProposal(phrase);
+    if (!ok) return res.status(404).json({ error: "Not found" });
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err, phrase }, "Failed to dismiss phrase proposal");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/admin/dispatch-phrase-proposals/:phrase/restore", async (req, res) => {
+  const phrase = decodeURIComponent(String(req.params["phrase"] ?? "")).trim();
+  if (!phrase) return res.status(400).json({ error: "Missing phrase" });
+  try {
+    const ok = await restorePhraseProposal(phrase);
+    if (!ok) return res.status(404).json({ error: "Not found" });
+    return res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err, phrase }, "Failed to restore phrase proposal");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Manual mining kick — usually mining runs automatically after every
+// eval, but the operator may want to re-run it after dismissing a row
+// or after a backfill that introduced new worstItems quotes.
+router.post("/admin/dispatch-phrase-proposals/mine", async (req, res) => {
+  try {
+    const summary = await mineBannedPhraseProposals();
+    return res.json(summary);
+  } catch (err) {
+    req.log.error({ err }, "Manual phrase mining failed");
     return res.status(500).json({ error: "Internal server error" });
   }
 });
