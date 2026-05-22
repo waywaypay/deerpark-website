@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { SOURCES, type SourceConfig } from "./headline-sources";
 import { logger } from "./logger";
 import { scoreUnscoredHeadlines } from "./headline-judge";
-import { generateMissingCommentary } from "./headline-commentator";
+import { clearViolatingCommentary, generateMissingCommentary } from "./headline-commentator";
 
 type NormalizedItem = Omit<InsertHeadline, "id" | "createdAt" | "relevanceScore">;
 
@@ -481,7 +481,7 @@ export async function ingestAllSources(): Promise<IngestResult[]> {
   // calls into the same wall just deepens the abuse-threshold cooldown.
   // Next ingest tick (15 min later) gets a fresh shot at both.
   scoreUnscoredHeadlines()
-    .then((judgeSummary) => {
+    .then(async (judgeSummary) => {
       const judgeStuck = judgeSummary.scored === 0 && judgeSummary.errors > 0;
       if (judgeStuck) {
         logger.info(
@@ -489,6 +489,17 @@ export async function ingestAllSources(): Promise<IngestResult[]> {
           "Headline commentator: skipped — judge made no progress this tick",
         );
         return;
+      }
+      // Clear stale slop before regen so rows committed before a banned-phrase
+      // was added get re-evaluated this tick. Without this, commented_at is
+      // sticky and offending text lives on the live site forever.
+      try {
+        const cleared = await clearViolatingCommentary();
+        if (cleared > 0) {
+          logger.info({ cleared }, "Headline commentator: cleared stale commentary");
+        }
+      } catch (err) {
+        logger.warn({ err }, "Headline commentator: stale-clear sweep failed");
       }
       return generateMissingCommentary().catch((err) => {
         logger.warn({ err }, "Headline commentator: post-judge run failed");

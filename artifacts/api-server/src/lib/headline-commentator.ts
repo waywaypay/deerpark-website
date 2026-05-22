@@ -12,7 +12,7 @@
 
 import OpenAI from "openai";
 import { db, headlinesTable } from "@workspace/db";
-import { and, gte, isNull, or, sql } from "drizzle-orm";
+import { and, gte, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
 import { logUsage } from "./llm-usage";
@@ -277,6 +277,48 @@ export type CommentatorRunSummary = {
   batches: number;
   errors: number;
 };
+
+/**
+ * NULL out commentary on rows whose stored text violates the current
+ * banned-phrase catalogue. The parseCommentary gate stops slop from being
+ * persisted going forward, but rows committed before a pattern was added —
+ * or before the gate existed — keep their stale text indefinitely, because
+ * generateMissingCommentary only re-runs where `commentary IS NULL`.
+ *
+ * This sweeps the same 7d lookback the commentator regenerates against, so
+ * cleared rows are picked up by the next post-ingest commentator tick. Cost
+ * is one SELECT + N small UPDATEs per call; with ~hundreds of rows in the
+ * window it's negligible vs the LLM calls that follow.
+ */
+export async function clearViolatingCommentary(): Promise<number> {
+  const since = new Date(Date.now() - COMMENTATOR_LOOKBACK_DAYS * 24 * 60 * 60 * 1000);
+  const rows = await db
+    .select({ id: headlinesTable.id, commentary: headlinesTable.commentary })
+    .from(headlinesTable)
+    .where(
+      and(
+        isNotNull(headlinesTable.commentary),
+        gte(headlinesTable.publishedAt, since),
+      ),
+    );
+  let cleared = 0;
+  for (const row of rows) {
+    const text = row.commentary;
+    if (!text) continue;
+    const violation = findFirstViolation(text);
+    if (!violation) continue;
+    await db
+      .update(headlinesTable)
+      .set({ commentary: null, commentedAt: null })
+      .where(sql`${headlinesTable.id} = ${row.id}`);
+    cleared++;
+    logger.info(
+      { id: row.id, phrase: violation.pattern.phrase },
+      "Headline commentator: cleared stale commentary on banned phrase",
+    );
+  }
+  return cleared;
+}
 
 /**
  * Generate commentary for top-eligible headlines that don't have it yet.
