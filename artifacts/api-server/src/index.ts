@@ -16,6 +16,7 @@ import {
   ensureDispatchEvalSchema,
   startDispatchEngagementScheduler,
 } from "./lib/dispatch-eval";
+import { startDynamicBannedPatternsReload } from "./lib/banned-phrases";
 
 const rawPort = process.env["PORT"];
 
@@ -70,6 +71,11 @@ app.listen(port, (err) => {
       logger.error({ err }, "Dispatch eval: ensureSchema failed");
     }),
   ]).finally(() => {
+    // Hydrate the dynamic banned-phrase cache once the dispatch_eval
+    // tables (including dispatch_phrase_proposals) are guaranteed to
+    // exist, then start the periodic reload. Independent of the
+    // headline scheduler.
+    startDynamicBannedPatternsReload();
     if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
       const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
       startHeadlineScheduler(intervalMinutes * 60 * 1000);

@@ -49,7 +49,12 @@ import {
 import { and, desc, eq, gte, isNotNull, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { logger } from "./logger";
 import { logUsage } from "./llm-usage";
-import { BANNED_PATTERNS, type Severity } from "./banned-phrases";
+import { getAllBannedPatterns, type Severity } from "./banned-phrases";
+import {
+  ensureDispatchPhraseProposalsSchema,
+  minePhraseProposalsInBackground,
+} from "./dispatch-phrase-mining";
+import { invalidateBestExamplesCache } from "./dispatch-best-examples";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 
@@ -138,7 +143,11 @@ function scanForBannedPhrases(row: DispatchArchive): ScanResult {
     tallies.set(phrase, entry);
   };
 
-  for (const pat of BANNED_PATTERNS) {
+  // Static catalogue + dynamically mined proposals. Dynamic patterns are
+  // refreshed periodically by the banned-phrases module (and on demand
+  // after each mining run); reading the merged list here means the
+  // eval scan stays in sync with whatever the runtime gate is enforcing.
+  for (const pat of getAllBannedPatterns()) {
     bump(pat.phrase, pat.severity, "subject", countMatches(pat.re, subject));
     bump(pat.phrase, pat.severity, "intro", countMatches(pat.re, introText));
     items.forEach((text, i) =>
@@ -1031,6 +1040,14 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
     },
     "Dispatch eval: complete",
   );
+
+  // Closed-loop hooks. Mining tries to extract recurring n-grams from
+  // the worstItems quotes we just persisted, and the best-examples cache
+  // gets invalidated so the next compose pulls fresh exemplars that
+  // include this row when its composite warrants. Both are fire-and-
+  // forget — eval already returned its scores before this runs.
+  minePhraseProposalsInBackground();
+  invalidateBestExamplesCache();
   return {
     ok: true,
     composite,
@@ -1217,6 +1234,10 @@ export async function ensureDispatchEvalSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS dispatch_archive_eval_engagement_run_at_idx
       ON dispatch_archive (eval_engagement_run_at)
   `);
+  // Closed-loop phrase-mining table (migrations/0009). Schema lives in
+  // its own module but the eval pipeline is the natural owner of "make
+  // sure the eval-related tables exist before the first eval runs."
+  await ensureDispatchPhraseProposalsSchema();
 }
 
 /** Exposed for tests / admin so the current rubric version can be displayed

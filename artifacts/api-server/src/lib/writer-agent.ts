@@ -22,6 +22,10 @@ import { selectTopHeadlines } from "./top-headlines";
 import { computeCostUsd, logUsage } from "./llm-usage";
 import { findFirstViolation } from "./banned-phrases";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
+import {
+  formatBestExamplesBlock,
+  getRecentBestExamples,
+} from "./dispatch-best-examples";
 
 // Provider-agnostic via OpenAI-compatible SDK. Default points at Venice AI;
 // override with LLM_BASE_URL to swap to OpenRouter, Together, Anthropic
@@ -974,6 +978,15 @@ export async function generateAndSavePost(opts: {
       ].join("\n")
     : "";
 
+  // Few-shot exemplars from recent high-composite dispatches. Prepended
+  // to the user message (NOT the system prompt) so the content-
+  // addressed base-prompt hash stays stable while the exemplars rotate
+  // per send. Empty when no dispatch has yet cleared the composite
+  // floor; the static examples in DEFAULT_BASE_PROMPT still anchor the
+  // model in that case.
+  const bestExamples = await getRecentBestExamples(3);
+  const bestExamplesBlock = formatBestExamplesBlock(bestExamples);
+
   const userMessage = [
     `Today is ${new Date().toISOString().slice(0, 10)}.`,
     modeHint === "auto"
@@ -988,6 +1001,7 @@ export async function generateAndSavePost(opts: {
     "",
     formatRecentPosts(recentPosts),
     "",
+    ...(bestExamplesBlock ? [bestExamplesBlock, ""] : []),
     `Headlines (${corpus.length} items from the last ${opts.corpusDays ?? 7} days):`,
     formatCorpus(corpus),
   ].join("\n");

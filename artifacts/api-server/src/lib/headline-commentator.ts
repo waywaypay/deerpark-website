@@ -17,6 +17,10 @@ import { logger } from "./logger";
 import { MIN_TOP_RELEVANCE_SCORE } from "./headline-judge";
 import { logUsage } from "./llm-usage";
 import { findFirstViolation } from "./banned-phrases";
+import {
+  formatBestExamplesBlock,
+  getRecentBestExamples,
+} from "./dispatch-best-examples";
 
 const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 // Venice removed Anthropic models from its catalog, so `claude-haiku-*` no
@@ -208,7 +212,18 @@ async function commentBatch(
   items: CommentaryInput[],
 ): Promise<ParsedCommentary> {
   const expectedIds = new Set(items.map((it) => it.id));
-  const userMessage = `Write commentary for these ${items.length} headlines:\n\n${formatBatch(items)}`;
+  // Few-shot exemplars from recent high-composite dispatches, fetched
+  // from the in-process cache. Empty block until the eval pipeline has
+  // produced enough good rows to mine from; gates degrade gracefully
+  // to the static examples already baked into SYSTEM_PROMPT.
+  // Prepending to the user message (NOT the system prompt) keeps the
+  // content-addressed commentator prompt hash stable as exemplars
+  // rotate per batch.
+  const examples = await getRecentBestExamples(3);
+  const examplesBlock = formatBestExamplesBlock(examples);
+  const userMessage = examplesBlock
+    ? `${examplesBlock}\n\n--- NEW HEADLINES TO WRITE ---\n\nWrite commentary for these ${items.length} headlines:\n\n${formatBatch(items)}`
+    : `Write commentary for these ${items.length} headlines:\n\n${formatBatch(items)}`;
 
   const response = await client.chat.completions.create({
     model,
