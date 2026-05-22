@@ -276,7 +276,27 @@ Title
 Sentence case, ≤ 80 chars. Names the day's editorial angle, not a single feature. "Vertical AI hardens around cybersecurity and finance" beats "Big AI news today."
 
 Dek
-1–2 sentences. A condensed version of the intro thesis from Part 1. State the through-line.
+1–2 sentences, 25–45 words. The dek is the *through-line of the whole day*, not a summary of any single item. It compresses the intro thesis from Part 1: name the pattern across 2+ stories, or name the operational shift the day's headlines surface.
+
+The dek is held to the SAME editorial standard as the body. Every "🚫 BANNED" list above (cinematic language, hedging, AI-ese filler, abstract business nouns, vague cautionary endings, "lack of clarity" cluster, dramatic verbs, corporate-checklist jargon) applies to the dek. The banned-phrase gate scans the dek; violations reject the whole post.
+
+Hard rules:
+- DO NOT describe one company's announcement ("OpenAI showcased…", "This designation…", "The initiative aims to…"). That's an item summary, not a dek.
+- DO NOT open with "This X highlights/showcases/demonstrates Y's commitment to Z" — that's press-release register.
+- DO NOT use filler verbs ("highlights", "showcases", "demonstrates", "underscores", "reflects", "signals" used loosely, "aims to", "seeks to", "fostering", "enhancing", "positioning"). Use a concrete verb tied to a named subject.
+- DO NOT speculate ("potentially setting a new standard", "may boost credibility", "could reshape"). State what's observable across the day, not what might happen.
+- DO NOT use abstract category nouns where the body would require specificity ("pressing ecological issues", "the enterprise market", "logistical efficiency", "productivity", "innovation", "sustainable solutions"). Same precision bar as Part 1.
+- The dek MUST name at least one concrete anchor: a workflow, a buyer category, a deployment surface, a governance structure, an industry vertical, or 2+ named companies that share the day's thread. If you can't, the through-line isn't strong enough — fall back to an observational dek that names the cluster ("Three funding rounds, all in agentic-SOC tooling.").
+
+Weak deks (rewrite — these are exactly the pattern to avoid):
+- "OpenAI showcased how Virgin Atlantic utilizes Codex for faster shipping processes. The integration of Codex into their operations highlights the airline's commitment to enhancing logistical efficiency, potentially setting a new standard for the aviation industry." — single-item, press-release, speculative.
+- "This designation highlights OpenAI's strong positioning in the enterprise market, particularly for tools like Codex, which are used by developers across various industries to enhance productivity." — single-item, abstract, AI-ese ("positioning", "various industries", "enhance productivity").
+- "The initiative aims to support startups and projects focused on using AI to address environmental challenges in the region. By fostering innovation, Google DeepMind seeks to create sustainable solutions to pressing ecological issues." — brochure register ("aims to", "fostering", "pressing ecological issues"), no concrete anchor.
+
+Strong deks (use this register):
+- "Vertical AI vendors are organizing around named enterprise workflows — cybersecurity triage, claims review, financial-services research — while horizontal API access fades from the GTM motion. Hebbia, Rogo, and today's Anthropic financial-services agent sit on this thread."
+- "Three of the day's top items — CrowdStrike, Wiz, and a $40M agentic-SOC Series B — push the same buyer: enterprise security teams that now evaluate AI on access-control and audit trails, not benchmarks."
+- "OpenAI's CFO hire and Anthropic's vertical-agent launch land the same week investors started pricing the model business on cost-of-revenue rather than topline growth."
 
 🧾 OUTPUT FORMAT (STRICT)
 
