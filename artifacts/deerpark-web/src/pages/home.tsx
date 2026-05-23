@@ -949,50 +949,6 @@ const Products = () => (
   </section>
 );
 
-const About = () => (
-  <section id="about" className="py-32 border-t border-foreground/10">
-    <div className="max-w-4xl mx-auto px-6">
-      <FadeIn>
-        <div className="flex items-center gap-3 mb-10 justify-center">
-          <div className="h-[1px] w-12 bg-primary" />
-          <span className="section-label">About DeerPark</span>
-          <div className="h-[1px] w-12 bg-primary" />
-        </div>
-      </FadeIn>
-
-      <FadeIn delay={0.05}>
-        <h2 className="text-4xl md:text-6xl font-serif leading-[1.05] mb-10 text-center">
-          We exist to put real AI inside the organizations doing real work.
-        </h2>
-      </FadeIn>
-
-      <FadeIn delay={0.1}>
-        <p className="text-xl md:text-2xl text-muted-foreground font-light leading-relaxed mb-8 text-center">
-          The frontier of AI shouldn't belong only to the companies that can afford a hundred-person ML team. We build production systems inside operating companies — close to the workflow, accountable to the metric, owned by the people who run the business.
-        </p>
-      </FadeIn>
-
-      <FadeIn delay={0.15}>
-        <p className="text-lg text-muted-foreground font-light leading-relaxed mb-12 text-center">
-          We are operators, not vendors. We sit in your repo and your standup until the system runs, hand over the code and the keys, and measure ourselves on the outcome that matters to you — not the hours we billed.
-        </p>
-      </FadeIn>
-
-      <FadeIn delay={0.2}>
-        <div className="flex justify-center">
-          <a
-            href="mailto:contact@deerpark.io"
-            className="inline-flex items-center gap-2 text-sm text-foreground hover:text-foreground/70 transition-colors"
-          >
-            <span className="underline underline-offset-4">Get in touch</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </a>
-        </div>
-      </FadeIn>
-    </div>
-  </section>
-);
-
 const FAQ_ITEMS = [
   {
     q: "Do you train our team, or just build the tool?",
@@ -1088,7 +1044,6 @@ export default function Home() {
         <Services />
         <Products />
         <CaseStudy />
-        <About />
         <FAQ />
       </main>
       <ConsultationFAB />
