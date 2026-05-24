@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, Users, Check, Plus, Minus, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, Users, Check, Plus, Minus, MapPin, Mic, FolderInput, Sparkles, Files, Building2, Mail } from "lucide-react";
 import { ConsultCTA, FadeIn, Navbar, Footer, ConsultationFAB } from "@/components/site-layout";
 
 const TICKER_ITEMS = [
@@ -516,6 +516,72 @@ const PR_WORKFLOW_STEPS = [
   },
 ] as const;
 
+const NEWS_DIGEST_STEPS = [
+  {
+    icon: Building2,
+    label: "Watchlist",
+    detail: "A curated list of companies — portfolio, competitors, partners — editable from any device.",
+  },
+  {
+    icon: ScanSearch,
+    label: "Scan",
+    detail: "Press releases, filings, and trade media are pulled continuously across the week.",
+  },
+  {
+    icon: Sparkles,
+    label: "Rank",
+    detail: "Stories are deduped, grouped by company, and scored for relevance — noise out, signal in.",
+  },
+  {
+    icon: Mail,
+    label: "Deliver",
+    detail: "One email lands every Monday with the week's stories embedded inline, organized by company.",
+  },
+] as const;
+
+const NewsDigestDiagram = () => (
+  <div className="border border-background/20 p-6 md:p-10">
+    <div className="flex items-baseline justify-between gap-4 mb-8">
+      <div className="section-label !text-background/60">How it runs</div>
+      <div className="text-[10px] uppercase tracking-[0.18em] text-background/40 font-sans">
+        Weekly · Monday 7am
+      </div>
+    </div>
+    <ol className="relative">
+      {NEWS_DIGEST_STEPS.map((step, i) => {
+        const Icon = step.icon;
+        const last = i === NEWS_DIGEST_STEPS.length - 1;
+        return (
+          <li
+            key={step.label}
+            className="relative grid grid-cols-[auto_1fr] gap-5 md:gap-7 pb-9 last:pb-0"
+          >
+            {!last && (
+              <div className="absolute left-[1.125rem] md:left-[1.375rem] top-10 md:top-12 bottom-1 w-px bg-background/15" />
+            )}
+            <div className="relative w-9 h-9 md:w-11 md:h-11 rounded-full border border-background/30 bg-foreground flex items-center justify-center text-primary shrink-0">
+              <Icon className="w-4 h-4 md:w-5 md:h-5" aria-hidden />
+            </div>
+            <div className="min-w-0 pt-1.5 md:pt-2">
+              <div className="flex items-baseline gap-3 mb-1.5">
+                <span className="font-sans text-[11px] tabular-nums text-background/40">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="text-[10px] uppercase tracking-[0.18em] text-background/55 font-sans">
+                  {step.label}
+                </span>
+              </div>
+              <div className="text-base md:text-lg font-serif text-background/90 leading-snug">
+                {step.detail}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  </div>
+);
+
 const PRWorkflowDiagram = () => (
   <div className="border border-background/20 p-6 md:p-10">
     <div className="flex items-baseline justify-between gap-4 mb-8">
@@ -622,6 +688,39 @@ const CASE_STUDIES: CaseStudyData[] = [
     outcome: (
       <>
         What used to take <span className="text-background font-medium">3 hours of hands-on work is now 20 minutes of review</span>. The team kept full editorial control; the freed time went into sharper narrative work and tighter sign-off cycles.
+      </>
+    ),
+  },
+  {
+    id: "news-intelligence",
+    eyebrow: "News Intelligence",
+    headline: "A weekly briefing on the companies that matter.",
+    narrativeOnly: true,
+    diagram: <NewsDigestDiagram />,
+    intro: [
+      "A principal was tracking 30+ portfolio companies, competitors, and partners — and skimming the same handful of news sites every morning to catch anything that mattered. Half the day's signal was diluted across noise; the other half got missed entirely on busy weeks.",
+      "We built a personal news pipeline driven by a single watchlist. Press releases, regulatory filings, and trade media are pulled continuously across the week. Each story is deduped, grouped by company, and scored for relevance, so the same headline doesn't show up three times under three sources. Every Monday at 7am, one email arrives — every new story from the week embedded inline, organized by company, with a one-line take on why each one matters.",
+      "Reading the week now takes about ten minutes over coffee instead of forty-five minutes a day across five tabs. Nothing material has been missed since the system shipped, and the watchlist is editable from any phone — add a company, drop a competitor, the next digest reflects it.",
+    ],
+    before:
+      "A daily habit of scanning five sites for thirty companies. Easy to miss things on busy weeks; impossible to keep consistent across travel.",
+    after:
+      "One email, every Monday morning. Each new story embedded inline, grouped by company, with a one-line take on why it matters.",
+    metrics: [
+      { label: "Time per week", value: "5h → 10m" },
+      { label: "Companies tracked", value: "30+" },
+      { label: "Delivery", value: "Mon · 7am" },
+    ],
+    delivered: [
+      { label: "Pipeline", detail: "Continuous source monitoring across press releases, filings, and trade media — keyed off a watchlist the principal owns and edits directly." },
+      { label: "Relevance", detail: "Per-story dedupe, company grouping, and a relevance score so repeats and noise drop out before the email is assembled." },
+      { label: "Delivery", detail: "A single Monday-morning email with every new story embedded inline and a one-line take on why each one matters — readable on phone in one pass." },
+      { label: "Control", detail: "Watchlist edits land in the next digest. Add a company, drop a competitor, retitle a bucket — no engineering loop." },
+      { label: "Deployment", detail: "Runs on a small managed schedule with cost and delivery telemetry. Source list and prompts are versioned and easy to tune." },
+    ],
+    outcome: (
+      <>
+        A single Monday-morning email now carries the week's full picture — <span className="text-background font-medium">ten minutes of reading</span> in place of a daily scan habit, with the watchlist editable from anywhere.
       </>
     ),
   },
