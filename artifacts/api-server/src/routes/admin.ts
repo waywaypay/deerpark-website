@@ -37,6 +37,9 @@ import {
   startWriterRun,
   getRunStatus,
   clearRunState,
+  getWriterEngine,
+  setWriterEngine,
+  isValidWriterEngine,
   type WriterMode,
 } from "../lib/writer-agent";
 import {
@@ -542,6 +545,37 @@ router.delete("/admin/writers/:id/prompt", async (req, res) => {
     return res.json({ ok: true });
   } catch (err) {
     req.log.error({ err, id, slot }, "Failed to reset prompt");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Engine selector — settings-backed, no env var. Flipping here takes effect
+// on the next writer run for the agent.
+router.get("/admin/writers/:id/engine", async (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  try {
+    const engine = await getWriterEngine(id);
+    return res.json({ engine });
+  } catch (err) {
+    req.log.error({ err, id }, "Failed to read writer engine");
+    return res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.put("/admin/writers/:id/engine", async (req, res) => {
+  const id = req.params["id"];
+  if (id !== "daily-writer") return res.status(404).json({ error: "Unknown writer" });
+  const body = (req.body ?? {}) as { engine?: unknown };
+  const engine = typeof body.engine === "string" ? body.engine : "";
+  if (!isValidWriterEngine(engine)) {
+    return res.status(400).json({ error: "Invalid engine (expected 'v1' or 'v2')" });
+  }
+  try {
+    await setWriterEngine(id, engine);
+    return res.json({ ok: true, engine });
+  } catch (err) {
+    req.log.error({ err, id, engine }, "Failed to set writer engine");
     return res.status(500).json({ error: "Internal server error" });
   }
 });
