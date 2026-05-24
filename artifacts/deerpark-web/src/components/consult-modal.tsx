@@ -163,9 +163,8 @@ export function ConsultModal({ open, onClose, source }: Props) {
               Tell us where to send a few questions.
             </h2>
             <p className="text-sm text-muted-foreground font-light leading-relaxed mb-6">
-              Drop your name and email. We'll send a short discovery brief — a
-              few PM-style questions about your workflow — so the first call
-              starts in the right place.
+              Drop your name and email. We'll send initial discovery questions
+              so the first call starts in the right place.
             </p>
 
             <form onSubmit={handleSubmit} className="space-y-4">
