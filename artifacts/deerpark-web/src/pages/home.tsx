@@ -170,11 +170,12 @@ const SERVICE_PILLARS = [
   {
     phase: "03",
     title: "Build",
-    subtitle: "Custom AI Software",
+    subtitle: "Custom Software",
     icon: Layers,
-    summary: "We design and ship the custom applications, agents, and integrations your team needs — built on your stack, in your cloud, with the runbooks and training to run them after handoff.",
+    summary: "We design and ship the custom applications and integrations your team needs — AI-powered when it earns its place, classical software when it doesn't. Built on your stack, in your cloud, with the runbooks and training to run it after handoff.",
     services: [
-      "Custom AI Application Development",
+      "Custom Application Development",
+      "AI Agents & Automations",
       "System Integration",
       "Runbooks & 30-Day On-Call",
     ],
