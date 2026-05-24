@@ -28,7 +28,11 @@
 // Output is the same `Draft` and `WriteResult` shapes as v1, and the row
 // gets persisted to `postsTable` identically — so the eval rubric, the
 // archive, the email digest, and the public site all consume v2 output
-// without changes. Toggle via env WRITER_ENGINE=v2.
+// without changes. Toggle via the admin "Writer Engine" selector — the
+// setting is persisted in the settings table under `writer.<agentId>.engine`
+// (see getWriterEngine in writer-agent.ts). v2 doesn't support
+// modeHint="auto"; the dispatcher logs and falls through to v1 in that
+// case.
 
 import OpenAI from "openai";
 import {

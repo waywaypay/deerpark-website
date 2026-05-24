@@ -35,13 +35,13 @@ const DEFAULT_BASE_URL = "https://api.venice.ai/api/v1";
 // Venice removed Anthropic models from its catalog, so `claude-haiku-*` no
 // longer resolves on /chat/completions — the commentator was silently
 // failing every batch (caught in the try/catch in generateMissingCommentary,
-// streak hits ERROR_STREAK_BREAK, bails), leaving `commentary` NULL on
-// every new top-eligible row. The judge hit the same wall and swapped to
-// gpt-4o-mini; we follow it here so dispatch headlines get their briefs
-// back. The previous concern with gpt-4o-mini was AI-slop register
-// ("This [noun]" leads, "could reshape"); the banned-phrase gate at
-// parseCommentary now drops those entries, so the prompt-following gap is
-// covered at the output filter instead of the model choice.
+// streak hits ERROR_BAIL, bails), leaving `commentary` NULL on every new
+// top-eligible row. The judge hit the same wall and swapped to gpt-4o-mini;
+// we follow it here so dispatch headlines get their briefs back. The
+// previous concern with gpt-4o-mini was AI-slop register ("This [noun]"
+// leads, "could reshape"); the inline banned-phrase gate in commentOne
+// now drops those entries, so the prompt-following gap is covered at the
+// output filter instead of the model choice.
 const DEFAULT_MODEL = "openai-gpt-4o-mini-2024-07-18";
 
 // 7d matches the top-view window — older rows won't appear in the top-10
@@ -58,11 +58,15 @@ const CALL_CONCURRENCY = 4;
 // Bumped beyond 2 wasn't worth the wall-clock cost in v1 testing.
 const ITEM_MAX_ATTEMPTS = 2;
 
-// Stop after this many back-to-back item failures of any kind. Venice's
-// "20 failed in 30s" abuse guard cascades, and any failure mode here
-// (429, timeout, parse error) signals "the LLM call path isn't healthy
-// right now." Bail and let the next ingest tick try again.
-const ERROR_STREAK_BREAK = 4;
+// Stop after this many transport errors during a run. Venice's "20 failed
+// in 30s" abuse guard cascades, and any transport failure (429, timeout,
+// network) signals "the LLM call path isn't healthy right now." We count
+// total errors during the run rather than "consecutive": under
+// CALL_CONCURRENCY=4, a quick success interleaved between concurrent
+// failures would race a consecutive counter to 0 while real errors were
+// still pending. Total-during-run conveys the same intent and is
+// well-defined under concurrency.
+const ERROR_BAIL = 4;
 
 export const SYSTEM_PROMPT = `You write a 2-3 sentence plain-English brief for ONE AI/tech headline. The brief sits directly under the headline on the website. A smart non-specialist should be able to read it once and walk away knowing what shipped and what specifically changed because of it.
 
@@ -167,25 +171,20 @@ function extractTextField(raw: string): string | null {
   return null;
 }
 
-// Walk back/forward from a match index to surround the offending sentence
-// so retry prompts can quote it verbatim. Without this, the retry says
-// "you used a banned pattern" and the model often rewrites the wrong half.
+// Return the sentence in `text` that contains position `idx`, so retry
+// prompts can quote the offending sentence verbatim. Uses the same
+// lookahead-aware boundary as banned-phrases.ts:stripViolationSentences so
+// decimal numbers ("$3.5B") and mid-sentence abbreviations don't truncate
+// the result mid-token.
 function extractSentence(text: string, idx: number): string {
-  let s = idx, e = idx;
-  while (s > 0) {
-    const ch = text[s - 1];
-    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") break;
-    s--;
+  const re = /(?<=[.!?])\s+(?=[A-Z(])/g;
+  let last = 0;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text)) !== null) {
+    if (idx < m.index) return text.slice(last, m.index).trim();
+    last = m.index + m[0].length;
   }
-  while (e < text.length) {
-    const ch = text[e];
-    if (ch === "." || ch === "!" || ch === "?" || ch === "\n") {
-      if (ch === "." || ch === "!" || ch === "?") e++;
-      break;
-    }
-    e++;
-  }
-  return text.slice(s, e).trim();
+  return text.slice(last).trim();
 }
 
 type ItemResult = { ok: true; text: string } | { ok: false; error: string };
@@ -209,7 +208,10 @@ async function commentOne(
   for (let attempt = 1; attempt <= ITEM_MAX_ATTEMPTS; attempt++) {
     const response = await client.chat.completions.create({
       model,
-      max_tokens: 1024,
+      // Headroom for reasoning-model output where reasoning_content counts
+      // against the cap before any JSON lands. With non-reasoning models
+      // the ~80-word brief easily fits in well under this.
+      max_tokens: 4096,
       messages,
       response_format: { type: "json_object" },
     });
@@ -223,22 +225,30 @@ async function commentOne(
 
     const raw = response.choices[0]?.message?.content ?? "";
     const text = raw ? extractTextField(raw) : null;
-    if (!text) {
+    // null = unparseable JSON (no recoverable structure). Empty string =
+    // valid parse, empty content — a real under-generation that DOES
+    // recover with a retry.
+    if (text === null) {
       lastError = `attempt ${attempt}: empty or unparseable response`;
-      break; // Parse failures don't usually recover with surgical feedback.
+      break;
     }
-    if (text.length > 800) {
-      lastError = `attempt ${attempt}: text ${text.length} chars (cap 800)`;
+    if (text === "") {
+      lastError = `attempt ${attempt}: model returned empty text`;
       if (attempt < ITEM_MAX_ATTEMPTS) {
         messages.push({ role: "assistant", content: raw });
         messages.push({
           role: "user",
-          content: "Your reply was too long. Re-emit in 2 sentences (3 only if a specific observation needs the room). Same JSON schema: { \"text\": \"...\" }.",
+          content: "Your response had no commentary text. Emit the JSON with a non-empty 2-3 sentence brief: { \"text\": \"...\" }.",
         });
         continue;
       }
       break;
     }
+    // Banned-phrase check runs BEFORE the length cap. If a draft is BOTH
+    // too long and tripping a ban, the ban feedback is surgical ("rewrite
+    // sentence X") and naturally tends to shorten the result; the length
+    // feedback alone would let the model carry the banned phrasing into
+    // the retry, exhausting attempts.
     const violation = findFirstViolation(text);
     if (violation) {
       const offending = extractSentence(text, violation.match.index);
@@ -255,6 +265,18 @@ async function commentOne(
             "",
             "Rewrite ONLY that sentence. Replace the banned phrase by naming the specific company, capability, metric, or workflow it gestures at. Keep the rest of the brief verbatim. Same JSON schema: { \"text\": \"...\" }.",
           ].join("\n"),
+        });
+        continue;
+      }
+      break;
+    }
+    if (text.length > 800) {
+      lastError = `attempt ${attempt}: text ${text.length} chars (cap 800)`;
+      if (attempt < ITEM_MAX_ATTEMPTS) {
+        messages.push({ role: "assistant", content: raw });
+        messages.push({
+          role: "user",
+          content: "Your reply was too long. Re-emit in 2 sentences (3 only if a specific observation needs the room). Stay within all the banned-phrase rules from the system prompt. Same JSON schema: { \"text\": \"...\" }.",
         });
         continue;
       }
@@ -315,10 +337,10 @@ export type CommentatorRunSummary = {
 
 /**
  * NULL out commentary on rows whose stored text violates the current
- * banned-phrase catalogue. The parseCommentary gate stops slop from being
- * persisted going forward, but rows committed before a pattern was added —
- * or before the gate existed — keep their stale text indefinitely, because
- * generateMissingCommentary only re-runs where `commentary IS NULL`.
+ * banned-phrase catalogue. The inline gate in commentOne stops slop from
+ * being persisted going forward, but rows committed before a pattern was
+ * added — or before the gate existed — keep their stale text indefinitely,
+ * because generateMissingCommentary only re-runs where `commentary IS NULL`.
  *
  * This sweeps the same 7d lookback the commentator regenerates against, so
  * cleared rows are picked up by the next post-ingest commentator tick. Cost
@@ -410,7 +432,7 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
   const examples = await getRecentBestExamples(3);
   const examplesBlock = formatBestExamplesBlock(examples);
 
-  let errorStreak = 0;
+  let transportErrors = 0;
   let bailed = false;
   await runWithConcurrency(candidates, CALL_CONCURRENCY, async (item) => {
     if (bailed) return;
@@ -420,7 +442,6 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
       if (result.ok) {
         await persistCommentary(item.id, result.text);
         summary.commented++;
-        errorStreak = 0;
       } else {
         summary.errors++;
         logger.info(
@@ -432,16 +453,16 @@ export async function generateMissingCommentary(): Promise<CommentatorRunSummary
       }
     } catch (err) {
       summary.errors++;
-      errorStreak++;
+      transportErrors++;
       logger.warn(
         { id: item.id, err: err instanceof Error ? err.message : String(err) },
         "Headline commentator: item call failed",
       );
-      if (errorStreak >= ERROR_STREAK_BREAK) {
+      if (transportErrors >= ERROR_BAIL) {
         bailed = true;
         logger.warn(
-          { streak: errorStreak, remaining: candidates.length - summary.batches },
-          "Headline commentator: bailing on transport error streak — next ingest tick will retry",
+          { transportErrors, remaining: candidates.length - summary.batches },
+          "Headline commentator: bailing on transport error count — next ingest tick will retry",
         );
       }
     }
