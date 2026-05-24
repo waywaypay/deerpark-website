@@ -846,6 +846,20 @@ const PRODUCTS: ProductCard[] = [
       "Configurable for any industry — finance, biotech, logistics, defense",
     ],
   },
+  {
+    href: "/sec",
+    name: "SEC EDGAR",
+    status: "Live",
+    tagline: "MCP server and CLI for SEC filings.",
+    description:
+      "Pulls SEC EDGAR data accurately — filings, structured and verbatim financials, insider activity, ownership, segment revenue, and issuer-tagged XBRL KPIs. Drops into Claude Desktop over stdio, runs hosted over StreamableHTTP, and pipes cleanly into shell tools with --json.",
+    bullets: [
+      "19 tools across filings, financials, insider, ownership, XBRL, diffs, and KPI history",
+      "MCP over stdio (Claude Desktop) + StreamableHTTP (Vercel-hosted)",
+      "CLI with --json output, -o spill to disk, stderr-isolated logs",
+      "Rate-limited inside EDGAR's 10 req/s ceiling, with caching and singleflight coalescing",
+    ],
+  },
 ];
 
 const Products = () => (
