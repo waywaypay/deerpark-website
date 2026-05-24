@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, GraduationCap, Rocket, Check, Plus, Minus, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
+import { ArrowRight, ChevronLeft, ChevronRight, ScanSearch, Layers, Users, Check, Plus, Minus, MapPin, Mic, FolderInput, Sparkles, Files } from "lucide-react";
 import { ConsultCTA, FadeIn, Navbar, Footer, ConsultationFAB } from "@/components/site-layout";
 
 const TICKER_ITEMS = [
@@ -117,7 +117,7 @@ const Problem = () => (
               because models like those offered by ChatGPT and Claude are too general and need to be customized. Small teams lack the time or expertise to integrate them into daily work.
             </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
-              Deer Park provides the hands-on partnership. We run the work end-to-end: we <span className="text-foreground">assess</span> where AI can drive the biggest gains, <span className="text-foreground">build</span> custom applications and integrations, <span className="text-foreground">deploy</span> with your team, and provide <span className="text-foreground">training</span> until the new, efficient way is your standard.
+              Deer Park provides the hands-on partnership. We <span className="text-foreground">map</span> where AI pays back fastest, <span className="text-foreground">embed</span> alongside your team to deploy and train in the flow of work, and <span className="text-foreground">build</span> the custom software when off-the-shelf tools can't do the job.
             </p>
           </FadeIn>
         </div>
@@ -144,9 +144,10 @@ const Problem = () => (
 const SERVICE_PILLARS = [
   {
     phase: "01",
-    title: "Assess",
+    title: "Map",
+    subtitle: "AI Opportunity Map",
     icon: ScanSearch,
-    summary: "We review your organization's AI readiness and surface the workflows where AI pays back fastest.",
+    summary: "We map your organization against where AI pays back fastest — a ranked matrix of use cases by impact and effort, with a clear shortlist of what to do first.",
     services: [
       "AI Readiness Assessment",
       "Workflow Diagnostic & Mapping",
@@ -155,44 +156,30 @@ const SERVICE_PILLARS = [
   },
   {
     phase: "02",
-    title: "Build",
-    icon: Layers,
-    summary: "We design and ship the applications, automations, and integrations your team needs to get the work done.",
+    title: "Embed",
+    subtitle: "Embedded AI Operator",
+    icon: Users,
+    summary: "We send a team member to work alongside yours — integrating AI into daily processes, tailoring solutions to how the work actually runs, and training your people on the job.",
     services: [
-      "Custom AI Application Development",
-      "Process Automation",
-      "System Integration",
-    ],
-  },
-  {
-    phase: "03",
-    title: "Deploy",
-    icon: Rocket,
-    summary: "We run the rollout with your team, support change management, and hand over a system your people own.",
-    services: [
-      "Rollout & Change Management",
-      "Runbooks & Governance",
-      "30-Day On-Call Support",
-    ],
-  },
-  {
-    phase: "04",
-    title: "Train",
-    icon: GraduationCap,
-    summary: "We train your organization end-to-end — from executive briefings to hands-on workshops so every role knows how to use what we build.",
-    services: [
-      "Executive AI Briefings",
+      "Embedded AI Operator",
+      "Process Automation & Change Management",
       "Role-Based Workshops",
       "Hands-On Team Enablement",
     ],
   },
-];
-
-const TIMELINE_PHASES: { phase: string; title: string; icon: typeof ScanSearch; start: number; span: number }[] = [
-  { phase: "01", title: "Assess", icon: ScanSearch, start: 1, span: 2 },
-  { phase: "02", title: "Build", icon: Layers, start: 3, span: 6 },
-  { phase: "03", title: "Deploy", icon: Rocket, start: 9, span: 5 },
-  { phase: "04", title: "Train", icon: GraduationCap, start: 1, span: 13 },
+  {
+    phase: "03",
+    title: "Build",
+    subtitle: "Custom Software",
+    icon: Layers,
+    summary: "We design and ship the custom applications and integrations your team needs — AI-powered when it earns its place, classical software when it doesn't. Built on your stack, in your cloud, with the runbooks and training to run it after handoff.",
+    services: [
+      "Custom Application Development",
+      "AI Agents & Automations",
+      "System Integration",
+      "Runbooks & 30-Day On-Call",
+    ],
+  },
 ];
 
 const Services = () => (
@@ -203,47 +190,16 @@ const Services = () => (
           <div className="h-[1px] w-12 bg-primary"></div>
           <span className="section-label">Services · Our Approach</span>
         </div>
-        <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">Four pillars. One continuous engagement.</h2>
+        <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">Three ways to work with us.</h2>
         <p className="text-lg text-muted-foreground font-light max-w-2xl mb-4">
-          Every engagement moves through assessment, build, deployment, and training — each pillar rolls up specific practice areas your organization will see on the plan.
+          Engage at the tier that matches your commitment — from a one-time opportunity map, to an embedded operator in the flow of work, to a full custom build. Training is included in Embed and Build, not sold separately.
         </p>
         <p className="text-sm text-muted-foreground/80 font-light max-w-2xl mb-12 italic">
-          <span className="text-foreground/80 not-italic font-medium">Services</span> are how we work with your team end-to-end. <span className="text-foreground/80 not-italic font-medium">Products</span> (below) are AI agents you can subscribe to or buy outright.
+          <span className="text-foreground/80 not-italic font-medium">Services</span> are how we work with your team. <span className="text-foreground/80 not-italic font-medium">Products</span> (below) are AI agents you can subscribe to or buy outright.
         </p>
       </FadeIn>
 
-      <FadeIn delay={0.1}>
-        <div className="hidden md:block mb-20 border border-foreground/15 bg-foreground/[0.02] p-8">
-          <div className="flex items-baseline justify-between mb-6">
-            <span className="section-label">Engagement timeline</span>
-            <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-sans">90 days · kickoff to handoff</span>
-          </div>
-          <div className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-px mb-3 border-b border-foreground/10 pb-3">
-            {Array.from({ length: 13 }, (_, i) => (
-              <div key={i} className="text-center">
-                <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">Wk</div>
-                <div className="text-sm font-serif text-foreground">{i + 1}</div>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-2">
-            {TIMELINE_PHASES.map((p) => (
-              <div key={p.phase} className="grid grid-cols-[repeat(13,minmax(0,1fr))] gap-px">
-                <div
-                  className="h-10 bg-foreground/[0.06] border border-foreground/10 flex items-center gap-3 px-4 hover:bg-foreground/[0.1] transition-colors"
-                  style={{ gridColumnStart: p.start, gridColumnEnd: p.start + p.span }}
-                >
-                  <p.icon className="w-4 h-4 text-primary shrink-0" />
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground font-sans">{p.phase}</span>
-                  <span className="text-sm font-serif text-foreground">{p.title}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </FadeIn>
-
-      <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+      <div className="grid md:grid-cols-3 gap-8">
         {SERVICE_PILLARS.map((pillar, i) => (
           <FadeIn key={pillar.phase} delay={i * 0.1}>
             <div className="group h-full border border-foreground/15 bg-foreground/[0.03] p-8 hover:bg-white/[0.04] transition-colors flex flex-col">
@@ -253,7 +209,10 @@ const Services = () => (
                   <pillar.icon className="w-5 h-5 text-primary" />
                 </div>
               </div>
-              <h3 className="text-3xl md:text-4xl font-serif mb-4">{pillar.title}</h3>
+              <div className="mb-4">
+                <h3 className="text-3xl md:text-4xl font-serif mb-2">{pillar.title}</h3>
+                <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground font-sans">{pillar.subtitle}</p>
+              </div>
               <p className="text-muted-foreground font-light leading-relaxed text-sm mb-8">
                 {pillar.summary}
               </p>
@@ -952,7 +911,7 @@ const Products = () => (
 const FAQ_ITEMS = [
   {
     q: "Do you train our team, or just build the tool?",
-    a: "Both, and the training is not an afterthought. Every engagement includes executive briefings, role-based workshops, and hands-on training on the application we ship — scoped in week one and running alongside the build so your team is live the day we hand over.",
+    a: "Both — training is included, not sold as a separate tier. In an Embed engagement it happens on the job, alongside the work. In a Build engagement we ship role-based workshops, runbooks, and hands-on training the day we hand over.",
   },
   {
     q: "Our team isn't technical. Is this for us?",
