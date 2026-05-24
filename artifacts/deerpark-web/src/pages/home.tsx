@@ -497,7 +497,7 @@ const PR_WORKFLOW_STEPS = [
   {
     icon: Mic,
     label: "Kick-off",
-    detail: "The quarterly client call is captured — transcript and notes ready for the workflow.",
+    detail: "Quarter closes. The latest financials, prior script, and management notes land in the project folder.",
   },
   {
     icon: FolderInput,
@@ -595,12 +595,12 @@ const CASE_STUDIES: CaseStudyData[] = [
   {
     id: "workflow-automation",
     eyebrow: "Workflow Automation",
-    headline: "Quarterly reporting, from 3 hours to 20 minutes.",
+    headline: "Earnings call scripts, from 3 hours to 20 minutes.",
     narrativeOnly: true,
     diagram: <PRWorkflowDiagram />,
     intro: [
-      "Every quarter, a client-services team had to write a performance report for each of their clients. Producing one meant pulling together notes from the quarterly review call, internal account data, and the previous quarter's report, then drafting and revising the new report by hand. Each report took a senior reviewer about three hours to finish.",
-      "We replaced the manual drafting with an automated pipeline. It reads the same sources the team used to read, applies the team's own analysis framework, and produces a finished draft in the team's voice. Senior staff now spend about twenty minutes per report — reading, correcting, and approving — instead of three hours writing from scratch.",
+      "Every quarter, the team drafting management's earnings call script worked from the same inputs: the freshly closed financials, the prior quarter's script, and management's talking points. The narrative had to stay consistent quarter over quarter, and every number cited had to tie back to the source. Each script took a senior writer about three hours to draft and reconcile by hand.",
+      "We replaced the manual drafting with an automated pipeline. It reads the same sources the team used to read, applies the house style and narrative framework, and produces a finished draft in management's voice — with the figures pulled directly from the source data so the numbers are right by construction. Senior staff now spend about twenty minutes per script — reading, correcting, and approving — instead of three hours writing from scratch.",
       "In side-by-side blind comparisons, drafts from the tuned pipeline scored 25% higher than the same prompt run against an off-the-shelf frontier model, because the team's standards, structure, and judgment are encoded into the workflow itself. The team moved from drafting to reviewing — voice and judgment stayed human; the typing left.",
     ],
     before:
@@ -621,7 +621,7 @@ const CASE_STUDIES: CaseStudyData[] = [
     ],
     outcome: (
       <>
-        What used to take <span className="text-background font-medium">3 hours of hands-on work is now 20 minutes of review</span>. The team kept full editorial control; the freed time went into deeper analysis and faster client turnaround.
+        What used to take <span className="text-background font-medium">3 hours of hands-on work is now 20 minutes of review</span>. The team kept full editorial control; the freed time went into sharper narrative work and tighter sign-off cycles.
       </>
     ),
   },
