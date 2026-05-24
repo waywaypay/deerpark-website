@@ -839,6 +839,8 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
   const [runMode, setRunMode] = useState<WriterModeId>("auto");
   const [lastRun, setLastRun] = useState<{ ok: boolean; message: string } | null>(null);
   const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
+  const [engine, setEngine] = useState<"v1" | "v2">("v1");
+  const [engineSaving, setEngineSaving] = useState(false);
 
   // Prompt editor state. Four slots: a shared base prompt + one addendum per
   // mode. Each slot has its own draft, isCustom flag, and built-in default.
@@ -862,9 +864,10 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
     setLoading(true);
     setError(null);
     try {
-      const [aRes, pRes] = await Promise.all([
+      const [aRes, pRes, eRes] = await Promise.all([
         apiFetch(token, "/admin/writers"),
         apiFetch(token, "/admin/posts"),
+        apiFetch(token, "/admin/writers/daily-writer/engine"),
       ]);
       if (!aRes.ok) throw new Error(`Writers HTTP ${aRes.status}`);
       if (!pRes.ok) throw new Error(`Posts HTTP ${pRes.status}`);
@@ -872,6 +875,12 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
       const pJson = (await pRes.json()) as { items: AdminPost[] };
       setAgents(aJson.items);
       setPosts(pJson.items);
+      // Engine endpoint is best-effort — pre-engine deploys 404 here and
+      // the UI just keeps the v1 default.
+      if (eRes.ok) {
+        const eJson = (await eRes.json()) as { engine?: "v1" | "v2" };
+        if (eJson.engine === "v1" || eJson.engine === "v2") setEngine(eJson.engine);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load writers");
     } finally {
@@ -880,6 +889,29 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
   }, [token]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const saveEngine = async (next: "v1" | "v2") => {
+    const prev = engine;
+    setEngine(next);
+    setEngineSaving(true);
+    try {
+      const res = await apiFetch(token, "/admin/writers/daily-writer/engine", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ engine: next }),
+      });
+      if (!res.ok) {
+        setEngine(prev);
+        const text = await res.text();
+        setLastRun({ ok: false, message: `Engine switch failed: ${text.slice(0, 200)}` });
+      }
+    } catch (err) {
+      setEngine(prev);
+      setLastRun({ ok: false, message: err instanceof Error ? err.message : "Engine switch failed" });
+    } finally {
+      setEngineSaving(false);
+    }
+  };
 
   const runOne = async (id: string) => {
     setBusyId(id);
@@ -1327,6 +1359,16 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-2 items-center">
+                    <select
+                      value={engine}
+                      onChange={(e) => void saveEngine(e.target.value as "v1" | "v2")}
+                      disabled={engineSaving || busyId !== null}
+                      title="Writer engine — v1 is the monolithic prompt, v2 the decomposed plan/items/intro pipeline"
+                      className="h-8 px-2 bg-background border border-foreground/15 text-[10px] uppercase tracking-widest outline-none focus:border-primary/80 disabled:opacity-50"
+                    >
+                      <option value="v1">v1</option>
+                      <option value="v2">v2</option>
+                    </select>
                     <select
                       value={runMode}
                       onChange={(e) => setRunMode(e.target.value as WriterModeId)}

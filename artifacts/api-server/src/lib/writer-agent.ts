@@ -395,6 +395,36 @@ export function isValidPromptSlot(s: string): s is PromptSlot {
   return (PROMPT_SLOTS as string[]).includes(s);
 }
 
+// Engine selector. Stored per-agent in the settings table so the admin UI
+// can flip v1↔v2 without a deploy. Defaults to "v1" until a row is written.
+export type WriterEngine = "v1" | "v2";
+const ENGINE_VALUES: readonly WriterEngine[] = ["v1", "v2"] as const;
+const engineKey = (agentId: string): string => `writer.${agentId}.engine`;
+
+export function isValidWriterEngine(s: string): s is WriterEngine {
+  return (ENGINE_VALUES as readonly string[]).includes(s);
+}
+
+export async function getWriterEngine(agentId: string): Promise<WriterEngine> {
+  const [row] = await db
+    .select({ value: settingsTable.value })
+    .from(settingsTable)
+    .where(eq(settingsTable.key, engineKey(agentId)))
+    .limit(1);
+  const v = row?.value;
+  return typeof v === "string" && isValidWriterEngine(v) ? v : "v1";
+}
+
+export async function setWriterEngine(agentId: string, engine: WriterEngine): Promise<void> {
+  await db
+    .insert(settingsTable)
+    .values({ key: engineKey(agentId), value: engine })
+    .onConflictDoUpdate({
+      target: settingsTable.key,
+      set: { value: engine, updatedAt: new Date() },
+    });
+}
+
 // Assemble the runtime system prompt: base + the addendum(s) for the requested
 // mode. For "auto", concatenate every addendum so the model can pick.
 async function buildSystemPrompt(agentId: string, mode: WriterMode | "auto"): Promise<string> {
@@ -935,17 +965,22 @@ export async function generateAndSavePost(opts: {
   model?: string;
   corpusDays?: number;
 }): Promise<WriteResult> {
-  // A/B: env-flag delegates to the decomposed pipeline (writer-v2.ts). The
-  // v2 path doesn't support modeHint="auto" — pick a concrete mode upstream
-  // or fall through to v1 when "auto" is requested.
-  if (process.env["WRITER_ENGINE"] === "v2" && opts.modeHint !== "auto") {
-    const { generateAndSavePostV2 } = await import("./writer-v2");
-    return generateAndSavePostV2({
-      agentId: opts.agentId,
-      modeHint: opts.modeHint,
-      model: opts.model,
-      corpusDays: opts.corpusDays,
-    });
+  // Settings-backed engine selector. The admin UI writes
+  // `writer.<agentId>.engine` directly, so flipping v1↔v2 is a click — no
+  // env var, no deploy. v2 doesn't support modeHint="auto"; fall through
+  // to v1 if "auto" is requested even when v2 is selected.
+  const agentIdForEngine = opts.agentId ?? "daily-writer";
+  if (opts.modeHint !== "auto") {
+    const engine = await getWriterEngine(agentIdForEngine);
+    if (engine === "v2") {
+      const { generateAndSavePostV2 } = await import("./writer-v2");
+      return generateAndSavePostV2({
+        agentId: opts.agentId,
+        modeHint: opts.modeHint,
+        model: opts.model,
+        corpusDays: opts.corpusDays,
+      });
+    }
   }
 
   const apiKey = process.env["LLM_API_KEY"];
