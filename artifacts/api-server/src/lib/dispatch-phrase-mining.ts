@@ -17,6 +17,7 @@ import {
   dispatchPhraseProposalsTable,
   type DispatchEvalDimension,
   type DispatchEvalScores,
+  type DispatchPhraseProposal,
 } from "@workspace/db";
 import { desc, eq, isNotNull, sql } from "drizzle-orm";
 import { logger } from "./logger";
@@ -342,6 +343,68 @@ export async function ensureDispatchPhraseProposalsSchema(): Promise<void> {
   `);
 }
 
+/** Defer the dynamic-pattern reload import to break a circular module
+ *  dependency at boot (banned-phrases imports db; mining imports
+ *  banned-phrases for the static list). Used by admin actions that
+ *  change proposal state and need the runtime gate to see it on the
+ *  next compose. */
+async function refreshDynamicPatternCache(): Promise<void> {
+  const { reloadDynamicBannedPatterns } = await import("./banned-phrases");
+  await reloadDynamicBannedPatterns();
+}
+
+/** Sorted view of proposals for the admin UI. Active rows (not
+ *  dismissed) first, ordered by severity then hit_count desc, then
+ *  dismissed rows last for visibility. */
+export async function listPhraseProposals(): Promise<DispatchPhraseProposal[]> {
+  const rows = await db
+    .select()
+    .from(dispatchPhraseProposalsTable);
+  // Sort in JS: it's a small table (proposals never grow past hundreds
+  // of rows) and the multi-key sort is clearer here than in SQL.
+  return rows.sort((a, b) => {
+    // Active first.
+    const aActive = a.dismissedAt === null ? 0 : 1;
+    const bActive = b.dismissedAt === null ? 0 : 1;
+    if (aActive !== bActive) return aActive - bActive;
+    // Violations above warnings.
+    const aSev = a.severity === "violation" ? 0 : 1;
+    const bSev = b.severity === "violation" ? 0 : 1;
+    if (aSev !== bSev) return aSev - bSev;
+    // Higher hit_count first.
+    if (a.hitCount !== b.hitCount) return b.hitCount - a.hitCount;
+    // Most recent activity first.
+    return b.lastSeenAt.getTime() - a.lastSeenAt.getTime();
+  });
+}
+
+/** Operator dismissal — false positive. The runtime gate ignores
+ *  dismissed rows on the next reload (called immediately, so the next
+ *  compose sees the change without waiting for the 5-min refresh). */
+export async function dismissPhraseProposal(phrase: string): Promise<boolean> {
+  const result = await db
+    .update(dispatchPhraseProposalsTable)
+    .set({ dismissedAt: new Date() })
+    .where(eq(dispatchPhraseProposalsTable.phrase, phrase))
+    .returning({ phrase: dispatchPhraseProposalsTable.phrase });
+  if (result.length === 0) return false;
+  await refreshDynamicPatternCache();
+  return true;
+}
+
+/** Undo a dismissal — operator changed their mind, or the phrase is
+ *  re-emerging in worstItems. Severity is preserved. */
+export async function restorePhraseProposal(phrase: string): Promise<boolean> {
+  const result = await db
+    .update(dispatchPhraseProposalsTable)
+    .set({ dismissedAt: null })
+    .where(eq(dispatchPhraseProposalsTable.phrase, phrase))
+    .returning({ phrase: dispatchPhraseProposalsTable.phrase });
+  if (result.length === 0) return false;
+  await refreshDynamicPatternCache();
+  return true;
+}
+
 /** Fire-and-forget wrapper invoked from the eval pipeline. Bundles
  *  mining + the dynamic-patterns cache refresh so next compose sees
  *  the freshly mined patterns without waiting for the periodic reload. */
@@ -352,11 +415,7 @@ export function minePhraseProposalsInBackground(): void {
       if (summary.upserted > 0 || summary.promotedToViolation > 0) {
         logger.info(summary, "Dispatch phrase mining: ran");
       }
-      // Defer the dynamic-pattern reload import to break a circular
-      // module dependency at boot (banned-phrases imports db; mining
-      // imports banned-phrases for the static list).
-      const { reloadDynamicBannedPatterns } = await import("./banned-phrases");
-      await reloadDynamicBannedPatterns();
+      await refreshDynamicPatternCache();
     } catch (err) {
       logger.warn(
         { err: err instanceof Error ? err.message : String(err) },
