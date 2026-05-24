@@ -17,7 +17,6 @@ import {
   Gavel,
   Eye,
   MessageSquare,
-  FileText,
   Activity,
   Cpu,
   Signal,
@@ -2429,19 +2428,6 @@ type DispatchPromptSlot = "polish" | "fallback" | "commentator" | "banner";
 
 type DispatchPromptVersionMap = Partial<Record<DispatchPromptSlot, string>>;
 
-type DispatchPromptSummary = {
-  hash: string;
-  slot: DispatchPromptSlot;
-  contentLength: number;
-  note: string | null;
-  firstSeenAt: string;
-  usageCount: number;
-};
-
-type DispatchPromptDetail = DispatchPromptSummary & {
-  content: string;
-};
-
 type DispatchLlmCall = {
   id: number;
   dispatchArchiveId: number | null;
@@ -2458,12 +2444,6 @@ type DispatchLlmCall = {
   errorMessage: string | null;
   createdAt: string;
 };
-
-const PROMPT_SLOTS: { id: DispatchPromptSlot; label: string }[] = [
-  { id: "polish", label: "Polish" },
-  { id: "fallback", label: "Fallback" },
-  { id: "banner", label: "Banner" },
-];
 
 type DispatchArchiveDetail = DispatchArchiveSummary & {
   bodyHtml: string;
@@ -3931,221 +3911,7 @@ const FeedbackTab = ({ token }: { token: string }) => {
   );
 };
 
-const PromptsTab = ({ token }: { token: string }) => {
-  const [slot, setSlot] = useState<DispatchPromptSlot>("polish");
-  const [items, setItems] = useState<DispatchPromptSummary[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [contentCache, setContentCache] = useState<Record<string, string>>({});
-  const [expandedHash, setExpandedHash] = useState<string | null>(null);
-  const [compareA, setCompareA] = useState<string | null>(null);
-  const [compareB, setCompareB] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch(token, `/admin/dispatch-prompts?slot=${slot}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { items: DispatchPromptSummary[] };
-      setItems(json.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load prompts");
-    } finally {
-      setLoading(false);
-    }
-  }, [slot, token]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const ensureContent = useCallback(
-    async (hash: string) => {
-      if (contentCache[hash]) return contentCache[hash];
-      const res = await apiFetch(token, `/admin/dispatch-prompts/${hash}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { item: DispatchPromptDetail };
-      setContentCache((prev) => ({ ...prev, [hash]: json.item.content }));
-      return json.item.content;
-    },
-    [contentCache, token],
-  );
-
-  const toggleExpand = async (hash: string) => {
-    if (expandedHash === hash) {
-      setExpandedHash(null);
-      return;
-    }
-    setExpandedHash(hash);
-    try {
-      await ensureContent(hash);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load content");
-    }
-  };
-
-  const inCompare = compareA && compareB;
-  const startCompare = async (hash: string) => {
-    if (compareA === hash) {
-      setCompareA(null);
-      return;
-    }
-    if (compareB === hash) {
-      setCompareB(null);
-      return;
-    }
-    if (!compareA) setCompareA(hash);
-    else if (!compareB) setCompareB(hash);
-    else {
-      setCompareA(hash);
-      setCompareB(null);
-    }
-    try {
-      await ensureContent(hash);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load content");
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-serif">Prompts</h2>
-          <p className="text-sm text-muted-foreground font-light mt-1 max-w-2xl">
-            Content-addressed registry of every prompt that has ever driven a
-            dispatch composition. Identical prompts across deploys collapse to
-            one version automatically. Each archived dispatch references the
-            hashes that were active when it composed.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void load()}
-          disabled={loading}
-          className="rounded-none text-[10px] uppercase tracking-widest"
-        >
-          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-2 border-b border-foreground/10 pb-2">
-        {PROMPT_SLOTS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => setSlot(s.id)}
-            className={`text-[10px] uppercase tracking-widest px-3 py-1.5 border ${
-              slot === s.id
-                ? "border-primary text-primary"
-                : "border-foreground/15 text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {s.label}
-          </button>
-        ))}
-      </div>
-
-      {error && (
-        <div className="border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
-          {error}
-        </div>
-      )}
-
-      {items.length === 0 && !loading && (
-        <div className="border border-foreground/15 bg-card px-4 py-6 text-sm text-muted-foreground">
-          No {slot} prompts seen yet. Once a dispatch composes, the active
-          prompt is hashed and recorded here.
-        </div>
-      )}
-
-      <div className="space-y-2">
-        {items.map((it) => {
-          const isExpanded = expandedHash === it.hash;
-          const isA = compareA === it.hash;
-          const isB = compareB === it.hash;
-          const content = contentCache[it.hash];
-          return (
-            <div key={it.hash} className="border border-foreground/15 bg-card">
-              <div className="px-4 py-3 flex items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => void toggleExpand(it.hash)}
-                  className="flex items-center gap-4 flex-1 text-left"
-                >
-                  <span className="text-[10px] uppercase tracking-widest text-primary font-mono w-20">
-                    {it.hash.slice(0, 8)}
-                  </span>
-                  <span className="text-xs text-muted-foreground font-mono w-44 shrink-0">
-                    {formatDate(it.firstSeenAt)}
-                  </span>
-                  <span className="flex-1 text-xs text-muted-foreground">
-                    {it.contentLength.toLocaleString()} chars
-                  </span>
-                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                    {it.usageCount} {it.usageCount === 1 ? "use" : "uses"}
-                  </span>
-                  <ChevronRight
-                    className={`w-3 h-3 text-muted-foreground transition-transform ${isExpanded ? "rotate-90" : ""}`}
-                  />
-                </button>
-                <Button
-                  variant={isA || isB ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => void startCompare(it.hash)}
-                  className="rounded-none text-[10px] uppercase tracking-widest"
-                  title="Pick two versions to compare side-by-side"
-                >
-                  {isA ? "A ✓" : isB ? "B ✓" : "Compare"}
-                </Button>
-              </div>
-              {isExpanded && (
-                <div className="border-t border-foreground/10 p-4 bg-background/40">
-                  <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-[600px] overflow-auto">
-                    {content ?? "Loading…"}
-                  </pre>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      {inCompare && (
-        <div className="border border-primary/40 bg-card">
-          <div className="px-4 py-2 border-b border-foreground/10 flex items-center justify-between">
-            <div className="text-[10px] uppercase tracking-widest text-primary">
-              Compare ·{" "}
-              <span className="font-mono">{compareA?.slice(0, 8)}</span> ↔{" "}
-              <span className="font-mono">{compareB?.slice(0, 8)}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => { setCompareA(null); setCompareB(null); }}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Close
-            </button>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-foreground/10">
-            <pre className="bg-card p-4 text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-[640px] overflow-auto">
-              {compareA && contentCache[compareA] !== undefined
-                ? contentCache[compareA]
-                : "Loading…"}
-            </pre>
-            <pre className="bg-card p-4 text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-[640px] overflow-auto">
-              {compareB && contentCache[compareB] !== undefined
-                ? contentCache[compareB]
-                : "Loading…"}
-            </pre>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-type DispatchSection = "headlines" | "judge" | "writers" | "emails" | "feedback" | "prompts";
+type DispatchSection = "headlines" | "judge" | "writers" | "emails" | "feedback";
 
 type WorkflowNodeSpec = {
   id: DispatchSection;
@@ -4190,13 +3956,6 @@ const WORKFLOW_NODES: WorkflowNodeSpec[] = [
     Icon: MessageSquare,
     description: "Rubric scores, banned-phrase scan, and operator feedback",
     io: "sends → scored dataset",
-  },
-  {
-    id: "prompts",
-    label: "Prompts",
-    Icon: FileText,
-    description: "Every prompt version that has driven a dispatch",
-    io: "compose → content-addressed registry",
   },
 ];
 
@@ -4344,7 +4103,6 @@ const DispatchView = ({ token }: { token: string }) => {
         {section === "writers" && <WriterAgentsTab token={token} />}
         {section === "emails" && <EmailAgentsTab token={token} />}
         {section === "feedback" && <FeedbackTab token={token} />}
-        {section === "prompts" && <PromptsTab token={token} />}
       </div>
     );
   }
