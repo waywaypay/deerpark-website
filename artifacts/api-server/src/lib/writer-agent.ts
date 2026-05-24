@@ -935,6 +935,19 @@ export async function generateAndSavePost(opts: {
   model?: string;
   corpusDays?: number;
 }): Promise<WriteResult> {
+  // A/B: env-flag delegates to the decomposed pipeline (writer-v2.ts). The
+  // v2 path doesn't support modeHint="auto" — pick a concrete mode upstream
+  // or fall through to v1 when "auto" is requested.
+  if (process.env["WRITER_ENGINE"] === "v2" && opts.modeHint !== "auto") {
+    const { generateAndSavePostV2 } = await import("./writer-v2");
+    return generateAndSavePostV2({
+      agentId: opts.agentId,
+      modeHint: opts.modeHint,
+      model: opts.model,
+      corpusDays: opts.corpusDays,
+    });
+  }
+
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) return { ok: false, error: "LLM_API_KEY not configured" };
 
