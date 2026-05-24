@@ -1,4 +1,4 @@
-import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -841,6 +841,11 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
   const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
   const [engine, setEngine] = useState<"v1" | "v2">("v1");
   const [engineSaving, setEngineSaving] = useState(false);
+  // Ref tracks an in-flight saveEngine PUT so a concurrent load() refresh
+  // doesn't clobber the user's optimistic selection with the stale server
+  // value. setState is async; a ref reads synchronously and is safe to
+  // check from the fetch callback.
+  const engineSavingRef = useRef(false);
 
   // Prompt editor state. Four slots: a shared base prompt + one addendum per
   // mode. Each slot has its own draft, isCustom flag, and built-in default.
@@ -864,10 +869,9 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
     setLoading(true);
     setError(null);
     try {
-      const [aRes, pRes, eRes] = await Promise.all([
+      const [aRes, pRes] = await Promise.all([
         apiFetch(token, "/admin/writers"),
         apiFetch(token, "/admin/posts"),
-        apiFetch(token, "/admin/writers/daily-writer/engine"),
       ]);
       if (!aRes.ok) throw new Error(`Writers HTTP ${aRes.status}`);
       if (!pRes.ok) throw new Error(`Posts HTTP ${pRes.status}`);
@@ -875,16 +879,26 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
       const pJson = (await pRes.json()) as { items: AdminPost[] };
       setAgents(aJson.items);
       setPosts(pJson.items);
-      // Engine endpoint is best-effort — pre-engine deploys 404 here and
-      // the UI just keeps the v1 default.
-      if (eRes.ok) {
-        const eJson = (await eRes.json()) as { engine?: "v1" | "v2" };
-        if (eJson.engine === "v1" || eJson.engine === "v2") setEngine(eJson.engine);
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load writers");
     } finally {
       setLoading(false);
+    }
+
+    // Engine endpoint is best-effort — pre-engine deploys 404 here, a
+    // proxy interstitial can return HTML, the network can drop. None of
+    // these should fail the writers/posts tab. Run after the main load so
+    // any throw here can't take the rest down. Skip the apply if a
+    // saveEngine PUT is in flight so we don't overwrite the user's
+    // optimistic selection with the pre-PUT server value.
+    try {
+      const eRes = await apiFetch(token, "/admin/writers/daily-writer/engine");
+      if (eRes.ok && !engineSavingRef.current) {
+        const eJson = (await eRes.json()) as { engine?: "v1" | "v2" };
+        if (eJson.engine === "v1" || eJson.engine === "v2") setEngine(eJson.engine);
+      }
+    } catch {
+      // swallow; the UI keeps its current engine value
     }
   }, [token]);
 
@@ -894,6 +908,7 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
     const prev = engine;
     setEngine(next);
     setEngineSaving(true);
+    engineSavingRef.current = true;
     try {
       const res = await apiFetch(token, "/admin/writers/daily-writer/engine", {
         method: "PUT",
@@ -910,6 +925,7 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
       setLastRun({ ok: false, message: err instanceof Error ? err.message : "Engine switch failed" });
     } finally {
       setEngineSaving(false);
+      engineSavingRef.current = false;
     }
   };
 
@@ -1359,6 +1375,11 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="inline-flex gap-2 items-center">
+                    {/* Engine selector is currently hardcoded to the
+                        single daily-writer agent (the admin endpoint
+                        also rejects other ids). When a second writer is
+                        added, this <select> and `engine`/`saveEngine`
+                        will need to key off `a.id` per-row. */}
                     <select
                       value={engine}
                       onChange={(e) => void saveEngine(e.target.value as "v1" | "v2")}
@@ -1372,7 +1393,7 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
                     <select
                       value={runMode}
                       onChange={(e) => setRunMode(e.target.value as WriterModeId)}
-                      disabled={!a.configured || busyId !== null}
+                      disabled={!a.configured || busyId !== null || engineSaving}
                       className="h-8 px-2 bg-background border border-foreground/15 text-[10px] uppercase tracking-widest outline-none focus:border-primary/80 disabled:opacity-50"
                     >
                       {WRITER_MODES.map((m) => (
@@ -1384,7 +1405,7 @@ const WriterAgentsTab = ({ token }: { token: string }) => {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={!a.configured || busyId !== null}
+                      disabled={!a.configured || busyId !== null || engineSaving}
                       onClick={() => void runOne(a.id)}
                       className="rounded-none text-[10px] uppercase tracking-widest"
                     >

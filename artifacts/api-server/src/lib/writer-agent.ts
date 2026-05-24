@@ -965,31 +965,62 @@ export async function generateAndSavePost(opts: {
   model?: string;
   corpusDays?: number;
 }): Promise<WriteResult> {
+  // Normalize inputs once so v1 and v2 see the same values — without this,
+  // a caller passing modeHint=undefined gets "auto" in v1 but a v2 path
+  // that coerces to free_pick, silently diverging.
+  const agentId = opts.agentId ?? "daily-writer";
+  const modeHint: WriterMode | "auto" = opts.modeHint ?? "auto";
+
   // Settings-backed engine selector. The admin UI writes
   // `writer.<agentId>.engine` directly, so flipping v1↔v2 is a click — no
   // env var, no deploy. v2 doesn't support modeHint="auto"; fall through
-  // to v1 if "auto" is requested even when v2 is selected.
-  const agentIdForEngine = opts.agentId ?? "daily-writer";
-  if (opts.modeHint !== "auto") {
-    const engine = await getWriterEngine(agentIdForEngine);
-    if (engine === "v2") {
+  // to v1 if "auto" is requested even when v2 is selected. Engine lookup
+  // failures default to v1 so a transient settings-table blip doesn't
+  // break runs that previously didn't touch the DB at this boundary.
+  let engine: WriterEngine = "v1";
+  try {
+    engine = await getWriterEngine(agentId);
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), agentId },
+      "Writer: engine lookup failed; defaulting to v1",
+    );
+  }
+  if (engine === "v2" && modeHint === "auto") {
+    // Operators flip v2 in the admin UI then click Run with the default
+    // mode='auto' and don't realize v2 doesn't support auto. Surface it
+    // in the logs so the selector isn't mistaken for a no-op.
+    logger.warn(
+      { agentId },
+      "Writer: engine=v2 selected but modeHint='auto' — v2 doesn't support auto, running v1",
+    );
+  }
+  if (engine === "v2" && modeHint !== "auto") {
+    try {
       const { generateAndSavePostV2 } = await import("./writer-v2");
-      return generateAndSavePostV2({
-        agentId: opts.agentId,
-        modeHint: opts.modeHint,
+      return await generateAndSavePostV2({
+        agentId,
+        modeHint,
         model: opts.model,
         corpusDays: opts.corpusDays,
       });
+    } catch (err) {
+      // Preserve the WriteResult contract on v2 init / runtime failure
+      // rather than rejecting the promise — callers shape their UI/logs
+      // around { ok: false, error }.
+      logger.error(
+        { err: err instanceof Error ? err.message : String(err), agentId },
+        "Writer v2 dispatch threw; returning error result",
+      );
+      return { ok: false, error: err instanceof Error ? err.message : "writer v2 dispatch failed" };
     }
   }
 
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) return { ok: false, error: "LLM_API_KEY not configured" };
 
-  const agentId = opts.agentId ?? "daily-writer";
   const baseURL = process.env["LLM_BASE_URL"] ?? DEFAULT_BASE_URL;
   const model = opts.model ?? process.env["LLM_MODEL"] ?? DEFAULT_MODEL;
-  const modeHint = opts.modeHint ?? "auto";
 
   const corpus = await loadCorpus(opts.corpusDays ?? 7);
   // Top-10 recap format needs at least 10 substantive items in the window.
@@ -1667,7 +1698,7 @@ export async function runWeeklyRecap(opts: { force?: boolean } = {}): Promise<We
   if (!opts.force && (await modeAlreadyPublishedThisWeek("weekly_recap"))) {
     return { ran: false, reason: "weekly_recap already published this ISO week" };
   }
-  const result = await generateAndSavePost({ modeHint: "weekly_recap" });
+  const result = await generateAndSavePost({ agentId: "daily-writer", modeHint: "weekly_recap" });
   if (result.ok) {
     return { ran: true, ok: true, postId: result.postId };
   }
@@ -1688,7 +1719,7 @@ export async function runWeeklyDeepDive(
   if (!opts.force && (await modeAlreadyPublishedThisWeek("deep_dive"))) {
     return { ran: false, reason: "deep_dive already published this ISO week" };
   }
-  const result = await generateAndSavePost({ modeHint: "deep_dive" });
+  const result = await generateAndSavePost({ agentId: "daily-writer", modeHint: "deep_dive" });
   if (result.ok) {
     return { ran: true, ok: true, postId: result.postId };
   }
