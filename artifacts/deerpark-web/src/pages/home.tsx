@@ -114,7 +114,7 @@ const Problem = () => (
               <em className="not-italic font-light">AI rollouts often stall</em>
             </h2>
             <p className="text-lg text-muted-foreground mb-6 font-light leading-relaxed">
-              because models like those offered by ChatGPT and Claude are too general and need to be customized. Small teams lack the time or expertise to integrate them into daily work.
+              Small teams lack the time or expertise to integrate them into daily work.
             </p>
             <p className="text-lg text-muted-foreground font-light leading-relaxed">
               Deer Park provides the hands-on partnership. We <span className="text-foreground">map</span> where AI pays back fastest, <span className="text-foreground">embed</span> alongside your team to deploy and train in the flow of work, and <span className="text-foreground">build</span> the custom software when off-the-shelf tools can't do the job.
