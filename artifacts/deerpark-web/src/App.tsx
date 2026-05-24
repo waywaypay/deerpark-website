@@ -9,6 +9,7 @@ import Products from "@/pages/products";
 import Dispatch from "@/pages/dispatch";
 import DispatchArchive from "@/pages/dispatch-archive";
 import DispatchPost from "@/pages/dispatch-post";
+import Sec from "@/pages/sec";
 import Admin from "@/pages/admin";
 import Privacy from "@/pages/privacy";
 import Terms from "@/pages/terms";
@@ -23,6 +24,7 @@ function Router() {
       <Route path="/dispatch" component={Dispatch} />
       <Route path="/dispatch/archive" component={DispatchArchive} />
       <Route path="/dispatch/:id" component={DispatchPost} />
+      <Route path="/sec" component={Sec} />
       <Route path="/admin" component={Admin} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/terms" component={Terms} />

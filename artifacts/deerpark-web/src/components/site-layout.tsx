@@ -9,6 +9,7 @@ import { useConsultModals } from "@/components/consult-modal-provider";
 /** Site-wide: product destinations linked from the home Products section + footer. */
 export const PRODUCT_LINKS = [
   { href: "/dispatch", label: "Dispatch" },
+  { href: "/sec", label: "SEC EDGAR" },
 ] as const;
 
 export const FadeIn = ({
