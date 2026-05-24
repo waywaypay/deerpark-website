@@ -212,10 +212,14 @@ export function findFirstViolation(text: string): { pattern: Pattern; match: Reg
  */
 export function stripViolationSentences(text: string): string {
   if (!text) return text;
-  // Split on sentence-terminator boundary. The lookahead requires whitespace
-  // or end-of-string after the terminator so we don't break decimal numbers
-  // ("$3.5B" → one sentence) or abbreviations followed by lowercase.
-  const parts = text.split(/(?<=[.!?])\s+(?=[A-Z(])/);
+  // Split on sentence-terminator + whitespace boundary. The lookahead admits
+  // the common openers we've seen lead a new sentence after a banned one:
+  // capital letters, opening parens, ASCII/typographic quotes, currency
+  // symbols, digits, and em/en dashes. Without this, a banned sentence
+  // followed by `"It's a milestone," said the CEO.` or `$3.5B in revenue`
+  // wouldn't split — the join would either over-strip both or smuggle the
+  // violation through depending on which side findFirstViolation matches.
+  const parts = text.split(/(?<=[.!?])\s+(?=["'“‘$(\d—–]|[A-Z])/);
   const kept: string[] = [];
   for (const raw of parts) {
     const trimmed = raw.trim();

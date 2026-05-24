@@ -1,3 +1,4 @@
+-- @no-transaction
 -- Auto-mined banned-phrase candidates surfaced by dispatch-phrase-mining.
 -- The eval's worstItems quotes feed an n-gram extractor; phrases that
 -- recur across multiple dispatches land in this table and the runtime
@@ -10,6 +11,13 @@
 --
 -- Self-healing: artifacts/api-server's dispatch-phrase-mining module
 -- mirrors this with ensureDispatchPhraseProposalsSchema() on boot.
+--
+-- Runs outside a transaction so the CREATE INDEX statements can use
+-- CONCURRENTLY. The miner upserts into this table on every eval, so
+-- once it's populated we want index builds to avoid the
+-- ShareLock/ShareUpdateExclusive contention a non-concurrent build
+-- would inflict on the upsert path. On the first run (empty table)
+-- the difference is academic; CONCURRENTLY is essentially free.
 
 CREATE TABLE IF NOT EXISTS dispatch_phrase_proposals (
   phrase             TEXT PRIMARY KEY,
@@ -24,8 +32,8 @@ CREATE TABLE IF NOT EXISTS dispatch_phrase_proposals (
   dismissed_at       TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS dispatch_phrase_proposals_severity_idx
+CREATE INDEX CONCURRENTLY IF NOT EXISTS dispatch_phrase_proposals_severity_idx
   ON dispatch_phrase_proposals (severity, dismissed_at);
 
-CREATE INDEX IF NOT EXISTS dispatch_phrase_proposals_last_seen_idx
+CREATE INDEX CONCURRENTLY IF NOT EXISTS dispatch_phrase_proposals_last_seen_idx
   ON dispatch_phrase_proposals (last_seen_at);

@@ -124,6 +124,26 @@ type ScanResult = {
   warningCount: number;
 };
 
+/** Read a previously-persisted banned-phrase scan off the row, or `null`
+ *  if this row hasn't been scanned yet. Used by evaluateDispatch so a
+ *  re-eval doesn't overwrite the original scan with one taken against a
+ *  later, drifted catalogue — that would silently retroactively flag
+ *  phrases the miner only added AFTER the dispatch shipped, corrupting
+ *  the cross-time comparability evalRubricVersion exists to protect. */
+function readPersistedBannedPhrases(row: DispatchArchive): ScanResult | null {
+  if (row.evalBannedPhrasesCount === null || row.evalBannedPhrases === null) {
+    return null;
+  }
+  const hits = row.evalBannedPhrases ?? [];
+  let violationCount = 0;
+  let warningCount = 0;
+  for (const h of hits) {
+    if (h.severity === "warning") warningCount += h.count;
+    else violationCount += h.count;
+  }
+  return { hits, violationCount, warningCount };
+}
+
 function scanForBannedPhrases(row: DispatchArchive): ScanResult {
   const introText = stripHtml(row.introHtml);
   const subject = row.subject;
@@ -235,7 +255,7 @@ ${RUBRIC_OUTPUT_INSTRUCTIONS}`,
 
 DIMENSION: sourceTiering (0-10)
 
-Does the editorial weight match source weight? Tier 1 (OpenAI / Microsoft / Google / Anthropic / IPOs / regulation) deserves fuller 3-sentence analytical treatment; Tier 3 (arXiv preprints) should be shorter and name a specific applied audience. 10 = clear weighting differential. 5 = mixed — some flattening visible. 0 = arXiv items get the same editorial weight as Microsoft strategy posts.
+Does the editorial weight match source weight? Tier 1 (frontier-lab releases, top-tier vendor strategy posts, IPOs / M&A / regulation from OpenAI / Microsoft / Google / Anthropic etc) deserves fuller 3-sentence analytical treatment; lower-tier items (research-blog posts, secondary-vendor product updates, niche applied tooling) should be shorter and name a specific applied audience. 10 = clear weighting differential. 5 = mixed — some flattening visible. 0 = research-blog items get the same editorial weight as Microsoft strategy posts.
 
 worstItems should flag items where the weighting is inverted or flat.
 
@@ -632,10 +652,28 @@ async function runFullRubric(
   }
 
   const out: Partial<DispatchEvalScores> = {};
+  const expectedJudges = judges.length;
   for (const dim of DIMENSIONS) {
     const samples = bucketed[dim] ?? [];
     if (samples.length === 0) {
       return { ok: false, error: `all judges failed on ${dim}` };
+    }
+    if (samples.length < expectedJudges) {
+      // Persisted samples[] already encodes the per-dimension count, but
+      // surface the ensemble shrink at log time so an operator comparing
+      // composite trends notices when this row's mean is computed against
+      // a smaller-than-roster sample. The full roster ran; some judges
+      // dropped this dimension specifically (truncated JSON, missing
+      // field, etc).
+      logger.warn(
+        {
+          dispatchId: row.id,
+          dimension: dim,
+          samples: samples.length,
+          expected: expectedJudges,
+        },
+        "Dispatch eval: dimension scored by partial ensemble",
+      );
     }
     out[dim] = aggregateDimensionSamples(samples);
   }
@@ -680,75 +718,84 @@ async function runPairwiseSpecificity(
   current: DispatchArchive,
   previous: DispatchArchive,
 ): Promise<DispatchPairwiseSpecificity | null> {
-  // Pairwise uses a SINGLE judge (the first in the roster) — three-judge
-  // ensemble on a pairwise call would just majority-vote, and the pairwise
-  // signal is already noise-resistant relative to absolute scoring. Saves
-  // 2 calls per dispatch.
-  const judge = judges[0];
-  if (!judge) return null;
+  // Pairwise uses a SINGLE judge (one call, not the full ensemble) — a
+  // three-judge ensemble on a pairwise call would just majority-vote, and
+  // the pairwise signal is already noise-resistant relative to absolute
+  // scoring. Iterate the roster in order so a misconfigured / unreachable
+  // first judge doesn't permanently null out the pairwise field — the
+  // healthy judges further down the roster get a chance instead.
+  if (judges.length === 0) return null;
 
   const currentIntro = stripHtml(current.introHtml);
   const previousIntro = stripHtml(previous.introHtml);
   const userMessage =
     `CURRENT (dispatch #${current.id}, "${current.subject}"):\n${currentIntro}\n\n` +
     `PREVIOUS (dispatch #${previous.id}, "${previous.subject}"):\n${previousIntro}`;
-  const seed = seedFor(current.id, "pairwise:introSpecificity", judge.model);
 
-  let text = "";
-  try {
-    const response = await client.chat.completions.create({
+  for (const judge of judges) {
+    const seed = seedFor(current.id, "pairwise:introSpecificity", judge.model);
+    let text = "";
+    try {
+      const response = await client.chat.completions.create({
+        model: judge.model,
+        temperature: JUDGE_TEMPERATURE,
+        top_p: JUDGE_TOP_P,
+        seed,
+        max_tokens: JUDGE_MAX_TOKENS,
+        messages: [
+          { role: "system", content: PAIRWISE_SPECIFICITY_PROMPT },
+          { role: "user", content: userMessage },
+        ],
+        response_format: { type: "json_object" },
+      });
+      await logUsage({
+        caller: "dispatch_eval",
+        callKind: "chat",
+        model: judge.model,
+        promptTokens: response.usage?.prompt_tokens ?? 0,
+        completionTokens: response.usage?.completion_tokens ?? 0,
+      });
+      text = response.choices[0]?.message?.content ?? "";
+    } catch (err) {
+      logger.warn(
+        {
+          dispatchId: current.id,
+          model: judge.model,
+          error: err instanceof Error ? err.message : String(err),
+        },
+        "Dispatch eval: pairwise call failed — trying next judge",
+      );
+      continue;
+    }
+
+    const parsed = parseJson(text);
+    if (!parsed || typeof parsed !== "object") continue;
+    const obj = parsed as { winner?: unknown; margin?: unknown; rationale?: unknown };
+    const winner =
+      obj.winner === "current" || obj.winner === "previous" || obj.winner === "tie"
+        ? obj.winner
+        : null;
+    if (!winner) continue;
+    const marginRaw = typeof obj.margin === "number" ? obj.margin : Number(obj.margin);
+    if (!Number.isFinite(marginRaw)) continue;
+    const margin = Math.max(0, Math.min(3, Math.trunc(marginRaw))) as 0 | 1 | 2 | 3;
+    // Coherence: a tie must have margin 0, and a non-tie must have margin ≥ 1.
+    if (winner === "tie" && margin !== 0) continue;
+    if (winner !== "tie" && margin === 0) continue;
+    const rationale =
+      typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 280) : "";
+    if (!rationale) continue;
+
+    return {
+      comparedToId: previous.id,
+      winner,
+      margin,
+      rationale,
       model: judge.model,
-      temperature: JUDGE_TEMPERATURE,
-      top_p: JUDGE_TOP_P,
-      seed,
-      max_tokens: JUDGE_MAX_TOKENS,
-      messages: [
-        { role: "system", content: PAIRWISE_SPECIFICITY_PROMPT },
-        { role: "user", content: userMessage },
-      ],
-      response_format: { type: "json_object" },
-    });
-    await logUsage({
-      caller: "dispatch_eval",
-      callKind: "chat",
-      model: judge.model,
-      promptTokens: response.usage?.prompt_tokens ?? 0,
-      completionTokens: response.usage?.completion_tokens ?? 0,
-    });
-    text = response.choices[0]?.message?.content ?? "";
-  } catch (err) {
-    logger.warn(
-      { dispatchId: current.id, error: err instanceof Error ? err.message : String(err) },
-      "Dispatch eval: pairwise call failed",
-    );
-    return null;
+    };
   }
 
-  const parsed = parseJson(text);
-  if (!parsed || typeof parsed !== "object") return null;
-  const obj = parsed as { winner?: unknown; margin?: unknown; rationale?: unknown };
-  const winner =
-    obj.winner === "current" || obj.winner === "previous" || obj.winner === "tie"
-      ? obj.winner
-      : null;
-  if (!winner) return null;
-  const marginRaw = typeof obj.margin === "number" ? obj.margin : Number(obj.margin);
-  if (!Number.isFinite(marginRaw)) return null;
-  const margin = Math.max(0, Math.min(3, Math.trunc(marginRaw))) as 0 | 1 | 2 | 3;
-  // Coherence: a tie must have margin 0, and a non-tie must have margin ≥ 1.
-  if (winner === "tie" && margin !== 0) return null;
-  if (winner !== "tie" && margin === 0) return null;
-  const rationale =
-    typeof obj.rationale === "string" ? obj.rationale.trim().slice(0, 280) : "";
-  if (!rationale) return null;
-
-  return {
-    comparedToId: previous.id,
-    winner,
-    margin,
-    rationale,
-    model: judge.model,
-  };
+  return null;
 }
 
 // Formatting eval -----------------------------------------------------------
@@ -920,7 +967,14 @@ export async function evaluateDispatch(id: number): Promise<EvalOutcome> {
     .limit(1);
   if (!row) return { ok: false, error: "not_found" };
 
-  const scan = scanForBannedPhrases(row);
+  // First eval: scan against the current catalogue (static + mined) and
+  // persist. Re-eval: preserve the original scan — the runtime gate keeps
+  // moving as the miner promotes new phrases, but the row's recorded
+  // count must reflect the catalogue active at compose time, otherwise
+  // historical composite trends silently re-score against newer rules.
+  // To force a fresh scan (e.g. after a catalogue cleanup), clear
+  // eval_banned_phrases / eval_banned_phrases_count on the row manually.
+  const scan = readPersistedBannedPhrases(row) ?? scanForBannedPhrases(row);
   const formatting = evaluateFormatting(row);
   const formattingScore = formattingScoreFrom(formatting);
 
@@ -1112,7 +1166,13 @@ export async function computeEngagementForDispatch(
     return { ok: false, reason: "too_recent" };
   }
 
-  const [{ unsubs }] = await db
+  // Only count subscribers who existed at send time. Without the
+  // createdAt filter, a user who signs up AFTER the dispatch and
+  // unsubscribes within the 24h window would inflate the numerator
+  // against a denominator (recipientCount) that never included them.
+  // Two overlapping dispatch windows would also double-count the same
+  // new-signup-then-unsub event against both rows.
+  const [row0] = await db
     .select({ unsubs: sql<number>`count(*)::int` })
     .from(subscribersTable)
     .where(
@@ -1120,8 +1180,10 @@ export async function computeEngagementForDispatch(
         isNotNull(subscribersTable.unsubscribedAt),
         gte(subscribersTable.unsubscribedAt, row.createdAt),
         lte(subscribersTable.unsubscribedAt, windowEnd),
+        lt(subscribersTable.createdAt, row.createdAt),
       ),
     );
+  const unsubs = row0?.unsubs ?? 0;
 
   const recipients = row.recipientCount ?? 0;
   const rate = recipients > 0 ? unsubs / recipients : null;
@@ -1230,8 +1292,13 @@ export async function ensureDispatchEvalSchema(): Promise<void> {
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_unsubs_24h INTEGER`);
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_unsub_rate_24h NUMERIC(6, 4)`);
   await db.execute(sql`ALTER TABLE dispatch_archive ADD COLUMN IF NOT EXISTS eval_engagement_run_at TIMESTAMPTZ`);
+  // CONCURRENTLY so a fresh boot that finds the index missing (e.g. a
+  // crashed migration) doesn't ACCESS-EXCLUSIVE-lock the table that fronts
+  // the public archive page. db.execute runs each statement on its own
+  // connection without a wrapping transaction, so CONCURRENTLY is valid
+  // here even though it would be rejected inside db.transaction(...).
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS dispatch_archive_eval_engagement_run_at_idx
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS dispatch_archive_eval_engagement_run_at_idx
       ON dispatch_archive (eval_engagement_run_at)
   `);
   // Closed-loop phrase-mining table (migrations/0009). Schema lives in

@@ -16,7 +16,10 @@ import {
   ensureDispatchEvalSchema,
   startDispatchEngagementScheduler,
 } from "./lib/dispatch-eval";
-import { startDynamicBannedPatternsReload } from "./lib/banned-phrases";
+import {
+  reloadDynamicBannedPatterns,
+  startDynamicBannedPatternsReload,
+} from "./lib/banned-phrases";
 
 const rawPort = process.env["PORT"];
 
@@ -70,11 +73,22 @@ app.listen(port, (err) => {
     ensureDispatchEvalSchema().catch((err) => {
       logger.error({ err }, "Dispatch eval: ensureSchema failed");
     }),
-  ]).finally(() => {
+  ]).finally(async () => {
     // Hydrate the dynamic banned-phrase cache once the dispatch_eval
     // tables (including dispatch_phrase_proposals) are guaranteed to
-    // exist, then start the periodic reload. Independent of the
-    // headline scheduler.
+    // exist. Await the first reload so the headline scheduler's
+    // immediate ingest tick — and any commentator / writer call queued
+    // in parallel — sees the full catalogue. Without the await, the
+    // first tick can run while the dynamic cache is still empty and
+    // ship phrases the gate would otherwise have blocked.
+    try {
+      await reloadDynamicBannedPatterns();
+    } catch (err) {
+      logger.warn(
+        { err: err instanceof Error ? err.message : String(err) },
+        "Banned phrases: initial cache hydration failed (continuing with static-only gate)",
+      );
+    }
     startDynamicBannedPatternsReload();
     if (process.env["DISABLE_HEADLINE_SCHEDULER"] !== "1") {
       const intervalMinutes = Number(process.env["HEADLINE_INGEST_INTERVAL_MIN"] ?? "15");
