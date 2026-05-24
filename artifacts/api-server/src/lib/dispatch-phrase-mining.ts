@@ -145,11 +145,16 @@ export function phraseToRegexSource(phrase: string): string {
 }
 
 /** Is this candidate already covered by a static BANNED_PATTERNS entry?
- *  Cheap regex test against each static pattern's source — if any
- *  static pattern matches the candidate phrase string, the static rule
- *  will catch the same offending text and we don't need a duplicate. */
+ *  Cheap regex test against each static *violation* pattern — if any
+ *  matches the candidate phrase string, the static rule will catch the
+ *  same offending text and we don't need a duplicate. Warning-tier
+ *  patterns (e.g. /\bincreasingly\b/) are deliberately excluded: they
+ *  catch the bare word but never gate, and shadowing the miner with
+ *  them would prevent ever promoting a compound like "increasingly
+ *  reevaluating" to violation. */
 function alreadyCoveredByStatic(candidate: string): boolean {
   for (const pat of BANNED_PATTERNS) {
+    if (pat.severity !== "violation") continue;
     // Re-compile without global to ensure .test starts at index 0.
     const re = new RegExp(pat.re.source, pat.re.flags.replace(/g/g, ""));
     if (re.test(candidate)) return true;
@@ -273,8 +278,19 @@ export async function mineBannedPhraseProposals(
     if (hitCount < WARNING_THRESHOLD) continue;
 
     const computedSeverity = severityFor(hitCount);
-    // Monotonic — never demote.
-    const currentSeverity = existing?.severity as "warning" | "violation" | undefined;
+    // Monotonic — never demote. Narrow the persisted text at runtime; an
+    // unknown legacy value (manual SQL edit, future enum addition) is
+    // treated as "violation" so we conservatively preserve the strongest
+    // gate rather than silently demoting it to warning.
+    const rawSeverity = existing?.severity;
+    const currentSeverity: "warning" | "violation" | undefined =
+      rawSeverity === "violation"
+        ? "violation"
+        : rawSeverity === "warning"
+          ? "warning"
+          : rawSeverity === undefined
+            ? undefined
+            : "violation";
     const newSeverity: "warning" | "violation" =
       currentSeverity === "violation" ? "violation" : computedSeverity;
     const justPromoted = newSeverity === "violation" && currentSeverity !== "violation";
@@ -332,12 +348,16 @@ export async function ensureDispatchPhraseProposalsSchema(): Promise<void> {
       dismissed_at       TIMESTAMPTZ
     )
   `);
+  // CONCURRENTLY so subsequent boots that race the miner's upsert path
+  // don't contend on a non-concurrent index build. db.execute runs each
+  // statement on a fresh connection without a wrapping transaction, so
+  // CONCURRENTLY is valid here.
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS dispatch_phrase_proposals_severity_idx
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS dispatch_phrase_proposals_severity_idx
       ON dispatch_phrase_proposals (severity, dismissed_at)
   `);
   await db.execute(sql`
-    CREATE INDEX IF NOT EXISTS dispatch_phrase_proposals_last_seen_idx
+    CREATE INDEX CONCURRENTLY IF NOT EXISTS dispatch_phrase_proposals_last_seen_idx
       ON dispatch_phrase_proposals (last_seen_at)
   `);
 }
