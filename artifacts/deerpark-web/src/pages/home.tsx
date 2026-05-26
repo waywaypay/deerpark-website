@@ -871,7 +871,7 @@ const Products = () => (
           <span className="section-label">Products</span>
         </div>
         <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">
-          Products we build, host, and keep running.
+          Our Products
         </h2>
         <p className="text-lg text-muted-foreground font-light max-w-2xl mb-4">
           Production AI tools from our practice — agents, MCP servers, and CLIs that each
