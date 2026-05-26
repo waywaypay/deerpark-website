@@ -195,7 +195,7 @@ const Services = () => (
           Engage at the tier that matches your commitment — from a one-time opportunity map, to an embedded operator in the flow of work, to a full custom build. Training is included in Embed and Build, not sold separately.
         </p>
         <p className="text-sm text-muted-foreground/80 font-light max-w-2xl mb-12 italic">
-          <span className="text-foreground/80 not-italic font-medium">Services</span> are how we work with your team. <span className="text-foreground/80 not-italic font-medium">Products</span> (below) are AI agents you can subscribe to or buy outright.
+          <span className="text-foreground/80 not-italic font-medium">Services</span> are how we work with your team. <span className="text-foreground/80 not-italic font-medium">Products</span> (below) are AI tools you can subscribe to or buy outright.
         </p>
       </FadeIn>
 
@@ -871,11 +871,11 @@ const Products = () => (
           <span className="section-label">Products</span>
         </div>
         <h2 className="text-4xl md:text-6xl font-serif mb-6 max-w-3xl">
-          Agents we build, host, and keep running.
+          Products we build, host, and keep running.
         </h2>
         <p className="text-lg text-muted-foreground font-light max-w-2xl mb-4">
-          Production AI agents from our practice — each solves a specific operator workflow,
-          runs on our infrastructure, and improves as we tune it.
+          Production AI tools from our practice — agents, MCP servers, and CLIs that each
+          solve a specific operator workflow, run on our infrastructure, and improve as we tune them.
         </p>
         <p className="text-sm text-muted-foreground/80 font-light max-w-2xl mb-12 italic">
           Subscribe to one that's live, or have us build the one your team actually needs as part of an engagement.
