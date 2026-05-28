@@ -1,4 +1,4 @@
-import { Fragment, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,16 +11,12 @@ import {
   Bot,
   Radio,
   PenLine,
-  Send,
   ChevronRight,
   ChevronDown,
   Gavel,
-  Eye,
-  MessageSquare,
   Activity,
   Cpu,
   Signal,
-  Zap,
 } from "lucide-react";
 
 const TOKEN_KEY = "deerpark.admin.token";
@@ -53,7 +49,7 @@ type AgentDetail = {
 
 type Lead = {
   id: string;
-  source: "consultation" | "dispatch";
+  source: "consultation";
   sourceDetail: string | null;
   createdAt: string;
   name: string | null;
@@ -61,7 +57,6 @@ type Lead = {
   contactType: "email" | "sms";
   company: string | null;
   challenge: string | null;
-  unsubscribedAt: string | null;
 };
 
 type IngestResult = {
@@ -76,18 +71,6 @@ const formatDate = (value: string | null | undefined) => {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString();
-};
-
-// Strip HTML tags safely. DOMParser with "text/html" does NOT execute scripts
-// or fetch resources during parsing, so extracting textContent is XSS-safe
-// even for LLM-produced HTML (which is what we have in dispatch_archive —
-// intro text is rendered from polished markdown, an untrusted source from a
-// security perspective). Use this anywhere archived intro/commentary is
-// surfaced in the authenticated admin UI.
-const htmlToText = (html: string): string => {
-  if (typeof window === "undefined" || !html) return html ?? "";
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return (doc.body.textContent ?? "").trim();
 };
 
 const apiFetch = async (token: string, path: string, init?: RequestInit) => {
@@ -476,7 +459,6 @@ const LeadsTab = ({ token }: { token: string }) => {
       "contact",
       "company",
       "challenge",
-      "unsubscribedAt",
     ];
     const rows = leads.map((l) =>
       [
@@ -489,7 +471,6 @@ const LeadsTab = ({ token }: { token: string }) => {
         l.contact,
         l.company ?? "",
         l.challenge ?? "",
-        l.unsubscribedAt ?? "",
       ]
         .map((v) => escape(String(v)))
         .join(","),
@@ -516,7 +497,7 @@ const LeadsTab = ({ token }: { token: string }) => {
         <div>
           <h2 className="text-2xl font-serif">Leads</h2>
           <p className="text-sm text-muted-foreground font-light mt-1">
-            Everyone who's reached out — free consultation requests and Dispatch newsletter subscribers.
+            Everyone who's reached out — free consultation requests.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -572,64 +553,52 @@ const LeadsTab = ({ token }: { token: string }) => {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((l) => {
-              const sourceLabel = l.source === "consultation" ? "Consultation" : "Dispatch";
-              const sourceClass =
-                l.source === "consultation"
-                  ? "border-primary/40 text-primary"
-                  : "border-foreground/30 text-foreground/80";
-              return (
-                <tr
-                  key={l.id}
-                  className="border-b border-foreground/10 hover:bg-background/40 cursor-pointer"
-                  onClick={() => setExpanded((id) => (id === l.id ? null : l.id))}
-                >
-                  <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatDate(l.createdAt)}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`text-[10px] uppercase tracking-widest border px-1.5 py-0.5 ${sourceClass}`}>
-                      {sourceLabel}
+            {filtered.map((l) => (
+              <tr
+                key={l.id}
+                className="border-b border-foreground/10 hover:bg-background/40 cursor-pointer"
+                onClick={() => setExpanded((id) => (id === l.id ? null : l.id))}
+              >
+                <td className="px-4 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatDate(l.createdAt)}</td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <span className="text-[10px] uppercase tracking-widest border px-1.5 py-0.5 border-primary/40 text-primary">
+                    Consultation
+                  </span>
+                  {l.sourceDetail && (
+                    <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                      {l.sourceDetail}
                     </span>
-                    {l.sourceDetail && (
-                      <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
-                        {l.sourceDetail}
-                      </span>
-                    )}
-                    {l.source === "dispatch" && l.unsubscribedAt && (
-                      <span className="ml-2 text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
-                        Unsubscribed
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">{l.name ?? <span className="text-muted-foreground">—</span>}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
-                        {l.contactType === "sms" ? "SMS" : "Email"}
-                      </span>
-                      <a
-                        href={l.contactType === "sms" ? `sms:${l.contact}` : `mailto:${l.contact}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="hover:underline underline-offset-4"
-                      >
-                        {l.contact}
-                      </a>
+                  )}
+                </td>
+                <td className="px-4 py-3">{l.name ?? <span className="text-muted-foreground">—</span>}</td>
+                <td className="px-4 py-3">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground border border-foreground/15 px-1.5 py-0.5">
+                      {l.contactType === "sms" ? "SMS" : "Email"}
                     </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {l.company ?? <span>—</span>}
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground max-w-md">
-                    {l.challenge ? (
-                      <div className={expanded === l.id ? "whitespace-pre-wrap" : "truncate"}>
-                        {l.challenge}
-                      </div>
-                    ) : (
-                      <span>—</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
+                    <a
+                      href={l.contactType === "sms" ? `sms:${l.contact}` : `mailto:${l.contact}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:underline underline-offset-4"
+                    >
+                      {l.contact}
+                    </a>
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-muted-foreground">
+                  {l.company ?? <span>—</span>}
+                </td>
+                <td className="px-4 py-3 text-muted-foreground max-w-md">
+                  {l.challenge ? (
+                    <div className={expanded === l.id ? "whitespace-pre-wrap" : "truncate"}>
+                      {l.challenge}
+                    </div>
+                  ) : (
+                    <span>—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
             {leads && filtered.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
@@ -643,127 +612,6 @@ const LeadsTab = ({ token }: { token: string }) => {
     </div>
   );
 };
-
-type WriterAgent = {
-  id: string;
-  displayName: string;
-  description: string;
-  model: string;
-  baseUrl: string;
-  enabled: boolean;
-  configured: boolean;
-  postCount: number;
-  latestPublishedAt: string | null;
-  totalPromptTokens: number;
-  totalCompletionTokens: number;
-  totalTokens: number;
-  totalCostUsd: string;
-};
-
-type AdminPost = {
-  id: number;
-  agentId: string;
-  mode: string;
-  tag: string;
-  title: string;
-  dek: string;
-  bodyMarkdown: string;
-  citations: string[];
-  sourceHeadlineIds: number[];
-  model: string;
-  promptTokens: number | null;
-  completionTokens: number | null;
-  totalTokens: number | null;
-  costUsd: string | null;
-  publishedAt: string;
-  createdAt: string;
-};
-
-const formatTokens = (n: number | null | undefined) => {
-  if (!n) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
-  return n.toLocaleString();
-};
-
-const formatUsd = (s: string | number | null | undefined) => {
-  if (s === null || s === undefined || s === "") return "—";
-  const n = typeof s === "string" ? Number(s) : s;
-  if (!Number.isFinite(n) || n === 0) return "$0";
-  if (n < 0.01) return `$${n.toFixed(4)}`;
-  if (n < 1) return `$${n.toFixed(3)}`;
-  return `$${n.toFixed(2)}`;
-};
-
-const DAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-function formatDigestDays(days: number[]): string {
-  if (!days || days.length === 0) return "no days";
-  if (days.length === 7) return "every day";
-  return [...days].sort().map((d) => DAY_ABBR[d] ?? "?").join(" + ");
-}
-
-type DigestState = {
-  config: {
-    hasFromEmail: boolean;
-    hasResendKey: boolean;
-    hasLlmKey: boolean;
-    hourPt: number;
-    minutePt: number;
-    daysOfWeekPt: number[];
-    timezone: string;
-    ready: boolean;
-  } | null;
-  lastSentPtDate: string | null;
-  todayPtDate: string;
-  alreadySentToday: boolean;
-  topCandidateCount: number;
-  activeSubscribers: number;
-};
-
-type DigestPreview = {
-  subject: string;
-  html: string;
-  text: string;
-  headlineCount: number;
-  bannerGenerated: boolean;
-  polishApplied: boolean;
-};
-
-type DigestRunResult = {
-  ok: boolean;
-  sent: number | null;
-  failed?: number;
-  subject?: string;
-  headlineCount?: number;
-  bannerGenerated?: boolean;
-  polishApplied?: boolean;
-  reason?: string;
-  firstFailure?: string | null;
-  results?: Array<{ recipient: string; ok: boolean; error?: string }>;
-};
-
-type ComposeDiagnostics = {
-  polishStatus: "success" | "no_api_key" | "request_failed" | "parse_failed" | "missing_subject_or_intro";
-  polishError?: string;
-  polishCommentaryCount: number;
-  fallbackCommentaryCount: number;
-  fallbackError?: string;
-  finalCommentaryCount: number;
-  headlineCount: number;
-};
-
-type DigestTestSendResult =
-  | {
-      ok: true;
-      recipient: string;
-      subject: string;
-      headlineCount: number;
-      bannerGenerated: boolean;
-      polishApplied: boolean;
-      diagnostics: ComposeDiagnostics;
-    }
-  | { ok: false; recipient?: string; error: string };
 
 type JudgeSpec = {
   judge: {
@@ -785,7 +633,6 @@ type JudgeSpec = {
     minPapers: number;
     broadPressSources: string[];
     broadPressRequiresOrg: boolean;
-    requiresCommentary: boolean;
   };
   lastRun: {
     finishedAt: string;
@@ -800,728 +647,6 @@ type JudgeSpec = {
     lowest: Array<{ id: number; source: string; title: string; relevanceScore: number }>;
     highest: Array<{ id: number; source: string; title: string; relevanceScore: number }>;
   };
-};
-
-const WRITER_MODES = [
-  { id: "auto", label: "Auto (agent picks)" },
-  { id: "deep_dive", label: "Deep dive" },
-  { id: "free_pick", label: "Free pick" },
-  { id: "weekly_recap", label: "Weekly recap (week's top-10)" },
-] as const;
-
-type WriterModeId = (typeof WRITER_MODES)[number]["id"];
-
-type WriterModeSlot = "free_pick" | "deep_dive" | "weekly_recap";
-type PromptSlotId = "base" | WriterModeSlot;
-
-type PromptSlotState = { value: string; isCustom: boolean; default: string };
-
-const PROMPT_SLOT_TABS: { id: PromptSlotId; label: string; helper: string }[] = [
-  { id: "base", label: "Shared rules", helper: "Voice, format, citation rules. Applied to every run regardless of mode." },
-  { id: "free_pick", label: "Free pick", helper: "Default daily recap framing. ~700–900 words." },
-  { id: "deep_dive", label: "Deep dive", helper: "Top 3 items get extra context. ~900–1100 words." },
-  { id: "weekly_recap", label: "Weekly recap", helper: "Once-per-week roundup framed around the week." },
-];
-
-const PROMPT_LIMITS: Record<PromptSlotId, { min: number; max: number }> = {
-  base: { min: 200, max: 20_000 },
-  free_pick: { min: 0, max: 4_000 },
-  deep_dive: { min: 0, max: 4_000 },
-  weekly_recap: { min: 0, max: 4_000 },
-};
-
-const WriterAgentsTab = ({ token }: { token: string }) => {
-  const [agents, setAgents] = useState<WriterAgent[] | null>(null);
-  const [posts, setPosts] = useState<AdminPost[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [runMode, setRunMode] = useState<WriterModeId>("auto");
-  const [lastRun, setLastRun] = useState<{ ok: boolean; message: string } | null>(null);
-  const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
-  const [engine, setEngine] = useState<"v1" | "v2">("v1");
-  const [engineSaving, setEngineSaving] = useState(false);
-  // Ref tracks an in-flight saveEngine PUT so a concurrent load() refresh
-  // doesn't clobber the user's optimistic selection with the stale server
-  // value. setState is async; a ref reads synchronously and is safe to
-  // check from the fetch callback.
-  const engineSavingRef = useRef(false);
-
-  // Prompt editor state. Four slots: a shared base prompt + one addendum per
-  // mode. Each slot has its own draft, isCustom flag, and built-in default.
-  const [promptOpen, setPromptOpen] = useState(false);
-  const [promptSlots, setPromptSlots] = useState<{
-    base: PromptSlotState;
-    addenda: Record<WriterModeSlot, PromptSlotState>;
-  } | null>(null);
-  const [drafts, setDrafts] = useState<Record<PromptSlotId, string>>({
-    base: "",
-    free_pick: "",
-    deep_dive: "",
-    weekly_recap: "",
-  });
-  const [activeSlot, setActiveSlot] = useState<PromptSlotId>("base");
-  const [promptLoading, setPromptLoading] = useState(false);
-  const [promptSaving, setPromptSaving] = useState(false);
-  const [promptStatus, setPromptStatus] = useState<{ ok: boolean; message: string } | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [aRes, pRes] = await Promise.all([
-        apiFetch(token, "/admin/writers"),
-        apiFetch(token, "/admin/posts"),
-      ]);
-      if (!aRes.ok) throw new Error(`Writers HTTP ${aRes.status}`);
-      if (!pRes.ok) throw new Error(`Posts HTTP ${pRes.status}`);
-      const aJson = (await aRes.json()) as { items: WriterAgent[] };
-      const pJson = (await pRes.json()) as { items: AdminPost[] };
-      setAgents(aJson.items);
-      setPosts(pJson.items);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load writers");
-    } finally {
-      setLoading(false);
-    }
-
-    // Engine endpoint is best-effort — pre-engine deploys 404 here, a
-    // proxy interstitial can return HTML, the network can drop. None of
-    // these should fail the writers/posts tab. Run after the main load so
-    // any throw here can't take the rest down. Skip the apply if a
-    // saveEngine PUT is in flight so we don't overwrite the user's
-    // optimistic selection with the pre-PUT server value.
-    try {
-      const eRes = await apiFetch(token, "/admin/writers/daily-writer/engine");
-      if (eRes.ok && !engineSavingRef.current) {
-        const eJson = (await eRes.json()) as { engine?: "v1" | "v2" };
-        if (eJson.engine === "v1" || eJson.engine === "v2") setEngine(eJson.engine);
-      }
-    } catch {
-      // swallow; the UI keeps its current engine value
-    }
-  }, [token]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const saveEngine = async (next: "v1" | "v2") => {
-    const prev = engine;
-    setEngine(next);
-    setEngineSaving(true);
-    engineSavingRef.current = true;
-    try {
-      const res = await apiFetch(token, "/admin/writers/daily-writer/engine", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ engine: next }),
-      });
-      if (!res.ok) {
-        setEngine(prev);
-        const text = await res.text();
-        setLastRun({ ok: false, message: `Engine switch failed: ${text.slice(0, 200)}` });
-      }
-    } catch (err) {
-      setEngine(prev);
-      setLastRun({ ok: false, message: err instanceof Error ? err.message : "Engine switch failed" });
-    } finally {
-      setEngineSaving(false);
-      engineSavingRef.current = false;
-    }
-  };
-
-  const runOne = async (id: string) => {
-    setBusyId(id);
-    setLastRun({ ok: true, message: "Starting run…" });
-    try {
-      const kickoff = await apiFetch(token, `/admin/writers/${id}/run?mode=${runMode}`, {
-        method: "POST",
-      });
-      const kickoffText = await kickoff.text();
-      let kickoffJson: { error?: string; accepted?: boolean } | null = null;
-      try {
-        kickoffJson = JSON.parse(kickoffText);
-      } catch {
-        kickoffJson = null;
-      }
-      if (!kickoff.ok && kickoff.status !== 202) {
-        const msg = kickoffJson?.error ?? `HTTP ${kickoff.status}: ${kickoffText.slice(0, 200)}`;
-        setLastRun({ ok: false, message: msg });
-        setBusyId(null);
-        return;
-      }
-
-      // Poll for up to 8 minutes. With 1,400–2,500 word posts plus a possible
-      // retry on length-validator rejection, Claude reasoning can run 4–6 min.
-      setLastRun({
-        ok: true,
-        message: "Generating… (this can take 3–6 minutes for long posts with retry)",
-      });
-      const startedAt = Date.now();
-      const deadlineMs = 8 * 60 * 1000;
-      const pollIntervalMs = 4000;
-      while (Date.now() - startedAt < deadlineMs) {
-        await new Promise((r) => setTimeout(r, pollIntervalMs));
-        const stRes = await apiFetch(token, `/admin/writers/${id}/run-status`);
-        if (!stRes.ok) continue;
-        const stJson = (await stRes.json()) as {
-          status: {
-            status: "idle" | "running" | "ok" | "error" | "aborted";
-            postId: number | null;
-            error: string | null;
-            rationale: string | null;
-          };
-        };
-        const s = stJson.status;
-        if (s.status === "ok") {
-          setLastRun({ ok: true, message: `Wrote post #${s.postId}` });
-          await load();
-          setBusyId(null);
-          return;
-        }
-        if (s.status === "aborted") {
-          // Clean outcome: agent decided the corpus doesn't support a real
-          // piece today. Surface as informational, not an error.
-          setLastRun({
-            ok: true,
-            message: `No post today — agent aborted: ${s.rationale ?? "corpus too thin for a real piece"}`,
-          });
-          setBusyId(null);
-          return;
-        }
-        if (s.status === "error") {
-          setLastRun({ ok: false, message: s.error ?? "Run failed" });
-          setBusyId(null);
-          return;
-        }
-      }
-      setLastRun({
-        ok: false,
-        message:
-          "Timed out waiting for the run to finish (8 minutes). The run may have completed — refresh the page and check Recent posts before re-running.",
-      });
-    } catch (err) {
-      setLastRun({ ok: false, message: err instanceof Error ? err.message : "Run failed" });
-    } finally {
-      setBusyId(null);
-    }
-  };
-
-  const stateForSlot = (
-    slots: { base: PromptSlotState; addenda: Record<WriterModeSlot, PromptSlotState> },
-    slot: PromptSlotId,
-  ): PromptSlotState => (slot === "base" ? slots.base : slots.addenda[slot]);
-
-  const openPromptEditor = async () => {
-    setPromptOpen(true);
-    setPromptStatus(null);
-    setPromptLoading(true);
-    try {
-      const res = await apiFetch(token, "/admin/writers/daily-writer/prompt");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as {
-        base: PromptSlotState;
-        addenda: Record<WriterModeSlot, PromptSlotState>;
-      };
-      setPromptSlots(json);
-      setDrafts({
-        base: json.base.value,
-        free_pick: json.addenda.free_pick.value,
-        deep_dive: json.addenda.deep_dive.value,
-        weekly_recap: json.addenda.weekly_recap.value,
-      });
-    } catch (err) {
-      setPromptStatus({
-        ok: false,
-        message: err instanceof Error ? err.message : "Failed to load prompt",
-      });
-    } finally {
-      setPromptLoading(false);
-    }
-  };
-
-  const savePromptSlot = async (slot: PromptSlotId) => {
-    setPromptSaving(true);
-    setPromptStatus(null);
-    try {
-      const res = await apiFetch(token, "/admin/writers/daily-writer/prompt", {
-        method: "PUT",
-        body: JSON.stringify({ slot, value: drafts[slot] }),
-      });
-      const json = (await res.json()) as { error?: string };
-      if (res.ok) {
-        setPromptSlots((prev) => {
-          if (!prev) return prev;
-          const next = { ...prev, addenda: { ...prev.addenda } };
-          const updated: PromptSlotState = {
-            value: drafts[slot],
-            isCustom: true,
-            default: stateForSlot(prev, slot).default,
-          };
-          if (slot === "base") next.base = updated;
-          else next.addenda[slot] = updated;
-          return next;
-        });
-        setPromptStatus({ ok: true, message: `Saved ${slot}. Next run will use it.` });
-      } else {
-        setPromptStatus({ ok: false, message: json.error ?? `HTTP ${res.status}` });
-      }
-    } catch (err) {
-      setPromptStatus({
-        ok: false,
-        message: err instanceof Error ? err.message : "Save failed",
-      });
-    } finally {
-      setPromptSaving(false);
-    }
-  };
-
-  const resetPromptSlot = async (slot: PromptSlotId) => {
-    if (!promptSlots) return;
-    const label = PROMPT_SLOT_TABS.find((t) => t.id === slot)?.label ?? slot;
-    if (!confirm(`Reset "${label}" to the built-in default? Your custom edits for this slot will be deleted.`)) return;
-    const defaultValue = stateForSlot(promptSlots, slot).default;
-    setPromptSaving(true);
-    setPromptStatus(null);
-    try {
-      const res = await apiFetch(
-        token,
-        `/admin/writers/daily-writer/prompt?slot=${encodeURIComponent(slot)}`,
-        { method: "DELETE" },
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setPromptSlots((prev) => {
-        if (!prev) return prev;
-        const updated: PromptSlotState = { value: defaultValue, isCustom: false, default: defaultValue };
-        const next = { ...prev, addenda: { ...prev.addenda } };
-        if (slot === "base") next.base = updated;
-        else next.addenda[slot] = updated;
-        return next;
-      });
-      setDrafts((d) => ({ ...d, [slot]: defaultValue }));
-      setPromptStatus({ ok: true, message: `Reset ${slot} to default.` });
-    } catch (err) {
-      setPromptStatus({
-        ok: false,
-        message: err instanceof Error ? err.message : "Reset failed",
-      });
-    } finally {
-      setPromptSaving(false);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-serif">Writer agents</h2>
-          <p className="text-sm text-muted-foreground font-light mt-1">
-            Agents that turn ingested headlines into posts. Anti-hallucination: every citation
-            is validated against the corpus before save.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => void openPromptEditor()}
-            className="rounded-none text-xs uppercase tracking-widest"
-          >
-            <PenLine className="w-3.5 h-3.5" /> Edit prompt
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void load()}
-            disabled={loading}
-            className="rounded-none text-xs uppercase tracking-widest"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-        </div>
-      </div>
-
-      {promptOpen && (
-        <div className="border border-foreground/30 bg-card">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
-            <div>
-              <div className="section-label">System prompt</div>
-              <div className="text-xs text-muted-foreground font-light mt-1">
-                Shared rules + per-mode framing. At run time the system prompt is{" "}
-                <code className="text-[11px]">base + addendum-for-this-mode</code>.
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPromptOpen(false)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Close
-            </button>
-          </div>
-          {promptLoading || !promptSlots ? (
-            <div className="p-6 text-xs text-muted-foreground">Loading…</div>
-          ) : (
-            (() => {
-              const slotState = stateForSlot(promptSlots, activeSlot);
-              const draft = drafts[activeSlot];
-              const limits = PROMPT_LIMITS[activeSlot];
-              const tab = PROMPT_SLOT_TABS.find((t) => t.id === activeSlot)!;
-              const dirty = draft !== slotState.value;
-              const tooShort = draft.length < limits.min;
-              const tooLong = draft.length > limits.max;
-              return (
-                <div className="p-4 space-y-3">
-                  <div className="flex items-center gap-1 border-b border-foreground/10 -mx-4 px-4 pb-0">
-                    {PROMPT_SLOT_TABS.map((t) => {
-                      const ts = stateForSlot(promptSlots, t.id);
-                      const isActive = t.id === activeSlot;
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          onClick={() => setActiveSlot(t.id)}
-                          className={`px-3 py-2 text-[11px] uppercase tracking-widest border-b-2 -mb-px transition-colors ${
-                            isActive
-                              ? "border-foreground text-foreground"
-                              : "border-transparent text-muted-foreground hover:text-foreground"
-                          }`}
-                        >
-                          {t.label}
-                          {ts.isCustom && (
-                            <span className="ml-1.5 text-primary" title="Custom value saved">
-                              ●
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <div className="text-xs text-muted-foreground font-light">
-                    {tab.helper}{" "}
-                    <span className={slotState.isCustom ? "text-primary" : ""}>
-                      {slotState.isCustom ? "Custom value saved." : "Using built-in default."}
-                    </span>
-                  </div>
-                  <textarea
-                    value={draft}
-                    onChange={(e) =>
-                      setDrafts((d) => ({ ...d, [activeSlot]: e.target.value }))
-                    }
-                    spellCheck={false}
-                    rows={activeSlot === "base" ? 20 : 8}
-                    className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
-                  />
-                  <div className="flex items-center justify-between text-xs">
-                    <div className="text-muted-foreground">
-                      {draft.length.toLocaleString()} chars
-                      {tooShort && (
-                        <span className="text-red-400 ml-2">— too short (min {limits.min})</span>
-                      )}
-                      {tooLong && (
-                        <span className="text-red-400 ml-2">— too long (max {limits.max.toLocaleString()})</span>
-                      )}
-                      {!tooShort && !tooLong && dirty && (
-                        <span className="text-amber-400 ml-2">— unsaved changes</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => void resetPromptSlot(activeSlot)}
-                        disabled={promptSaving || !slotState.isCustom}
-                        className="rounded-none text-[10px] uppercase tracking-widest"
-                      >
-                        Reset to default
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() =>
-                          setDrafts((d) => ({ ...d, [activeSlot]: slotState.default }))
-                        }
-                        disabled={promptSaving}
-                        className="rounded-none text-[10px] uppercase tracking-widest"
-                      >
-                        Load default into editor
-                      </Button>
-                      <Button
-                        onClick={() => void savePromptSlot(activeSlot)}
-                        disabled={promptSaving || tooShort || tooLong || !dirty}
-                        className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
-                      >
-                        {promptSaving ? "Saving…" : "Save"}
-                      </Button>
-                    </div>
-                  </div>
-                  {promptStatus && (
-                    <div
-                      className={`text-xs ${
-                        promptStatus.ok ? "text-primary" : "text-red-400"
-                      }`}
-                    >
-                      {promptStatus.message}
-                    </div>
-                  )}
-                  <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
-                    Saved prompts take effect on the next writer run. Anti-hallucination is enforced
-                    in code regardless of prompt — the citation validator rejects drafts that
-                    reference URLs not in the corpus, so even if you remove the rules from the
-                    prompt, fabricated citations still won't be saved.
-                  </p>
-                </div>
-              );
-            })()
-          )}
-        </div>
-      )}
-
-      {error && <p className="text-xs text-red-400">{error}</p>}
-
-      {agents && agents.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {(() => {
-            const a = agents[0];
-            const avgCost =
-              a.postCount > 0
-                ? Number(a.totalCostUsd) / a.postCount
-                : 0;
-            const avgTokens = a.postCount > 0 ? a.totalTokens / a.postCount : 0;
-            return (
-              <>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Total spent</div>
-                  <div className="text-xl font-serif mt-1">
-                    {formatUsd(a.totalCostUsd)}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    over {a.postCount} {a.postCount === 1 ? "post" : "posts"}
-                  </div>
-                </div>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Avg cost / post</div>
-                  <div className="text-xl font-serif mt-1">{formatUsd(avgCost)}</div>
-                  <div className="text-[10px] text-muted-foreground mt-1">running average</div>
-                </div>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Total tokens</div>
-                  <div className="text-xl font-serif mt-1">
-                    {formatTokens(a.totalTokens)}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    {formatTokens(a.totalPromptTokens)} in · {formatTokens(a.totalCompletionTokens)} out
-                  </div>
-                </div>
-                <div className="border border-foreground/15 bg-card px-4 py-3">
-                  <div className="section-label text-[10px]">Avg tokens / post</div>
-                  <div className="text-xl font-serif mt-1">
-                    {formatTokens(Math.round(avgTokens))}
-                  </div>
-                  <div className="text-[10px] text-muted-foreground mt-1">
-                    in + out combined
-                  </div>
-                </div>
-              </>
-            );
-          })()}
-        </div>
-      )}
-
-      {lastRun && (
-        <div
-          className={`border p-3 text-xs font-sans ${
-            lastRun.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"
-          }`}
-        >
-          {lastRun.message}
-        </div>
-      )}
-
-      <div className="border border-foreground/15 bg-card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-left bg-background/40">
-            <tr className="border-b border-foreground/10">
-              <th className="px-4 py-3 section-label">Agent</th>
-              <th className="px-4 py-3 section-label">Model</th>
-              <th className="px-4 py-3 section-label">Status</th>
-              <th className="px-4 py-3 section-label">Posts</th>
-              <th className="px-4 py-3 section-label">Latest</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {agents?.map((a) => (
-              <tr key={a.id} className="border-b border-foreground/10 hover:bg-background/40">
-                <td className="px-4 py-3">
-                  <div>{a.displayName}</div>
-                  <div className="text-[11px] text-muted-foreground font-light max-w-md">
-                    {a.description}
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground font-mono text-xs">
-                  <div>{a.model}</div>
-                  <div className="text-[10px] opacity-70 truncate max-w-[200px]">{a.baseUrl}</div>
-                </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${
-                      a.enabled
-                        ? "border-primary/40 text-primary"
-                        : "border-foreground/20 text-muted-foreground"
-                    }`}
-                  >
-                    {a.configured ? (a.enabled ? "Enabled" : "Disabled") : "Needs API key"}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{a.postCount}</td>
-                <td className="px-4 py-3 text-muted-foreground text-xs">
-                  {formatDate(a.latestPublishedAt)}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <div className="inline-flex gap-2 items-center">
-                    {/* Engine selector is currently hardcoded to the
-                        single daily-writer agent (the admin endpoint
-                        also rejects other ids). When a second writer is
-                        added, this <select> and `engine`/`saveEngine`
-                        will need to key off `a.id` per-row. */}
-                    <select
-                      value={engine}
-                      onChange={(e) => void saveEngine(e.target.value as "v1" | "v2")}
-                      disabled={engineSaving || busyId !== null}
-                      title="Writer engine — v1 is the monolithic prompt, v2 the decomposed plan/items/intro pipeline"
-                      className="h-8 px-2 bg-background border border-foreground/15 text-[10px] uppercase tracking-widest outline-none focus:border-primary/80 disabled:opacity-50"
-                    >
-                      <option value="v1">v1</option>
-                      <option value="v2">v2</option>
-                    </select>
-                    <select
-                      value={runMode}
-                      onChange={(e) => setRunMode(e.target.value as WriterModeId)}
-                      disabled={!a.configured || busyId !== null || engineSaving}
-                      className="h-8 px-2 bg-background border border-foreground/15 text-[10px] uppercase tracking-widest outline-none focus:border-primary/80 disabled:opacity-50"
-                    >
-                      {WRITER_MODES.map((m) => (
-                        <option key={m.id} value={m.id}>
-                          {m.label}
-                        </option>
-                      ))}
-                    </select>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!a.configured || busyId !== null || engineSaving}
-                      onClick={() => void runOne(a.id)}
-                      className="rounded-none text-[10px] uppercase tracking-widest"
-                    >
-                      <Play className="w-3 h-3" />
-                      {busyId === a.id ? "…" : "Run"}
-                    </Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {agents && agents.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground text-sm">
-                  No writer agents configured.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div>
-        <div className="section-label mb-3">Recent posts ({posts?.length ?? 0})</div>
-        <div className="border border-foreground/15 bg-card divide-y divide-foreground/10">
-          {posts?.map((p) => (
-            <div key={p.id} className="px-4 py-4">
-              <button
-                type="button"
-                onClick={() => setExpandedPostId((id) => (id === p.id ? null : p.id))}
-                className="w-full text-left"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs text-muted-foreground font-mono mb-1">
-                      {formatDate(p.publishedAt)} · {p.mode} · {p.tag} ·{" "}
-                      {p.citations.length} citations
-                    </div>
-                    <div className="text-base font-serif">{p.title}</div>
-                    <div className="text-xs text-muted-foreground font-light mt-1 line-clamp-2">
-                      {p.dek}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <div className="text-xs font-mono">{formatUsd(p.costUsd)}</div>
-                    <div className="text-[11px] text-muted-foreground font-mono">
-                      {formatTokens(p.totalTokens)} tok
-                    </div>
-                    <ChevronRight
-                      className={`w-4 h-4 text-muted-foreground mt-1 ml-auto transition-transform ${
-                        expandedPostId === p.id ? "rotate-90" : ""
-                      }`}
-                    />
-                  </div>
-                </div>
-              </button>
-              {expandedPostId === p.id && (
-                <div className="mt-4 space-y-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-                    <div>
-                      <div className="text-[10px] section-label">Cost</div>
-                      <div className="text-sm font-mono mt-1">{formatUsd(p.costUsd)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] section-label">Total tokens</div>
-                      <div className="text-sm font-mono mt-1">
-                        {formatTokens(p.totalTokens)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] section-label">Prompt</div>
-                      <div className="text-sm font-mono mt-1">
-                        {formatTokens(p.promptTokens)}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] section-label">Completion</div>
-                      <div className="text-sm font-mono mt-1">
-                        {formatTokens(p.completionTokens)}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs section-label">Body</div>
-                  <pre className="whitespace-pre-wrap text-sm font-light text-foreground/90 leading-relaxed">
-                    {p.bodyMarkdown}
-                  </pre>
-                  <div>
-                    <div className="text-xs section-label mb-2">Citations</div>
-                    <ul className="text-xs space-y-1">
-                      {p.citations.map((url) => (
-                        <li key={url}>
-                          <a
-                            href={url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 break-all"
-                          >
-                            <ExternalLink className="w-3 h-3 shrink-0" />
-                            <span>{url}</span>
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-          {posts && posts.length === 0 && (
-            <div className="px-4 py-10 text-center text-muted-foreground text-sm">
-              No posts yet. Hit Run to generate one.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
 };
 
 const JudgeTab = ({ token }: { token: string }) => {
@@ -1642,7 +767,7 @@ const JudgeTab = ({ token }: { token: string }) => {
           <h2 className="text-2xl font-serif">Headline judge</h2>
           <p className="text-sm text-muted-foreground font-light mt-1">
             The LLM that scores each headline 0–100 plus the deterministic algorithm that turns
-            scored items into the top-10 dispatch. Edit the prompt to change what the judge calls
+            scored items into the top-10 feed. Edit the prompt to change what the judge calls
             "relevant"; tune the scoring constants in code.
           </p>
         </div>
@@ -1803,12 +928,6 @@ const JudgeTab = ({ token }: { token: string }) => {
                     ? "Broad-press items dropped unless they anchor on an org entity (judged or not)"
                     : "Disabled"}
                 </dd>
-                <dt className="text-muted-foreground">Commentary required</dt>
-                <dd>
-                  {spec.topSelection.requiresCommentary
-                    ? "Top items must have a generated brief; uncommented rows are skipped"
-                    : "Disabled"}
-                </dd>
               </dl>
             </div>
           </div>
@@ -1901,2352 +1020,21 @@ const JudgeTab = ({ token }: { token: string }) => {
   );
 };
 
-const EmailAgentsTab = ({ token }: { token: string }) => {
-  const [state, setState] = useState<DigestState | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [runResults, setRunResults] = useState<DigestRunResult["results"] | null>(null);
-  const [previewing, setPreviewing] = useState(false);
-  const [preview, setPreview] = useState<DigestPreview | null>(null);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const [testEmail, setTestEmail] = useState("");
-  const [testSending, setTestSending] = useState(false);
-  const [testResult, setTestResult] = useState<DigestTestSendResult | null>(null);
-
-  // Banner-image prompt editor state
-  const [bannerPromptOpen, setBannerPromptOpen] = useState(false);
-  const [bannerPromptDraft, setBannerPromptDraft] = useState<string>("");
-  const [bannerPromptIsCustom, setBannerPromptIsCustom] = useState(false);
-  const [bannerPromptDefault, setBannerPromptDefault] = useState<string>("");
-  const [bannerPromptLoading, setBannerPromptLoading] = useState(false);
-  const [bannerPromptSaving, setBannerPromptSaving] = useState(false);
-  const [bannerPromptStatus, setBannerPromptStatus] =
-    useState<{ ok: boolean; message: string } | null>(null);
-
-  const openBannerPromptEditor = async () => {
-    setBannerPromptOpen(true);
-    setBannerPromptStatus(null);
-    setBannerPromptLoading(true);
-    try {
-      const res = await apiFetch(token, "/admin/email/banner-prompt");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as {
-        template: string;
-        isCustom: boolean;
-        defaultTemplate: string;
-      };
-      setBannerPromptDraft(json.template);
-      setBannerPromptIsCustom(json.isCustom);
-      setBannerPromptDefault(json.defaultTemplate);
-    } catch (err) {
-      setBannerPromptStatus({
-        ok: false,
-        message: err instanceof Error ? err.message : "Failed to load template",
-      });
-    } finally {
-      setBannerPromptLoading(false);
-    }
-  };
-
-  const saveBannerPrompt = async () => {
-    setBannerPromptSaving(true);
-    setBannerPromptStatus(null);
-    try {
-      const res = await apiFetch(token, "/admin/email/banner-prompt", {
-        method: "PUT",
-        body: JSON.stringify({ template: bannerPromptDraft }),
-      });
-      const json = (await res.json()) as { error?: string };
-      if (res.ok) {
-        setBannerPromptIsCustom(true);
-        setBannerPromptStatus({ ok: true, message: "Template saved. Next send will use it." });
-      } else {
-        setBannerPromptStatus({ ok: false, message: json.error ?? `HTTP ${res.status}` });
-      }
-    } catch (err) {
-      setBannerPromptStatus({
-        ok: false,
-        message: err instanceof Error ? err.message : "Save failed",
-      });
-    } finally {
-      setBannerPromptSaving(false);
-    }
-  };
-
-  const resetBannerPrompt = async () => {
-    if (!confirm("Reset banner prompt to the built-in default? Your custom edits will be deleted.")) return;
-    setBannerPromptSaving(true);
-    setBannerPromptStatus(null);
-    try {
-      const res = await apiFetch(token, "/admin/email/banner-prompt", { method: "DELETE" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setBannerPromptDraft(bannerPromptDefault);
-      setBannerPromptIsCustom(false);
-      setBannerPromptStatus({ ok: true, message: "Reset to default." });
-    } catch (err) {
-      setBannerPromptStatus({
-        ok: false,
-        message: err instanceof Error ? err.message : "Reset failed",
-      });
-    } finally {
-      setBannerPromptSaving(false);
-    }
-  };
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await apiFetch(token, "/admin/digest/state");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setState((await res.json()) as DigestState);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load digest state");
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const sendNow = async () => {
-    if (!confirm(`Send the daily top-10 email to ${state?.activeSubscribers ?? "?"} subscribers right now?`)) return;
-    setSending(true);
-    setSendResult(null);
-    setRunResults(null);
-    try {
-      const res = await apiFetch(token, "/admin/digest/run", { method: "POST" });
-      const json = (await res.json()) as DigestRunResult;
-      if (json.sent === null) {
-        setSendResult({ ok: true, message: json.reason ?? "No-op." });
-      } else {
-        setSendResult({
-          ok: (json.failed ?? 0) === 0,
-          message: `Sent "${json.subject}" to ${json.sent} (failed ${json.failed ?? 0}). Banner ${json.bannerGenerated ? "generated" : "skipped"}, polish ${json.polishApplied ? "applied" : "skipped"}.`,
-        });
-        setRunResults(json.results ?? null);
-      }
-      await load();
-    } catch (err) {
-      setSendResult({ ok: false, message: err instanceof Error ? err.message : "Send failed" });
-    } finally {
-      setSending(false);
-    }
-  };
-
-  const sendTest = async () => {
-    const to = testEmail.trim();
-    if (!to) return;
-    setTestSending(true);
-    setTestResult(null);
-    try {
-      const res = await apiFetch(token, "/admin/digest/send-test", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to }),
-      });
-      const json = (await res.json()) as DigestTestSendResult;
-      setTestResult(json);
-    } catch (err) {
-      setTestResult({ ok: false, error: err instanceof Error ? err.message : "Test send failed" });
-    } finally {
-      setTestSending(false);
-    }
-  };
-
-  const openPreview = async () => {
-    setPreviewing(true);
-    setPreviewError(null);
-    setPreview(null);
-    try {
-      const res = await apiFetch(token, "/admin/digest/preview");
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(json.error ?? `HTTP ${res.status}`);
-      }
-      setPreview((await res.json()) as DigestPreview);
-    } catch (err) {
-      setPreviewError(err instanceof Error ? err.message : "Preview failed");
-    } finally {
-      setPreviewing(false);
-    }
-  };
-
-  const cfg = state?.config;
-  const ready = Boolean(cfg?.ready);
-  const statusLabel = !cfg
-    ? "Loading…"
-    : ready
-      ? state?.alreadySentToday
-        ? "Sent today"
-        : "Ready"
-      : "Needs config";
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-serif">Email agents</h2>
-          <p className="text-sm text-muted-foreground font-light mt-1">
-            One agent: the daily top-10 dispatch. Pulls the same top-10 the website serves,
-            generates a banner image, and runs an LLM polish pass over the subject and intro
-            before sending via Resend.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => void openBannerPromptEditor()}
-            className="rounded-none text-xs uppercase tracking-widest"
-          >
-            <PenLine className="w-3.5 h-3.5" /> Edit banner prompt
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => void load()}
-            disabled={loading}
-            className="rounded-none text-xs uppercase tracking-widest"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
-          </Button>
-        </div>
-      </div>
-
-      {bannerPromptOpen && (
-        <div className="border border-foreground/30 bg-card">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
-            <div>
-              <div className="section-label">Banner image prompt</div>
-              <div className="text-xs text-muted-foreground font-light mt-1">
-                Sent to Venice's image endpoint to generate the email banner. Use{" "}
-                <code className="font-mono">{`{{stories}}`}</code> as a placeholder for the
-                day's top three headlines.{" "}
-                <span className={bannerPromptIsCustom ? "text-primary" : ""}>
-                  {bannerPromptIsCustom ? "Using custom template." : "Using built-in default."}
-                </span>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setBannerPromptOpen(false)}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Close
-            </button>
-          </div>
-          {bannerPromptLoading ? (
-            <div className="p-6 text-xs text-muted-foreground">Loading…</div>
-          ) : (
-            <div className="p-4 space-y-3">
-              <textarea
-                value={bannerPromptDraft}
-                onChange={(e) => setBannerPromptDraft(e.target.value)}
-                spellCheck={false}
-                rows={8}
-                className="w-full bg-background border border-foreground/15 px-3 py-3 text-xs font-mono leading-relaxed outline-none focus:border-primary/80 resize-y"
-              />
-              <div className="flex items-center justify-between text-xs">
-                <div className="text-muted-foreground">
-                  {bannerPromptDraft.length.toLocaleString()} chars
-                  {bannerPromptDraft.length < 20 && (
-                    <span className="text-red-400 ml-2">— too short (min 20)</span>
-                  )}
-                  {bannerPromptDraft.length > 4000 && (
-                    <span className="text-red-400 ml-2">— too long (max 4,000)</span>
-                  )}
-                  {bannerPromptDraft.length >= 20 &&
-                    !bannerPromptDraft.includes("{{stories}}") && (
-                      <span className="text-amber-400 ml-2">
-                        — no <code className="font-mono">{`{{stories}}`}</code> placeholder; the
-                        prompt will be sent verbatim regardless of the day's headlines
-                      </span>
-                    )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => void resetBannerPrompt()}
-                    disabled={bannerPromptSaving || !bannerPromptIsCustom}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    Reset to default
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setBannerPromptDraft(bannerPromptDefault)}
-                    disabled={bannerPromptSaving}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    Load default into editor
-                  </Button>
-                  <Button
-                    onClick={() => void saveBannerPrompt()}
-                    disabled={
-                      bannerPromptSaving ||
-                      bannerPromptDraft.length < 20 ||
-                      bannerPromptDraft.length > 4000
-                    }
-                    className="rounded-none text-[10px] uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90"
-                  >
-                    {bannerPromptSaving ? "Saving…" : "Save template"}
-                  </Button>
-                </div>
-              </div>
-              {bannerPromptStatus && (
-                <div
-                  className={`text-xs ${
-                    bannerPromptStatus.ok ? "text-primary" : "text-red-400"
-                  }`}
-                >
-                  {bannerPromptStatus.message}
-                </div>
-              )}
-              <p className="text-[11px] text-muted-foreground font-light leading-relaxed pt-2 border-t border-foreground/10">
-                Saved templates take effect on the next email send (manual run or scheduled).
-                The Preview button re-runs image generation.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {error && <p className="text-xs text-red-400">{error}</p>}
-
-      {state && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="border border-foreground/15 bg-card px-4 py-3">
-            <div className="section-label text-[10px]">Subscribers</div>
-            <div className="text-xl font-serif mt-1">{state.activeSubscribers}</div>
-            <div className="text-[10px] text-muted-foreground mt-1">active</div>
-          </div>
-          <div className="border border-foreground/15 bg-card px-4 py-3">
-            <div className="section-label text-[10px]">Top candidates</div>
-            <div className="text-xl font-serif mt-1">{state.topCandidateCount}</div>
-            <div className="text-[10px] text-muted-foreground mt-1">in last 24h</div>
-          </div>
-          <div className="border border-foreground/15 bg-card px-4 py-3">
-            <div className="section-label text-[10px]">Schedule</div>
-            <div className="text-xl font-serif mt-1">
-              {cfg ? `${String(cfg.hourPt).padStart(2, "0")}:${String(cfg.minutePt).padStart(2, "0")}` : "—"}
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-1">
-              {cfg
-                ? `${formatDigestDays(cfg.daysOfWeekPt)} · ${cfg.timezone}`
-                : ""}
-            </div>
-          </div>
-          <div className="border border-foreground/15 bg-card px-4 py-3">
-            <div className="section-label text-[10px]">Last sent</div>
-            <div className="text-xl font-serif mt-1">{state.lastSentPtDate ?? "—"}</div>
-            <div className="text-[10px] text-muted-foreground mt-1">PT date</div>
-          </div>
-        </div>
-      )}
-
-      {sendResult && (
-        <div className={`border p-3 text-xs ${sendResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}>
-          {sendResult.message}
-        </div>
-      )}
-
-      {runResults && runResults.length > 0 && (
-        <div className="border border-foreground/15 bg-card">
-          <div className="px-4 py-2 border-b border-foreground/10 section-label text-[10px]">
-            Per-recipient results
-          </div>
-          <div className="max-h-64 overflow-y-auto text-xs font-mono">
-            {runResults.map((r) => (
-              <div
-                key={r.recipient}
-                className="flex items-start gap-3 px-4 py-1.5 border-b border-foreground/5 last:border-b-0"
-              >
-                <span className={r.ok ? "text-primary" : "text-red-400"}>
-                  {r.ok ? "✓" : "✗"}
-                </span>
-                <span className="flex-1 break-all">{r.recipient}</span>
-                {!r.ok && r.error && (
-                  <span className="text-red-400 truncate" title={r.error}>{r.error}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="border border-foreground/15 bg-card p-4">
-        <div className="section-label text-[10px] mb-2">Send a test to me</div>
-        <p className="text-xs text-muted-foreground font-light mb-3 max-w-xl">
-          Sends today's composed top-10 to one address only. Bypasses the
-          subscribers table and the once-per-day lock — useful for verifying
-          deliverability without disturbing the scheduled run. Subject is
-          prefixed with <code className="font-mono">[TEST]</code>.
-        </p>
-        <div className="flex flex-wrap gap-2 items-center">
-          <input
-            type="email"
-            value={testEmail}
-            onChange={(e) => setTestEmail(e.target.value)}
-            placeholder="you@example.com"
-            disabled={testSending}
-            className="flex-1 min-w-[240px] bg-background border border-foreground/20 px-3 py-2 text-xs font-mono focus:outline-none focus:border-foreground/50"
-          />
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={!ready || testSending || !testEmail.trim()}
-            onClick={() => void sendTest()}
-            className="rounded-none text-[10px] uppercase tracking-widest"
-          >
-            <Send className="w-3 h-3" /> {testSending ? "Sending…" : "Send test"}
-          </Button>
-        </div>
-        {testResult && (
-          <div
-            className={`mt-3 border p-3 text-xs space-y-1 ${testResult.ok ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}
-          >
-            {testResult.ok ? (
-              <>
-                <div>
-                  Sent "{testResult.subject}" to {testResult.recipient}. Banner {testResult.bannerGenerated ? "generated" : "skipped"}, polish {testResult.polishApplied ? "applied" : "skipped"}.
-                </div>
-                <div className="font-mono text-[10px] text-foreground/70">
-                  Polish: {testResult.diagnostics.polishStatus}
-                  {testResult.diagnostics.polishError ? ` (${testResult.diagnostics.polishError.slice(0, 200)})` : ""}
-                  {" · "}commentary {testResult.diagnostics.finalCommentaryCount}/{testResult.diagnostics.headlineCount}
-                  {" "}(polish {testResult.diagnostics.polishCommentaryCount}, fallback {testResult.diagnostics.fallbackCommentaryCount})
-                  {testResult.diagnostics.fallbackError ? ` · fallback err: ${testResult.diagnostics.fallbackError.slice(0, 100)}` : ""}
-                </div>
-              </>
-            ) : (
-              <div>
-                Test send failed{testResult.recipient ? ` for ${testResult.recipient}` : ""}: {testResult.error}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="border border-foreground/15 bg-card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-left bg-background/40">
-            <tr className="border-b border-foreground/10">
-              <th className="px-4 py-3 section-label">Agent</th>
-              <th className="px-4 py-3 section-label">Pipeline</th>
-              <th className="px-4 py-3 section-label">Status</th>
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-foreground/10 hover:bg-background/40">
-              <td className="px-4 py-3">
-                <div>Daily top-10 dispatch</div>
-                <div className="text-[11px] text-muted-foreground font-light max-w-md">
-                  Top-10 select → image gen → LLM polish (subject + intro + commentary edits) → Resend send
-                </div>
-              </td>
-              <td className="px-4 py-3 text-muted-foreground text-xs space-y-0.5">
-                <div>Resend: {cfg?.hasResendKey ? "✓" : <span className="text-red-400">missing key</span>}</div>
-                <div>From: {cfg?.hasFromEmail ? "✓" : <span className="text-red-400">missing</span>}</div>
-                <div>LLM: {cfg?.hasLlmKey ? "✓ (image + polish)" : <span className="text-amber-400">disabled — fallback subject/intro, no banner</span>}</div>
-              </td>
-              <td className="px-4 py-3">
-                <span className={`text-[10px] uppercase tracking-widest px-2 py-1 border ${ready ? "border-primary/40 text-primary" : "border-red-400/40 text-red-400"}`}>
-                  {statusLabel}
-                </span>
-              </td>
-              <td className="px-4 py-3 text-right">
-                <div className="inline-flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!ready || previewing}
-                    onClick={() => void openPreview()}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    <Eye className="w-3 h-3" /> {previewing ? "…" : "Preview"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={!ready || sending}
-                    onClick={() => void sendNow()}
-                    className="rounded-none text-[10px] uppercase tracking-widest"
-                  >
-                    <Send className="w-3 h-3" /> {sending ? "Sending…" : "Send now"}
-                  </Button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {(preview || previewError) && (
-        <div className="border border-foreground/30 bg-card">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/15">
-            <div>
-              <div className="section-label">Email preview</div>
-              {preview && (
-                <div className="text-xs text-muted-foreground font-light mt-1">
-                  Subject: <span className="text-foreground">{preview.subject}</span> &middot;{" "}
-                  {preview.headlineCount} items &middot; banner {preview.bannerGenerated ? "generated" : "skipped"} &middot;{" "}
-                  polish {preview.polishApplied ? "applied" : "skipped"}
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => { setPreview(null); setPreviewError(null); }}
-              className="text-xs text-muted-foreground hover:text-foreground"
-            >
-              Close
-            </button>
-          </div>
-          {previewError && <div className="p-4 text-xs text-red-400">{previewError}</div>}
-          {preview && (
-            <iframe
-              title="Email preview"
-              srcDoc={preview.html}
-              className="w-full bg-white"
-              style={{ height: "720px", border: "0" }}
-            />
-          )}
-        </div>
-      )}
-    </div>
-  );
+const formatTokens = (n: number | null | undefined) => {
+  if (!n) return "—";
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return n.toLocaleString();
 };
 
-type DispatchArchiveItemSnapshot = {
-  id: number;
-  source: string;
-  title: string;
-  url: string;
-  commentary: string | null;
-  publishedAt: string;
+const formatUsd = (s: string | number | null | undefined) => {
+  if (s === null || s === undefined || s === "") return "—";
+  const n = typeof s === "string" ? Number(s) : s;
+  if (!Number.isFinite(n) || n === 0) return "$0";
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(2)}`;
 };
-
-type DispatchEvalDimension = {
-  score: number;
-  note: string;
-  /** Up to 3 items the LLM flagged as the worst offenders on this
-   *  dimension (1-indexed; 0 = intro). Optional for back-compat with
-   *  rows evaluated before per-item attribution shipped. */
-  worstItems?: Array<{ item: number; quote: string }>;
-};
-
-type DispatchEvalScores = {
-  introSpecificity: DispatchEvalDimension;
-  lensDiversity: DispatchEvalDimension;
-  cadenceVariety: DispatchEvalDimension;
-  sourceTiering: DispatchEvalDimension;
-  concreteness: DispatchEvalDimension;
-};
-
-type DispatchBannedPhraseHit = {
-  phrase: string;
-  count: number;
-  locations: string[];
-  /** "violation" = sentence-shape or LLM-tic phrase (drives the headline
-   *  violations count). "warning" = bare-word ban (tracked but not counted).
-   *  Optional for back-compat with rows scanned before the severity split —
-   *  those are treated as "violation". */
-  severity?: "violation" | "warning";
-};
-
-type DispatchArchiveSummary = {
-  id: number;
-  kind: string;
-  subject: string;
-  introHtml: string;
-  recipientCount: number | null;
-  polishApplied: boolean;
-  bannerGenerated: boolean;
-  feedback: string | null;
-  feedbackUpdatedAt: string | null;
-  evalScores: DispatchEvalScores | null;
-  evalCompositeScore: string | number | null;
-  evalBannedPhrasesCount: number | null;
-  evalBannedPhrases: DispatchBannedPhraseHit[] | null;
-  evalModel: string | null;
-  evalRunAt: string | null;
-  evalFormatting:
-    | {
-        issues: Array<{ type: string; count: number; sample?: string }>;
-        totalIssues: number;
-      }
-    | null;
-  evalFormattingScore: string | number | null;
-  evalBannerScores: Record<string, { score: number; note: string }> | null;
-  evalBannerCompositeScore: string | number | null;
-  evalBannerModel: string | null;
-  promptVersions: DispatchPromptVersionMap | null;
-  createdAt: string;
-  itemCount: number;
-};
-
-type DispatchPromptSlot = "polish" | "fallback" | "commentator" | "banner";
-
-type DispatchPromptVersionMap = Partial<Record<DispatchPromptSlot, string>>;
-
-type DispatchLlmCall = {
-  id: number;
-  dispatchArchiveId: number | null;
-  kind: "polish" | "fallback" | "commentator";
-  promptHash: string;
-  userMessage: string;
-  responseText: string;
-  model: string;
-  promptTokens: number | null;
-  completionTokens: number | null;
-  totalTokens: number | null;
-  latencyMs: number | null;
-  status: "ok" | "request_failed" | "parse_failed" | "missing_subject_or_intro";
-  errorMessage: string | null;
-  createdAt: string;
-};
-
-type DispatchArchiveDetail = DispatchArchiveSummary & {
-  bodyHtml: string;
-  headlinesSnapshot: DispatchArchiveItemSnapshot[];
-};
-
-const RUBRIC_LABELS: Record<keyof DispatchEvalScores, string> = {
-  introSpecificity: "Intro specificity",
-  lensDiversity: "Lens diversity",
-  cadenceVariety: "Cadence variety",
-  sourceTiering: "Source tiering",
-  concreteness: "Concreteness",
-};
-
-const compositeNumber = (v: string | number | null | undefined): number | null => {
-  if (v === null || v === undefined) return null;
-  const n = typeof v === "number" ? v : Number(v);
-  return Number.isFinite(n) ? n : null;
-};
-
-const scoreColor = (score: number | null): string => {
-  if (score === null) return "text-muted-foreground";
-  if (score >= 7) return "text-emerald-400";
-  if (score >= 5) return "text-amber-300";
-  return "text-red-400";
-};
-
-type DispatchEvalDimensionStats = {
-  mean: number | null;
-  min: number | null;
-  max: number | null;
-  n: number;
-};
-
-type DispatchEvalPromptVersionAgg = {
-  hash: string;
-  n: number;
-  compositeMean: number | null;
-  bannedMean: number | null;
-};
-
-type DispatchEvalBannedPhraseAgg = {
-  phrase: string;
-  severity: "violation" | "warning";
-  totalCount: number;
-  dispatchCount: number;
-};
-
-type DispatchEvalAggregates = {
-  totals: { archived: number; evaluated: number; withFeedback: number };
-  composite: DispatchEvalDimensionStats;
-  bannedPerDispatch: DispatchEvalDimensionStats;
-  dimensions: Record<keyof DispatchEvalScores, DispatchEvalDimensionStats>;
-  byPromptVersion: {
-    polish: DispatchEvalPromptVersionAgg[];
-    fallback: DispatchEvalPromptVersionAgg[];
-    commentator: DispatchEvalPromptVersionAgg[];
-    banner: DispatchEvalPromptVersionAgg[];
-  };
-  topBannedPhrases: DispatchEvalBannedPhraseAgg[];
-  formatting: {
-    score: DispatchEvalDimensionStats;
-    totalIssues: DispatchEvalDimensionStats;
-    byType: Array<{ type: string; totalCount: number; dispatchCount: number }>;
-  };
-  banner: { composite: DispatchEvalDimensionStats };
-  trend: Array<{
-    id: number;
-    createdAt: string;
-    composite: number | null;
-    banned: number | null;
-    formatting: number | null;
-    banner: number | null;
-  }>;
-};
-
-const FORMATTING_ISSUE_LABELS: Record<string, string> = {
-  empty_paragraph: "Empty paragraph",
-  nbsp_run: "&nbsp; run",
-  double_space: "Double space",
-  broken_anchor: "Broken anchor",
-  item_count_mismatch: "Item count ≠ 10",
-  missing_alt: "Missing alt text",
-  unrendered_token: "Unrendered {{token}}",
-  duplicate_link: "Duplicate link",
-};
-
-// Trailing window for the rolling baseline shown on the trend chart. 7 sends
-// is roughly a week of daily dispatches — short enough to track prompt
-// changes, long enough to dampen single-day noise.
-const BASELINE_WINDOW = 7;
-// A point flags as a regression when it falls this far below the baseline
-// computed over the trailing window. 1.0 on a 10-point scale ≈ one rubric
-// letter-grade drop — visible to the eye but unambiguous.
-const REGRESSION_THRESHOLD = 1.0;
-
-const EvalTrendStrip = ({
-  trend,
-}: {
-  trend: DispatchEvalAggregates["trend"];
-}) => {
-  // Pre-filter once, memoize the geometry so re-renders of the parent
-  // (driven by feedback drafts, expanded row state, etc) don't rebuild the
-  // bar list. The aggregate endpoint already returns points in oldest →
-  // newest order, so no reverse here.
-  const points = useMemo(
-    () =>
-      trend.filter(
-        (p): p is typeof p & { composite: number } => p.composite !== null,
-      ),
-    [trend],
-  );
-  if (points.length < 2) return null;
-
-  // Trailing baseline: mean of the previous BASELINE_WINDOW points (NOT
-  // including the current one — otherwise a single bad send drags down its
-  // own baseline and never flags as a regression). Undefined until we have
-  // at least 3 priors so the early line isn't visually noisy.
-  type Annotated = (typeof points)[number] & {
-    baseline: number | null;
-    regression: boolean;
-  };
-  const annotated: Annotated[] = points.map((p, i) => {
-    const prior = points.slice(Math.max(0, i - BASELINE_WINDOW), i);
-    if (prior.length < 3) return { ...p, baseline: null, regression: false };
-    const baseline =
-      prior.reduce((s, q) => s + q.composite, 0) / prior.length;
-    const regression = baseline - p.composite >= REGRESSION_THRESHOLD;
-    return { ...p, baseline, regression };
-  });
-
-  const latest = annotated[annotated.length - 1];
-  const regressionCount = annotated.filter((p) => p.regression).length;
-  const max = 10;
-  const width = 720;
-  const height = 80;
-  const barWidth = Math.max(2, Math.floor(width / points.length) - 2);
-  const xFor = (i: number) => i * (width / points.length) + barWidth / 2 + 1;
-  const yFor = (score: number) => height - (score / max) * (height - 4);
-
-  // Build the baseline polyline (skipping undefined segments).
-  const baselineSegments: Array<Array<{ x: number; y: number }>> = [];
-  let current: Array<{ x: number; y: number }> = [];
-  annotated.forEach((p, i) => {
-    if (p.baseline === null) {
-      if (current.length > 0) baselineSegments.push(current);
-      current = [];
-      return;
-    }
-    current.push({ x: xFor(i), y: yFor(p.baseline) });
-  });
-  if (current.length > 0) baselineSegments.push(current);
-
-  return (
-    <div className="border border-foreground/15 bg-card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="section-label">Composite trend</div>
-          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-            Mean of the five rubric scores per dispatch — oldest → newest,
-            full archive. Dashed line is the trailing {BASELINE_WINDOW}-send
-            baseline; ringed bars dropped ≥{REGRESSION_THRESHOLD.toFixed(1)}{" "}
-            below it.
-          </div>
-        </div>
-        <div className="text-xs text-muted-foreground space-x-3">
-          <span>
-            {points.length} evaluated · latest{" "}
-            <span className={scoreColor(latest?.composite ?? null)}>
-              {latest?.composite?.toFixed(2) ?? "—"}
-            </span>
-            /10
-          </span>
-          {latest?.baseline !== null && latest?.baseline !== undefined && (
-            <span>
-              vs baseline{" "}
-              <span className="font-mono">{latest.baseline.toFixed(2)}</span>
-              <span
-                className={
-                  latest.composite - latest.baseline >= 0
-                    ? "text-emerald-400 ml-1"
-                    : "text-red-400 ml-1"
-                }
-              >
-                ({latest.composite - latest.baseline >= 0 ? "+" : ""}
-                {(latest.composite - latest.baseline).toFixed(2)})
-              </span>
-            </span>
-          )}
-          {regressionCount > 0 && (
-            <span className="text-red-400">
-              {regressionCount} regression{regressionCount === 1 ? "" : "s"}
-            </span>
-          )}
-        </div>
-      </div>
-      <svg
-        viewBox={`0 0 ${width} ${height}`}
-        className="w-full h-20 overflow-visible"
-        preserveAspectRatio="none"
-      >
-        <line
-          x1={0}
-          x2={width}
-          y1={yFor(7)}
-          y2={yFor(7)}
-          stroke="currentColor"
-          strokeOpacity={0.15}
-          strokeDasharray="4 4"
-        />
-        {annotated.map((p, i) => {
-          const score = p.composite;
-          const h = Math.max(2, (score / max) * (height - 4));
-          const x = i * (width / points.length) + 1;
-          const y = height - h;
-          const color =
-            score >= 7 ? "#34d399" : score >= 5 ? "#fbbf24" : "#f87171";
-          const tooltip =
-            `#${p.id}\n${score.toFixed(2)}/10 · ${p.banned ?? 0} banned hits` +
-            (p.baseline !== null
-              ? `\nBaseline ${p.baseline.toFixed(2)} (${score - p.baseline >= 0 ? "+" : ""}${(score - p.baseline).toFixed(2)})`
-              : "") +
-            (p.regression ? "\n⚠ regression vs baseline" : "");
-          return (
-            <g key={p.id}>
-              <title>{tooltip}</title>
-              <rect
-                x={x}
-                y={y}
-                width={barWidth}
-                height={h}
-                fill={color}
-                fillOpacity={0.75}
-              />
-              {p.regression && (
-                <rect
-                  x={x - 1}
-                  y={y - 1}
-                  width={barWidth + 2}
-                  height={h + 2}
-                  fill="none"
-                  stroke="#f87171"
-                  strokeWidth={1.5}
-                />
-              )}
-            </g>
-          );
-        })}
-        {baselineSegments.map((seg, idx) => (
-          <polyline
-            key={idx}
-            points={seg.map((s) => `${s.x},${s.y}`).join(" ")}
-            fill="none"
-            stroke="currentColor"
-            strokeOpacity={0.55}
-            strokeWidth={1}
-            strokeDasharray="3 3"
-          />
-        ))}
-      </svg>
-    </div>
-  );
-};
-
-const DatasetDownloadControls = ({ token }: { token: string }) => {
-  const [minComposite, setMinComposite] = useState("");
-  const [kind, setKind] = useState<"" | "polish" | "fallback">("");
-  const [feedbackOnly, setFeedbackOnly] = useState(false);
-  const [withMeta, setWithMeta] = useState(true);
-  const [downloading, setDownloading] = useState(false);
-  const [status, setStatus] = useState<{ ok: boolean; message: string } | null>(null);
-
-  const download = async () => {
-    setDownloading(true);
-    setStatus(null);
-    const params = new URLSearchParams();
-    if (minComposite.trim().length > 0 && Number.isFinite(Number(minComposite))) {
-      params.set("minComposite", String(Number(minComposite)));
-    }
-    if (kind) params.set("kind", kind);
-    if (feedbackOnly) params.set("feedbackOnly", "1");
-    if (withMeta) params.set("withMeta", "1");
-    const path = `/admin/dispatch-archive/fine-tune-dataset${
-      params.toString().length > 0 ? `?${params.toString()}` : ""
-    }`;
-    try {
-      const res = await apiFetch(token, path);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const rows = res.headers.get("X-Dataset-Rows");
-      const skipped = res.headers.get("X-Dataset-Skipped");
-      const skippedByRaw = res.headers.get("X-Dataset-Skipped-By");
-      const blob = await res.blob();
-      const filename =
-        res.headers
-          .get("Content-Disposition")
-          ?.match(/filename="([^"]+)"/)?.[1] ?? "dispatch-fine-tune.jsonl";
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      let breakdown = "";
-      if (skippedByRaw) {
-        try {
-          const parsed = JSON.parse(skippedByRaw) as Record<string, number>;
-          const parts = Object.entries(parsed)
-            .filter(([, n]) => n > 0)
-            .map(([k, n]) => `${k}:${n}`);
-          if (parts.length > 0) breakdown = ` (skipped ${skipped ?? "?"} — ${parts.join(", ")})`;
-        } catch {
-          // ignore parse errors
-        }
-      }
-      setStatus({ ok: true, message: `${rows ?? "?"} rows downloaded${breakdown}` });
-    } catch (err) {
-      setStatus({
-        ok: false,
-        message: err instanceof Error ? err.message : "Download failed",
-      });
-    } finally {
-      setDownloading(false);
-    }
-  };
-
-  return (
-    <div className="border-t border-foreground/10 pt-3 mt-1">
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <div>
-          <div className="section-label">Fine-tune dataset</div>
-          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-            Downloads a JSONL of (system, user, assistant) triples from
-            captured LLM calls — upload directly to an OpenAI/Anthropic
-            fine-tune job.
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          {status && (
-            <span
-              className={`text-[10px] uppercase tracking-widest ${status.ok ? "text-primary" : "text-red-400"}`}
-            >
-              {status.message}
-            </span>
-          )}
-          <Button
-            variant="default"
-            size="sm"
-            onClick={() => void download()}
-            disabled={downloading}
-            className="rounded-none text-[10px] uppercase tracking-widest"
-          >
-            {downloading ? "Building…" : "Download JSONL"}
-          </Button>
-        </div>
-      </div>
-      <div className="flex flex-wrap items-end gap-3 text-xs">
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Min composite
-          </span>
-          <input
-            type="number"
-            min={0}
-            max={10}
-            step={0.1}
-            value={minComposite}
-            onChange={(e) => setMinComposite(e.target.value)}
-            placeholder="e.g. 6"
-            className="w-24 bg-background/40 border border-foreground/20 px-2 py-1 text-xs font-mono focus:border-primary focus:outline-none"
-          />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Call kind
-          </span>
-          <select
-            value={kind}
-            onChange={(e) =>
-              setKind(e.target.value as "" | "polish" | "fallback")
-            }
-            className="bg-background/40 border border-foreground/20 px-2 py-1 text-xs focus:border-primary focus:outline-none"
-          >
-            <option value="">All</option>
-            <option value="polish">Polish</option>
-            <option value="fallback">Fallback</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-2 pb-1">
-          <input
-            type="checkbox"
-            checked={feedbackOnly}
-            onChange={(e) => setFeedbackOnly(e.target.checked)}
-          />
-          <span className="text-muted-foreground">Feedback only</span>
-        </label>
-        <label className="flex items-center gap-2 pb-1">
-          <input
-            type="checkbox"
-            checked={withMeta}
-            onChange={(e) => setWithMeta(e.target.checked)}
-          />
-          <span className="text-muted-foreground">Include metadata</span>
-        </label>
-      </div>
-    </div>
-  );
-};
-
-const EvalAggregatePanel = ({
-  aggregates,
-  token,
-}: {
-  aggregates: DispatchEvalAggregates | null;
-  token: string;
-}) => {
-  if (!aggregates) return null;
-  const {
-    totals,
-    composite,
-    bannedPerDispatch,
-    dimensions,
-    byPromptVersion,
-    topBannedPhrases,
-    formatting,
-    banner,
-  } = aggregates;
-  // Sorted weakest → strongest so the dimensions most in need of fine-tune
-  // examples lead the eye.
-  const dimRows = (Object.keys(RUBRIC_LABELS) as Array<keyof DispatchEvalScores>)
-    .map((k) => ({ key: k, label: RUBRIC_LABELS[k], stats: dimensions[k] }))
-    .sort((a, b) => (a.stats.mean ?? 99) - (b.stats.mean ?? 99));
-  // Best prompt per slot (highest composite mean with n >= 2 — drop single-row
-  // hashes since one composite isn't signal). The server already orders by
-  // composite_mean desc within each slot.
-  const bestPromptPerSlot = (
-    ["polish", "fallback", "banner"] as const
-  )
-    .map((slot) => {
-      const list = byPromptVersion[slot];
-      const candidate = list.find((p) => p.n >= 2 && p.compositeMean !== null) ?? list[0];
-      return candidate ? { slot, agg: candidate } : null;
-    })
-    .filter((v): v is { slot: "polish" | "fallback" | "banner"; agg: DispatchEvalPromptVersionAgg } => v !== null);
-  return (
-    <div className="space-y-4">
-      <div className="border border-foreground/15 bg-card p-4 space-y-2">
-        <div className="flex items-baseline justify-between">
-          <div>
-            <div className="section-label">Aggregate signals</div>
-            <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-              Three independent tracks. Each targets a different model and
-              has its own dataset — never folded into one composite.
-            </div>
-          </div>
-          <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground text-right">
-            <div>
-              {totals.archived} archived · {totals.evaluated} evaluated
-            </div>
-            <div className="text-primary/80 mt-0.5">
-              {totals.withFeedback} with feedback
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-foreground/15 bg-card p-4 space-y-4">
-        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
-          <div className="section-label">Writing track</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Target: text fine-tune (chat completions JSONL)
-          </div>
-        </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-            Composite & banned (fleet)
-          </div>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Composite mean</span>
-              <span className={`font-mono ${scoreColor(composite.mean)}`}>
-                {composite.mean !== null ? composite.mean.toFixed(2) : "—"}/10
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Range</span>
-              <span className="font-mono text-muted-foreground">
-                {composite.min !== null && composite.max !== null
-                  ? `${composite.min.toFixed(1)}–${composite.max.toFixed(1)}`
-                  : "—"}
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Banned/send mean</span>
-              <span
-                className={`font-mono ${
-                  bannedPerDispatch.mean === null
-                    ? "text-muted-foreground"
-                    : bannedPerDispatch.mean <= 1
-                      ? "text-emerald-400"
-                      : bannedPerDispatch.mean <= 3
-                        ? "text-amber-300"
-                        : "text-red-400"
-                }`}
-              >
-                {bannedPerDispatch.mean !== null
-                  ? bannedPerDispatch.mean.toFixed(2)
-                  : "—"}
-              </span>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <span className="text-muted-foreground">Banned range</span>
-              <span className="font-mono text-muted-foreground">
-                {bannedPerDispatch.min !== null && bannedPerDispatch.max !== null
-                  ? `${bannedPerDispatch.min}–${bannedPerDispatch.max}`
-                  : "—"}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-            Rubric dimensions (weakest first)
-          </div>
-          <div className="space-y-1">
-            {dimRows.map((d) => (
-              <div key={d.key} className="flex items-baseline justify-between text-xs">
-                <span className="text-muted-foreground">{d.label}</span>
-                <span className="flex items-baseline gap-2">
-                  <span className={`font-mono ${scoreColor(d.stats.mean)}`}>
-                    {d.stats.mean !== null ? d.stats.mean.toFixed(2) : "—"}
-                  </span>
-                  <span className="font-mono text-muted-foreground/70 text-[10px]">
-                    {d.stats.min !== null && d.stats.max !== null
-                      ? `(${d.stats.min.toFixed(1)}–${d.stats.max.toFixed(1)})`
-                      : ""}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-            Best prompt per slot
-          </div>
-          {bestPromptPerSlot.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground">
-              Not enough evaluated dispatches to compare prompt versions yet.
-            </div>
-          ) : (
-            <div className="space-y-1 text-xs">
-              {bestPromptPerSlot.map(({ slot, agg }) => (
-                <div key={slot} className="flex items-baseline justify-between">
-                  <span className="text-muted-foreground capitalize">{slot}</span>
-                  <span className="flex items-baseline gap-2">
-                    <span className="font-mono text-primary/80">
-                      {agg.hash.slice(0, 10)}
-                    </span>
-                    <span className={`font-mono ${scoreColor(agg.compositeMean)}`}>
-                      {agg.compositeMean !== null ? agg.compositeMean.toFixed(2) : "—"}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">n={agg.n}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-            Top leaked phrases
-          </div>
-          {topBannedPhrases.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground">
-              No banned phrases recorded across the archive yet.
-            </div>
-          ) : (
-            <ul className="space-y-1 text-xs max-h-40 overflow-auto pr-1">
-              {topBannedPhrases.slice(0, 12).map((p) => (
-                <li
-                  key={`${p.phrase}:${p.severity}`}
-                  className="flex items-baseline justify-between"
-                >
-                  <span
-                    className={`font-mono ${p.severity === "violation" ? "text-red-300" : "text-amber-300/90"}`}
-                  >
-                    "{p.phrase}"
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">
-                    {p.totalCount}× · {p.dispatchCount} sends
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </div>
-
-        <DatasetDownloadControls token={token} />
-      </div>
-
-      <div className="border border-foreground/15 bg-card p-4 space-y-3">
-        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
-          <div className="section-label">Formatting track</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Target: template / post-processing fixes (no fine-tune)
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-              Score (10 = clean)
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-              <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">Score mean</span>
-                <span className={`font-mono ${scoreColor(formatting.score.mean)}`}>
-                  {formatting.score.mean !== null
-                    ? formatting.score.mean.toFixed(2)
-                    : "—"}
-                  /10
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">Range</span>
-                <span className="font-mono text-muted-foreground">
-                  {formatting.score.min !== null && formatting.score.max !== null
-                    ? `${formatting.score.min.toFixed(1)}–${formatting.score.max.toFixed(1)}`
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">Issues/send mean</span>
-                <span
-                  className={`font-mono ${
-                    formatting.totalIssues.mean === null
-                      ? "text-muted-foreground"
-                      : formatting.totalIssues.mean <= 1
-                        ? "text-emerald-400"
-                        : formatting.totalIssues.mean <= 3
-                          ? "text-amber-300"
-                          : "text-red-400"
-                  }`}
-                >
-                  {formatting.totalIssues.mean !== null
-                    ? formatting.totalIssues.mean.toFixed(2)
-                    : "—"}
-                </span>
-              </div>
-              <div className="flex items-baseline justify-between">
-                <span className="text-muted-foreground">Evaluated</span>
-                <span className="font-mono text-muted-foreground">
-                  n={formatting.score.n}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-              Top issue types
-            </div>
-            {formatting.byType.length === 0 ? (
-              <div className="text-[11px] text-muted-foreground">
-                No formatting issues recorded yet.
-              </div>
-            ) : (
-              <ul className="space-y-1 text-xs max-h-40 overflow-auto pr-1">
-                {formatting.byType.slice(0, 12).map((i) => (
-                  <li
-                    key={i.type}
-                    className="flex items-baseline justify-between"
-                  >
-                    <span className="font-mono text-amber-300/90">
-                      {FORMATTING_ISSUE_LABELS[i.type] ?? i.type}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {i.totalCount}× · {i.dispatchCount} sends
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="border border-foreground/15 bg-card p-4 space-y-3">
-        <div className="flex items-baseline justify-between border-b border-foreground/10 pb-2">
-          <div className="section-label">Image track</div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-            Target: banner LoRA fine-tune (prompt + image JSONL)
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
-          <div className="flex items-baseline justify-between">
-            <span className="text-muted-foreground">Banner score mean</span>
-            <span className={`font-mono ${scoreColor(banner.composite.mean)}`}>
-              {banner.composite.mean !== null
-                ? banner.composite.mean.toFixed(2)
-                : "—"}
-              /10
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-muted-foreground">Evaluated</span>
-            <span className="font-mono text-muted-foreground">
-              n={banner.composite.n}
-            </span>
-          </div>
-        </div>
-        {banner.composite.n === 0 && (
-          <div className="text-[11px] text-muted-foreground italic">
-            Vision rubric not wired yet — landing in PR B (Venice VL call +
-            banner-image archive + image dataset download).
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-const formatTokensMaybe = (n: number | null): string =>
-  n === null ? "—" : n.toLocaleString();
-
-const callStatusColor = (status: DispatchLlmCall["status"]): string =>
-  status === "ok"
-    ? "text-emerald-400"
-    : status === "missing_subject_or_intro"
-      ? "text-amber-300"
-      : "text-red-400";
-
-const DispatchLlmTrace = ({
-  archiveId,
-  state,
-  openCallId,
-  onToggle,
-}: {
-  archiveId: number;
-  state: DispatchLlmCall[] | "loading" | "error" | undefined;
-  openCallId: number | null;
-  onToggle: (id: number | null) => void;
-}) => {
-  return (
-    <div className="border-t border-foreground/10 p-4 space-y-3">
-      <div className="flex items-baseline justify-between">
-        <div className="section-label">LLM trace</div>
-        <div className="text-[10px] text-muted-foreground">
-          Raw input + output captured per call · archive #{archiveId}
-        </div>
-      </div>
-      {state === "loading" && (
-        <div className="text-xs text-muted-foreground">Loading…</div>
-      )}
-      {state === "error" && (
-        <div className="text-xs text-red-400">Failed to load LLM calls.</div>
-      )}
-      {Array.isArray(state) && state.length === 0 && (
-        <div className="text-xs text-muted-foreground">
-          No LLM calls captured for this dispatch (composed before tracing was
-          enabled, or fallback didn't fire).
-        </div>
-      )}
-      {Array.isArray(state) && state.length > 0 && (
-        <div className="space-y-2">
-          {state.map((c) => {
-            const isOpen = openCallId === c.id;
-            return (
-              <div key={c.id} className="border border-foreground/15 bg-background/40">
-                <button
-                  type="button"
-                  onClick={() => onToggle(isOpen ? null : c.id)}
-                  className="w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-background/60"
-                >
-                  <span className="text-[10px] uppercase tracking-widest w-20">
-                    {c.kind}
-                  </span>
-                  <span
-                    className={`text-[10px] uppercase tracking-widest w-32 ${callStatusColor(c.status)}`}
-                  >
-                    {c.status}
-                  </span>
-                  <span className="text-[10px] text-primary/80 font-mono">
-                    p:{c.promptHash.slice(0, 7)}
-                  </span>
-                  <span className="flex-1 text-[10px] text-muted-foreground font-mono truncate">
-                    {c.model}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground font-mono">
-                    {formatTokensMaybe(c.promptTokens)} in ·{" "}
-                    {formatTokensMaybe(c.completionTokens)} out
-                  </span>
-                  <span className="text-[10px] text-muted-foreground font-mono w-16 text-right">
-                    {c.latencyMs !== null ? `${c.latencyMs}ms` : "—"}
-                  </span>
-                  <ChevronRight
-                    className={`w-3 h-3 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
-                  />
-                </button>
-                {isOpen && (
-                  <div className="border-t border-foreground/10 grid grid-cols-1 lg:grid-cols-2 gap-px bg-foreground/10">
-                    <div className="bg-card p-3 space-y-1">
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                        User message
-                      </div>
-                      <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-[480px] overflow-auto">
-                        {c.userMessage}
-                      </pre>
-                    </div>
-                    <div className="bg-card p-3 space-y-1">
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                        Raw response{c.status !== "ok" ? ` (${c.status})` : ""}
-                      </div>
-                      <pre className="text-[11px] font-mono whitespace-pre-wrap leading-relaxed max-h-[480px] overflow-auto">
-                        {c.responseText || c.errorMessage || "(empty)"}
-                      </pre>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-};
-
-const FeedbackTab = ({ token }: { token: string }) => {
-  const [items, setItems] = useState<DispatchArchiveSummary[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<number | null>(null);
-  const [detail, setDetail] = useState<DispatchArchiveDetail | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [drafts, setDrafts] = useState<Record<number, string>>({});
-  const [savingId, setSavingId] = useState<number | null>(null);
-  const [saveStatus, setSaveStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
-  const [evalRunningId, setEvalRunningId] = useState<number | null>(null);
-  const [evalStatus, setEvalStatus] = useState<{ id: number; ok: boolean; message: string } | null>(null);
-  const [llmCalls, setLlmCalls] = useState<Record<number, DispatchLlmCall[] | "loading" | "error">>({});
-  const [openCallId, setOpenCallId] = useState<number | null>(null);
-  const [aggregates, setAggregates] = useState<DispatchEvalAggregates | null>(null);
-
-  const loadAggregates = useCallback(async () => {
-    try {
-      const res = await apiFetch(token, "/admin/dispatch-archive/eval-aggregates");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as DispatchEvalAggregates;
-      setAggregates(json);
-    } catch {
-      // Non-fatal — the row list still renders without aggregates.
-    }
-  }, [token]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Fire list + aggregates in parallel. Aggregates roll up the full
-      // archive server-side, so they don't depend on the (capped) list
-      // response and don't need to wait on it.
-      const [listRes] = await Promise.all([
-        apiFetch(token, "/admin/dispatch-archive?limit=100"),
-        loadAggregates(),
-      ]);
-      if (!listRes.ok) throw new Error(`HTTP ${listRes.status}`);
-      const json = (await listRes.json()) as { items: DispatchArchiveSummary[] };
-      setItems(json.items);
-      // Seed drafts with persisted feedback so the textarea reflects current state.
-      const seed: Record<number, string> = {};
-      for (const it of json.items) seed[it.id] = it.feedback ?? "";
-      setDrafts((prev) => ({ ...seed, ...prev }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load archive");
-    } finally {
-      setLoading(false);
-    }
-  }, [token, loadAggregates]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  const loadLlmCalls = async (id: number) => {
-    if (llmCalls[id] !== undefined && llmCalls[id] !== "error") return;
-    setLlmCalls((prev) => ({ ...prev, [id]: "loading" }));
-    try {
-      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/llm-calls`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { items: DispatchLlmCall[] };
-      setLlmCalls((prev) => ({ ...prev, [id]: json.items }));
-    } catch {
-      setLlmCalls((prev) => ({ ...prev, [id]: "error" }));
-    }
-  };
-
-  const openDetail = async (id: number) => {
-    if (expanded === id) {
-      setExpanded(null);
-      setDetail(null);
-      return;
-    }
-    setExpanded(id);
-    setDetail(null);
-    setDetailLoading(true);
-    // Fire LLM calls fetch in parallel with the detail fetch.
-    void loadLlmCalls(id);
-    try {
-      const res = await apiFetch(token, `/admin/dispatch-archive/${id}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { item: DispatchArchiveDetail };
-      setDetail(json.item);
-    } catch (err) {
-      setSaveStatus({
-        id,
-        ok: false,
-        message: err instanceof Error ? err.message : "Failed to load detail",
-      });
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
-  const saveFeedback = async (id: number) => {
-    const value = drafts[id] ?? "";
-    setSavingId(id);
-    setSaveStatus(null);
-    try {
-      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/feedback`, {
-        method: "PUT",
-        body: JSON.stringify({ feedback: value }),
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        feedback?: string | null;
-        feedbackUpdatedAt?: string | null;
-        error?: string;
-      };
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? `HTTP ${res.status}`);
-      }
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === id
-            ? {
-                ...it,
-                feedback: json.feedback ?? null,
-                feedbackUpdatedAt: json.feedbackUpdatedAt ?? null,
-              }
-            : it,
-        ),
-      );
-      setSaveStatus({ id, ok: true, message: "Saved." });
-    } catch (err) {
-      setSaveStatus({
-        id,
-        ok: false,
-        message: err instanceof Error ? err.message : "Save failed",
-      });
-    } finally {
-      setSavingId(null);
-    }
-  };
-
-  const runEval = async (id: number) => {
-    setEvalRunningId(id);
-    setEvalStatus(null);
-    try {
-      const res = await apiFetch(token, `/admin/dispatch-archive/${id}/eval`, {
-        method: "POST",
-      });
-      const json = (await res.json()) as {
-        ok?: boolean;
-        composite?: number;
-        bannedCount?: number;
-        formattingScore?: number;
-        formattingIssues?: number;
-        evalScores?: DispatchEvalScores | null;
-        evalBannedPhrases?: DispatchBannedPhraseHit[] | null;
-        evalFormatting?: DispatchArchiveSummary["evalFormatting"];
-        evalFormattingScore?: number | null;
-        evalRunAt?: string | null;
-        evalModel?: string | null;
-        error?: string;
-      };
-      if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? `HTTP ${res.status}`);
-      }
-      setItems((prev) =>
-        prev.map((it) =>
-          it.id === id
-            ? {
-                ...it,
-                evalScores: json.evalScores ?? null,
-                evalCompositeScore:
-                  typeof json.composite === "number" ? json.composite : null,
-                evalBannedPhrasesCount: json.bannedCount ?? null,
-                evalBannedPhrases: json.evalBannedPhrases ?? null,
-                evalFormatting: json.evalFormatting ?? null,
-                evalFormattingScore:
-                  typeof json.evalFormattingScore === "number"
-                    ? json.evalFormattingScore
-                    : typeof json.formattingScore === "number"
-                      ? json.formattingScore
-                      : null,
-                evalRunAt: json.evalRunAt ?? null,
-                evalModel: json.evalModel ?? null,
-              }
-            : it,
-        ),
-      );
-      if (detail && detail.id === id) {
-        setDetail({
-          ...detail,
-          evalScores: json.evalScores ?? null,
-          evalCompositeScore:
-            typeof json.composite === "number" ? json.composite : null,
-          evalBannedPhrasesCount: json.bannedCount ?? null,
-          evalBannedPhrases: json.evalBannedPhrases ?? null,
-          evalFormatting: json.evalFormatting ?? null,
-          evalFormattingScore:
-            typeof json.evalFormattingScore === "number"
-              ? json.evalFormattingScore
-              : typeof json.formattingScore === "number"
-                ? json.formattingScore
-                : null,
-          evalRunAt: json.evalRunAt ?? null,
-          evalModel: json.evalModel ?? null,
-        });
-      }
-      setEvalStatus({
-        id,
-        ok: true,
-        message: `W ${json.composite?.toFixed(2) ?? "—"}/10 · F ${json.formattingScore?.toFixed(1) ?? "—"}/10 · ${json.bannedCount ?? 0} hits · ${json.formattingIssues ?? 0} fmt`,
-      });
-      // Refresh aggregates so the dashboard reflects the new score without
-      // forcing a full archive reload.
-      void loadAggregates();
-    } catch (err) {
-      setEvalStatus({
-        id,
-        ok: false,
-        message: err instanceof Error ? err.message : "Eval failed",
-      });
-    } finally {
-      setEvalRunningId(null);
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-serif">Dispatch eval &amp; feedback</h2>
-          <p className="text-sm text-muted-foreground font-light mt-1 max-w-2xl">
-            Every composed dispatch (real send or admin test) is logged, scored
-            against a 5-dimension rubric, and scanned for banned phrases. Click
-            a row to read the body, see the rubric breakdown, and leave
-            freeform feedback — it accumulates as a dataset for tuning the
-            dispatch prompt.
-          </p>
-        </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void load()}
-          disabled={loading}
-          className="rounded-none text-[10px] uppercase tracking-widest"
-        >
-          <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} /> Refresh
-        </Button>
-      </div>
-
-      {error && (
-        <div className="border border-red-500/30 bg-red-500/5 px-4 py-3 text-xs text-red-300">
-          {error}
-        </div>
-      )}
-
-      {items.length === 0 && !loading && (
-        <div className="border border-foreground/15 bg-card px-4 py-6 text-sm text-muted-foreground">
-          No dispatches archived yet. Once a real send or a test send runs,
-          it will appear here.
-        </div>
-      )}
-
-      <EvalAggregatePanel aggregates={aggregates} token={token} />
-      <EvalTrendStrip trend={aggregates?.trend ?? []} />
-
-      <div className="space-y-3">
-        {items.map((it) => {
-          const isOpen = expanded === it.id;
-          const draft = drafts[it.id] ?? "";
-          const dirty = draft !== (it.feedback ?? "");
-          const status = saveStatus?.id === it.id ? saveStatus : null;
-          const evStatus = evalStatus?.id === it.id ? evalStatus : null;
-          const composite = compositeNumber(it.evalCompositeScore);
-          const banned = it.evalBannedPhrasesCount;
-          const formattingScore = compositeNumber(it.evalFormattingScore);
-          const formattingIssues = it.evalFormatting?.totalIssues ?? null;
-          return (
-            <div key={it.id} className="border border-foreground/15 bg-card">
-              <button
-                type="button"
-                onClick={() => void openDetail(it.id)}
-                className="w-full px-4 py-3 flex items-center gap-4 text-left hover:bg-background/40"
-              >
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground w-16">
-                  {it.kind === "test"
-                    ? "Test"
-                    : it.kind === "preview"
-                      ? "Preview"
-                      : "Send"}
-                </span>
-                <span className="text-xs text-muted-foreground font-mono w-44 shrink-0">
-                  {formatDate(it.createdAt)}
-                </span>
-                <span className="flex-1 text-sm font-serif truncate">{it.subject}</span>
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground hidden sm:inline">
-                  {it.itemCount} items
-                </span>
-                <span
-                  className="text-[10px] uppercase tracking-widest font-mono w-20 text-right text-primary/80"
-                  title={`Polish prompt: ${it.promptVersions?.polish ?? "—"}`}
-                >
-                  {it.promptVersions?.polish
-                    ? `p:${it.promptVersions.polish.slice(0, 7)}`
-                    : "p:—"}
-                </span>
-                <span
-                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${scoreColor(composite)}`}
-                  title="Composite rubric score (0-10)"
-                >
-                  {composite !== null ? `${composite.toFixed(1)}/10` : "—"}
-                </span>
-                <span
-                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${
-                    banned === null
-                      ? "text-muted-foreground"
-                      : banned === 0
-                        ? "text-emerald-400"
-                        : banned <= 3
-                          ? "text-amber-300"
-                          : "text-red-400"
-                  }`}
-                  title="Banned-phrase hits (lower is better)"
-                >
-                  {banned === null ? "—" : `${banned} hits`}
-                </span>
-                <span
-                  className={`text-[10px] uppercase tracking-widest font-mono w-16 text-right ${scoreColor(formattingScore)}`}
-                  title={
-                    formattingIssues === null
-                      ? "Formatting score (10 = clean)"
-                      : `Formatting: ${formattingIssues} issue${formattingIssues === 1 ? "" : "s"}`
-                  }
-                >
-                  {formattingScore !== null ? `F ${formattingScore.toFixed(1)}` : "F —"}
-                </span>
-                {it.feedback ? (
-                  <span className="text-[10px] uppercase tracking-widest text-primary w-20 text-right">
-                    Feedback ✓
-                  </span>
-                ) : (
-                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground/60 w-20 text-right">
-                    —
-                  </span>
-                )}
-                <ChevronRight
-                  className={`w-3 h-3 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`}
-                />
-              </button>
-
-              {isOpen && (
-                <div className="border-t border-foreground/10">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
-                  <div className="lg:border-r border-foreground/10 p-4 space-y-4 max-h-[640px] overflow-auto">
-                    <div className="section-label">Dispatch</div>
-                    <div>
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                        Subject
-                      </div>
-                      <div className="text-sm font-serif mt-1">{it.subject}</div>
-                    </div>
-                    {detailLoading && (
-                      <div className="text-xs text-muted-foreground">Loading…</div>
-                    )}
-                    {detail && detail.id === it.id && (
-                      <>
-                        <div>
-                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                            Intro
-                          </div>
-                          <div className="text-sm font-light mt-1 leading-relaxed whitespace-pre-line">
-                            {htmlToText(detail.introHtml)}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">
-                            Items ({detail.headlinesSnapshot.length})
-                          </div>
-                          <ol className="space-y-3">
-                            {detail.headlinesSnapshot.map((h, i) => (
-                              <li key={h.id} className="border-l-2 border-foreground/15 pl-3">
-                                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                                  {String(i + 1).padStart(2, "0")} · {h.source}
-                                </div>
-                                <a
-                                  href={h.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm font-serif hover:text-primary inline-flex items-baseline gap-1"
-                                >
-                                  {h.title}
-                                  <ExternalLink className="w-3 h-3 self-center" />
-                                </a>
-                                {h.commentary && (
-                                  <div className="text-xs text-muted-foreground font-light mt-1 leading-relaxed whitespace-pre-line">
-                                    {h.commentary}
-                                  </div>
-                                )}
-                              </li>
-                            ))}
-                          </ol>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="p-4 space-y-4 max-h-[640px] overflow-auto">
-                    <div className="flex items-center justify-between">
-                      <div className="section-label">Eval</div>
-                      <div className="flex items-center gap-2">
-                        {evStatus && (
-                          <span
-                            className={`text-[10px] uppercase tracking-widest ${evStatus.ok ? "text-primary" : "text-red-400"}`}
-                          >
-                            {evStatus.message}
-                          </span>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void runEval(it.id)}
-                          disabled={evalRunningId === it.id}
-                          className="rounded-none text-[10px] uppercase tracking-widest"
-                        >
-                          <RefreshCw
-                            className={`w-3 h-3 ${evalRunningId === it.id ? "animate-spin" : ""}`}
-                          />{" "}
-                          {it.evalRunAt ? "Re-run eval" : "Run eval"}
-                        </Button>
-                      </div>
-                    </div>
-
-                    {it.evalRunAt ? (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                          <div className="col-span-2 flex items-center justify-between border-b border-foreground/10 pb-2">
-                            <span className="text-xs text-muted-foreground">
-                              Composite
-                            </span>
-                            <span
-                              className={`text-lg font-serif ${scoreColor(composite)}`}
-                            >
-                              {composite !== null ? composite.toFixed(2) : "—"}
-                              <span className="text-xs text-muted-foreground ml-1">
-                                /10
-                              </span>
-                            </span>
-                          </div>
-                          {it.evalScores &&
-                            (Object.keys(RUBRIC_LABELS) as Array<keyof DispatchEvalScores>).map(
-                              (key) => {
-                                const dim = it.evalScores?.[key];
-                                const worst = dim?.worstItems ?? [];
-                                return (
-                                  <div key={key} className="space-y-1">
-                                    <div className="flex items-baseline justify-between">
-                                      <span className="text-[11px] text-muted-foreground">
-                                        {RUBRIC_LABELS[key]}
-                                      </span>
-                                      <span
-                                        className={`text-xs font-mono ${scoreColor(dim?.score ?? null)}`}
-                                      >
-                                        {dim ? `${dim.score.toFixed(1)}/10` : "—"}
-                                      </span>
-                                    </div>
-                                    {dim?.note && (
-                                      <div className="text-[11px] text-muted-foreground font-light leading-snug">
-                                        {dim.note}
-                                      </div>
-                                    )}
-                                    {worst.length > 0 && (
-                                      <ul className="space-y-0.5 pl-2 border-l border-foreground/10">
-                                        {worst.map((w, idx) => (
-                                          <li
-                                            key={`${key}-${idx}`}
-                                            className="text-[10px] leading-snug"
-                                          >
-                                            <span className="text-primary/80 font-mono mr-1.5">
-                                              {w.item === 0
-                                                ? "intro"
-                                                : `item ${String(w.item).padStart(2, "0")}`}
-                                            </span>
-                                            <span className="text-muted-foreground/90 italic">
-                                              "{w.quote}"
-                                            </span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    )}
-                                  </div>
-                                );
-                              },
-                            )}
-                        </div>
-                        <div className="space-y-3">
-                          {(() => {
-                            // Split hits into violations (drive the headline
-                            // count) and warnings (bare-word bans tracked
-                            // separately). Rows scanned before the severity
-                            // split lack the field — treat those as
-                            // violations for back-compat.
-                            const hits = it.evalBannedPhrases ?? [];
-                            const violations = hits.filter(
-                              (h) => (h.severity ?? "violation") === "violation",
-                            );
-                            const warnings = hits.filter(
-                              (h) => h.severity === "warning",
-                            );
-                            const warningTotal = warnings.reduce((s, h) => s + h.count, 0);
-                            return (
-                              <>
-                                <div>
-                                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
-                                    Violations ({banned ?? 0})
-                                  </div>
-                                  {violations.length > 0 ? (
-                                    <ul className="space-y-1">
-                                      {violations.map((h) => (
-                                        <li
-                                          key={h.phrase}
-                                          className="flex items-baseline justify-between text-[11px]"
-                                        >
-                                          <span className="text-red-300 font-mono">
-                                            "{h.phrase}"
-                                          </span>
-                                          <span className="text-muted-foreground">
-                                            {h.count}× · {h.locations.slice(0, 4).join(", ")}
-                                            {h.locations.length > 4 ? "…" : ""}
-                                          </span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  ) : (
-                                    <div className="text-[11px] text-muted-foreground">
-                                      No violations detected.
-                                    </div>
-                                  )}
-                                </div>
-                                {warnings.length > 0 && (
-                                  <div>
-                                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">
-                                      Warnings ({warningTotal}) ·{" "}
-                                      <span className="normal-case tracking-normal text-muted-foreground/70">
-                                        bare-word bans, not part of violation count
-                                      </span>
-                                    </div>
-                                    <ul className="space-y-1">
-                                      {warnings.map((h) => (
-                                        <li
-                                          key={h.phrase}
-                                          className="flex items-baseline justify-between text-[11px]"
-                                        >
-                                          <span className="text-amber-300/90 font-mono">
-                                            "{h.phrase}"
-                                          </span>
-                                          <span className="text-muted-foreground">
-                                            {h.count}× · {h.locations.slice(0, 4).join(", ")}
-                                            {h.locations.length > 4 ? "…" : ""}
-                                          </span>
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground/70 pt-1 border-t border-foreground/5">
-                          Last evaluated {formatDate(it.evalRunAt)}
-                          {it.evalModel ? ` · ${it.evalModel}` : ""}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-xs text-muted-foreground">
-                        Not yet evaluated. Click "Run eval" to score against the
-                        rubric.
-                      </div>
-                    )}
-
-                    <div className="section-label pt-4 border-t border-foreground/10">
-                      Feedback
-                    </div>
-                    <textarea
-                      value={draft}
-                      onChange={(e) =>
-                        setDrafts((prev) => ({ ...prev, [it.id]: e.target.value }))
-                      }
-                      placeholder="What worked? What didn't? Specific phrases that leaked, items that felt off, intro framing notes…"
-                      className="w-full min-h-[260px] border border-foreground/20 bg-background/40 p-3 text-sm font-light leading-relaxed focus:border-primary focus:outline-none"
-                    />
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-[10px] text-muted-foreground">
-                        {it.feedbackUpdatedAt
-                          ? `Last saved ${formatDate(it.feedbackUpdatedAt)}`
-                          : dirty
-                            ? "Unsaved changes"
-                            : "Not yet saved"}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {status && (
-                          <span
-                            className={`text-[10px] uppercase tracking-widest ${status.ok ? "text-primary" : "text-red-400"}`}
-                          >
-                            {status.message}
-                          </span>
-                        )}
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => void saveFeedback(it.id)}
-                          disabled={savingId === it.id || !dirty}
-                          className="rounded-none text-[10px] uppercase tracking-widest"
-                        >
-                          Save feedback
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <DispatchLlmTrace
-                  archiveId={it.id}
-                  state={llmCalls[it.id]}
-                  openCallId={openCallId}
-                  onToggle={setOpenCallId}
-                />
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-type DispatchSection = "headlines" | "judge" | "writers" | "emails" | "feedback";
-
-type WorkflowNodeSpec = {
-  id: DispatchSection;
-  label: string;
-  Icon: typeof Bot;
-  description: string;
-  io: string;
-};
-
-const WORKFLOW_NODES: WorkflowNodeSpec[] = [
-  {
-    id: "headlines",
-    label: "Headline ingestion",
-    Icon: Radio,
-    description: "Sources that fetch AI news on a schedule",
-    io: "RSS · APIs → headlines",
-  },
-  {
-    id: "judge",
-    label: "Headline judge",
-    Icon: Gavel,
-    description: "Scores headlines + picks the top-10",
-    io: "headlines → ranked picks",
-  },
-  {
-    id: "writers",
-    label: "Writer agents",
-    Icon: PenLine,
-    description: "Turn headlines into blog posts",
-    io: "picks → drafted posts",
-  },
-  {
-    id: "emails",
-    label: "Email agent",
-    Icon: Send,
-    description: "Daily top-10 dispatch email",
-    io: "picks + posts → inbox",
-  },
-  {
-    id: "feedback",
-    label: "Eval & feedback",
-    Icon: MessageSquare,
-    description: "Rubric scores, banned-phrase scan, and operator feedback",
-    io: "sends → scored dataset",
-  },
-];
-
-const WorkflowNodeCard = ({
-  node,
-  index,
-  isFirst,
-  isLast,
-  onClick,
-}: {
-  node: WorkflowNodeSpec;
-  index: number;
-  isFirst: boolean;
-  isLast: boolean;
-  onClick: () => void;
-}) => {
-  const { Icon, label, description, io } = node;
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="group relative w-full lg:w-56 lg:shrink-0 border-2 border-foreground/25 bg-background/90 backdrop-blur p-5 text-left flex flex-col gap-4 hover:border-primary hover:shadow-[0_0_0_4px_rgba(255,255,255,0.04)] transition-all"
-    >
-      <div className="flex items-center justify-between">
-        <div className="p-2 border border-foreground/20 bg-card group-hover:border-primary/60 transition-colors">
-          <Icon className="w-4 h-4 text-foreground/80 group-hover:text-primary transition-colors" />
-        </div>
-        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
-          Step {index + 1}
-        </span>
-      </div>
-      <div className="space-y-1.5">
-        <div className="text-base font-serif leading-tight">{label}</div>
-        <p className="text-[11px] text-muted-foreground font-light leading-relaxed">
-          {description}
-        </p>
-      </div>
-      <div className="text-[10px] text-muted-foreground/80 font-mono border-t border-foreground/10 pt-2">
-        {io}
-      </div>
-      <span className="text-[10px] uppercase tracking-[0.18em] text-foreground/60 group-hover:text-primary inline-flex items-center gap-1 font-sans transition-colors">
-        Open <ChevronRight className="w-3 h-3" />
-      </span>
-      {!isFirst && (
-        <span
-          aria-hidden
-          className="hidden lg:block absolute -left-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-background border-2 border-foreground/50 group-hover:border-primary transition-colors"
-        />
-      )}
-      {!isLast && (
-        <span
-          aria-hidden
-          className="hidden lg:block absolute -right-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-foreground group-hover:bg-primary transition-colors"
-        />
-      )}
-    </button>
-  );
-};
-
-const WorkflowConnector = () => (
-  <div className="flex items-center justify-center self-center">
-    <div className="hidden lg:flex items-center w-10 xl:w-14">
-      <div className="flex-1 border-t border-dashed border-foreground/40" />
-      <ChevronRight className="w-4 h-4 text-foreground/60 -ml-1" />
-    </div>
-    <div className="lg:hidden flex flex-col items-center py-2">
-      <div className="h-6 w-px border-l border-dashed border-foreground/40" />
-      <ChevronDown className="w-4 h-4 text-foreground/60 -mt-1" />
-    </div>
-  </div>
-);
-
-const WorkflowCanvas = ({
-  onSelect,
-}: {
-  onSelect: (id: DispatchSection) => void;
-}) => (
-  <div className="relative border border-foreground/15 bg-card overflow-hidden">
-    <div
-      aria-hidden
-      className="absolute inset-0 pointer-events-none"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)",
-        backgroundSize: "22px 22px",
-      }}
-    />
-    <div className="relative px-5 py-3 border-b border-foreground/10 flex items-center justify-between">
-      <span className="section-label">Workflow canvas</span>
-      <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans hidden sm:inline">
-        Ingestion → Judge → Writers → Email
-      </span>
-    </div>
-    <div className="relative px-6 py-10 lg:px-10 lg:py-14">
-      <div className="flex flex-col lg:flex-row lg:items-stretch lg:justify-center lg:flex-wrap gap-y-2 lg:gap-y-6">
-        {WORKFLOW_NODES.map((node, i) => (
-          <Fragment key={node.id}>
-            <WorkflowNodeCard
-              node={node}
-              index={i}
-              isFirst={i === 0}
-              isLast={i === WORKFLOW_NODES.length - 1}
-              onClick={() => onSelect(node.id)}
-            />
-            {i < WORKFLOW_NODES.length - 1 && <WorkflowConnector />}
-          </Fragment>
-        ))}
-      </div>
-    </div>
-  </div>
-);
-
-const DispatchView = ({ token }: { token: string }) => {
-  const [section, setSection] = useState<DispatchSection | null>(null);
-
-  if (section) {
-    const active = WORKFLOW_NODES.find((n) => n.id === section)!;
-    const Icon = active.Icon;
-    return (
-      <div className="space-y-8">
-        <div>
-          <button
-            type="button"
-            onClick={() => setSection(null)}
-            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 mb-4"
-          >
-            <ArrowLeft className="w-3 h-3" /> Back to workflow
-          </button>
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 border border-foreground/20 bg-card mt-1">
-              <Icon className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <div className="section-label">Dispatch · Workflow</div>
-              <h2 className="text-3xl font-serif mt-0.5">{active.label}</h2>
-              <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
-                {active.description}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {section === "headlines" && <AgentsTab token={token} />}
-        {section === "judge" && <JudgeTab token={token} />}
-        {section === "writers" && <WriterAgentsTab token={token} />}
-        {section === "emails" && <EmailAgentsTab token={token} />}
-        {section === "feedback" && <FeedbackTab token={token} />}
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-8">
-      <div>
-        <div className="section-label">Dispatch</div>
-        <h2 className="text-3xl font-serif mt-1">Workflows and Agents</h2>
-        <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
-          The full pipeline that ingests AI news, writes posts about it, and sends email out the door. Click any node to open it.
-        </p>
-      </div>
-
-      <WorkflowCanvas onSelect={setSection} />
-    </div>
-  );
-};
-
-type View = "home" | "products" | "dispatch" | "leads";
-
-type Tile<T extends string> = {
-  id: T;
-  label: string;
-  description: string;
-  Icon: typeof Bot;
-};
-
-const HOME_TILES: Tile<"products" | "leads">[] = [
-  {
-    id: "products",
-    label: "Products",
-    description: "All products — Dispatch news pipeline and more to come.",
-    Icon: Bot,
-  },
-  {
-    id: "leads",
-    label: "Leads",
-    description: "Free consultation requests and Dispatch newsletter subscribers.",
-    Icon: Mail,
-  },
-];
-
-const PRODUCT_TILES: Tile<"dispatch">[] = [
-  {
-    id: "dispatch",
-    label: "Dispatch",
-    description: "News pipeline — headline ingestion, writers, and email.",
-    Icon: Radio,
-  },
-];
-
-const TileGrid = <T extends string>({
-  tiles,
-  onSelect,
-}: {
-  tiles: Tile<T>[];
-  onSelect: (id: T) => void;
-}) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-    {tiles.map(({ id, label, description, Icon }) => (
-      <button
-        key={id}
-        type="button"
-        onClick={() => onSelect(id)}
-        className="group aspect-square border border-foreground/15 bg-card p-6 text-left flex flex-col justify-between hover:border-primary/60 hover:bg-background/60 transition-colors"
-      >
-        <Icon className="w-8 h-8 text-foreground/80 group-hover:text-primary transition-colors" />
-        <div>
-          <div className="flex items-center justify-between">
-            <div className="text-lg font-serif">{label}</div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
-          </div>
-          <p className="text-xs text-muted-foreground font-light mt-2 leading-relaxed">
-            {description}
-          </p>
-        </div>
-      </button>
-    ))}
-  </div>
-);
 
 type VeniceUsageBucket = {
   promptTokens: number;
@@ -4269,12 +1057,7 @@ const VENICE_CALLER_META: Record<
   string,
   { label: string; unit: string }
 > = {
-  writer: { label: "Writer agent", unit: "posts" },
   judge: { label: "Headline judge", unit: "batches" },
-  commentator: { label: "Commentator", unit: "batches" },
-  email_polish: { label: "Email polish", unit: "sends" },
-  email_fallback: { label: "Email fallback", unit: "calls" },
-  image_gen: { label: "Banner image gen", unit: "images" },
   sms_bot: { label: "SMS bot", unit: "replies" },
 };
 
@@ -4518,7 +1301,6 @@ type SubsystemSnapshot = {
   primary: string;
   detail: string;
   lastAt: string | null;
-  href: "products" | "leads" | null;
 };
 
 const SubsystemPanel = ({ s }: { s: SubsystemSnapshot }) => {
@@ -4547,13 +1329,6 @@ const SubsystemPanel = ({ s }: { s: SubsystemSnapshot }) => {
   );
 };
 
-type DigestStateLite = {
-  config: { ready: boolean } | null;
-  alreadySentToday: boolean;
-  activeSubscribers: number;
-  lastSentPtDate: string | null;
-};
-
 const SubsystemStatusGrid = ({ token }: { token: string }) => {
   const [snapshots, setSnapshots] = useState<SubsystemSnapshot[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -4563,17 +1338,13 @@ const SubsystemStatusGrid = ({ token }: { token: string }) => {
     setLoading(true);
     setError(null);
     try {
-      const [aRes, wRes, jRes, dRes] = await Promise.all([
+      const [aRes, jRes] = await Promise.all([
         apiFetch(token, "/admin/agents"),
-        apiFetch(token, "/admin/writers"),
         apiFetch(token, "/admin/judge/spec"),
-        apiFetch(token, "/admin/digest/state"),
       ]);
 
       const agents = aRes.ok ? ((await aRes.json()) as { items: Agent[] }).items : [];
-      const writers = wRes.ok ? ((await wRes.json()) as { items: WriterAgent[] }).items : [];
       const judge = jRes.ok ? ((await jRes.json()) as JudgeSpec) : null;
-      const digest = dRes.ok ? ((await dRes.json()) as DigestStateLite) : null;
 
       const enabledAgents = agents.filter((a) => a.enabled);
       const ingestLast = enabledAgents
@@ -4587,27 +1358,6 @@ const SubsystemStatusGrid = ({ token }: { token: string }) => {
       const judgeScored = judge?.stats?.scored ?? 0;
       const judgeTotal = judge?.stats?.total ?? 0;
 
-      const writerLast = writers
-        .map((w) => w.latestPublishedAt)
-        .filter((v): v is string => !!v)
-        .sort()
-        .at(-1) ?? null;
-      const totalPosts = writers.reduce((sum, w) => sum + w.postCount, 0);
-      const writersOnline = writers.filter((w) => w.enabled && w.configured).length;
-
-      // Email: derive last-sent from digest state. lastSentPtDate is a YYYY-MM-DD
-      // string in Pacific time — convert to a roughly-correct ISO at noon PT so
-      // ageLabel can show "Xh/d ago" without claiming sub-hour precision.
-      const emailLastIso = digest?.lastSentPtDate
-        ? new Date(`${digest.lastSentPtDate}T20:00:00Z`).toISOString()
-        : null;
-      const emailReady = digest?.config?.ready === true;
-      const emailState: SubsystemState = !emailReady
-        ? "fault"
-        : digest?.alreadySentToday
-          ? "nominal"
-          : stateForAge(emailLastIso, 36, 96);
-
       const next: SubsystemSnapshot[] = [
         {
           key: "ingest",
@@ -4617,7 +1367,6 @@ const SubsystemStatusGrid = ({ token }: { token: string }) => {
           primary: `${enabledAgents.length}/${agents.length}`,
           detail: `${totalHeadlines.toLocaleString()} headlines · sources online`,
           lastAt: ingestLast,
-          href: "products",
         },
         {
           key: "judge",
@@ -4629,39 +1378,6 @@ const SubsystemStatusGrid = ({ token }: { token: string }) => {
           primary: `${judgeScored.toLocaleString()}`,
           detail: `of ${judgeTotal.toLocaleString()} scored · ${judge?.judge.model ?? "—"}`,
           lastAt: judgeLast,
-          href: "products",
-        },
-        {
-          key: "writers",
-          label: "Writers",
-          Icon: Bot,
-          state:
-            writers.length === 0
-              ? "idle"
-              : writersOnline === 0
-                ? "fault"
-                // Dispatch publishes Tue + Thu PT, so the longest healthy gap
-                // is Thu → next Tue (~96h). Warn only after that window is
-                // overrun, fault after a full extra cycle.
-                : stateForAge(writerLast, 96, 168),
-          primary: `${totalPosts}`,
-          detail: `posts published · ${writersOnline}/${writers.length} online`,
-          lastAt: writerLast,
-          href: "products",
-        },
-        {
-          key: "email",
-          label: "Email",
-          Icon: Mail,
-          state: emailState,
-          primary: `${digest?.activeSubscribers ?? 0}`,
-          detail: emailReady
-            ? digest?.alreadySentToday
-              ? "subs · sent today"
-              : "subs · pending"
-            : "subs · not configured",
-          lastAt: emailLastIso,
-          href: "products",
         },
       ];
 
@@ -4701,10 +1417,10 @@ const SubsystemStatusGrid = ({ token }: { token: string }) => {
         </Button>
       </div>
       {error && <div className="px-4 py-3 text-xs text-red-400">{error}</div>}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-foreground/10">
+      <div className="grid grid-cols-2 gap-px bg-foreground/10">
         {snapshots
           ? snapshots.map((s) => <SubsystemPanel key={s.key} s={s} />)
-          : Array.from({ length: 4 }).map((_, i) => (
+          : Array.from({ length: 2 }).map((_, i) => (
               <div key={i} className="bg-card px-4 py-4">
                 <div className="section-label text-[10px] text-muted-foreground">Loading…</div>
                 <div className="h-5 mt-3 bg-foreground/5" />
@@ -4712,71 +1428,6 @@ const SubsystemStatusGrid = ({ token }: { token: string }) => {
               </div>
             ))}
       </div>
-    </div>
-  );
-};
-
-const Transmissions = ({ token }: { token: string }) => {
-  const [posts, setPosts] = useState<AdminPost[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const res = await apiFetch(token, "/admin/posts");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { items: AdminPost[] };
-      setPosts(json.items.slice(0, 5));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load transmissions");
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void load();
-    const id = setInterval(() => void load(), 60_000);
-    return () => clearInterval(id);
-  }, [load]);
-
-  useTick(15_000);
-
-  return (
-    <div className="border border-foreground/15 bg-card">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-foreground/10">
-        <div>
-          <div className="section-label inline-flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5" /> Transmissions
-          </div>
-          <div className="text-[11px] text-muted-foreground font-light mt-0.5">
-            Latest posts pushed out of the writer agents.
-          </div>
-        </div>
-      </div>
-      {error && <div className="px-4 py-3 text-xs text-red-400">{error}</div>}
-      {posts && posts.length === 0 && (
-        <div className="px-4 py-10 text-center text-muted-foreground text-sm">
-          No transmissions yet.
-        </div>
-      )}
-      <ul className="divide-y divide-foreground/10">
-        {posts?.map((p) => (
-          <li key={p.id} className="px-4 py-3 flex items-start gap-4">
-            <div className="text-[10px] text-muted-foreground font-mono w-32 shrink-0 pt-1">
-              <div>{ageLabel(p.publishedAt)}</div>
-              <div className="opacity-70">{p.mode} · {p.tag}</div>
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-serif truncate">{p.title}</div>
-              <div className="text-[11px] text-muted-foreground font-light line-clamp-1 mt-0.5">
-                {p.dek}
-              </div>
-            </div>
-            <div className="text-right shrink-0 text-[10px] font-mono text-muted-foreground">
-              <div>{formatUsd(p.costUsd)}</div>
-              <div className="opacity-70">{formatTokens(p.totalTokens)} tok</div>
-            </div>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 };
@@ -4790,8 +1441,8 @@ const Home = ({ token, onSelect }: { token: string; onSelect: (view: "products" 
         </div>
         <h1 className="text-3xl font-serif mt-1">All systems</h1>
         <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
-          Real-time status of every AI agent in the pipeline — ingest, judge,
-          writers, email. Auto-refreshes in the background.
+          Real-time status of the AI agents in the pipeline — headline ingest and the
+          relevance judge. Auto-refreshes in the background.
         </p>
       </div>
     </div>
@@ -4799,7 +1450,6 @@ const Home = ({ token, onSelect }: { token: string; onSelect: (view: "products" 
     <MissionHeader />
     <SubsystemStatusGrid token={token} />
     <VeniceUsageCard token={token} />
-    <Transmissions token={token} />
 
     <div>
       <div className="section-label mb-3 inline-flex items-center gap-2">
@@ -4820,6 +1470,256 @@ const ProductsHome = ({ onSelect }: { onSelect: (view: "dispatch") => void }) =>
       </p>
     </div>
     <TileGrid tiles={PRODUCT_TILES} onSelect={onSelect} />
+  </div>
+);
+
+type DispatchSection = "headlines" | "judge";
+
+type WorkflowNodeSpec = {
+  id: DispatchSection;
+  label: string;
+  Icon: typeof Bot;
+  description: string;
+  io: string;
+};
+
+const WORKFLOW_NODES: WorkflowNodeSpec[] = [
+  {
+    id: "headlines",
+    label: "Headline ingestion",
+    Icon: Radio,
+    description: "Sources that fetch AI news on a schedule",
+    io: "RSS · APIs → headlines",
+  },
+  {
+    id: "judge",
+    label: "Headline judge",
+    Icon: Gavel,
+    description: "Scores headlines + picks the top-10",
+    io: "headlines → ranked picks",
+  },
+];
+
+const WorkflowNodeCard = ({
+  node,
+  index,
+  isFirst,
+  isLast,
+  onClick,
+}: {
+  node: WorkflowNodeSpec;
+  index: number;
+  isFirst: boolean;
+  isLast: boolean;
+  onClick: () => void;
+}) => {
+  const { Icon, label, description, io } = node;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative w-full lg:w-56 lg:shrink-0 border-2 border-foreground/25 bg-background/90 backdrop-blur p-5 text-left flex flex-col gap-4 hover:border-primary hover:shadow-[0_0_0_4px_rgba(255,255,255,0.04)] transition-all"
+    >
+      <div className="flex items-center justify-between">
+        <div className="p-2 border border-foreground/20 bg-card group-hover:border-primary/60 transition-colors">
+          <Icon className="w-4 h-4 text-foreground/80 group-hover:text-primary transition-colors" />
+        </div>
+        <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans">
+          Step {index + 1}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        <div className="text-base font-serif leading-tight">{label}</div>
+        <p className="text-[11px] text-muted-foreground font-light leading-relaxed">
+          {description}
+        </p>
+      </div>
+      <div className="text-[10px] text-muted-foreground/80 font-mono border-t border-foreground/10 pt-2">
+        {io}
+      </div>
+      <span className="text-[10px] uppercase tracking-[0.18em] text-foreground/60 group-hover:text-primary inline-flex items-center gap-1 font-sans transition-colors">
+        Open <ChevronRight className="w-3 h-3" />
+      </span>
+      {!isFirst && (
+        <span
+          aria-hidden
+          className="hidden lg:block absolute -left-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-background border-2 border-foreground/50 group-hover:border-primary transition-colors"
+        />
+      )}
+      {!isLast && (
+        <span
+          aria-hidden
+          className="hidden lg:block absolute -right-[7px] top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-foreground group-hover:bg-primary transition-colors"
+        />
+      )}
+    </button>
+  );
+};
+
+const WorkflowConnector = () => (
+  <div className="flex items-center justify-center self-center">
+    <div className="hidden lg:flex items-center w-10 xl:w-14">
+      <div className="flex-1 border-t border-dashed border-foreground/40" />
+      <ChevronRight className="w-4 h-4 text-foreground/60 -ml-1" />
+    </div>
+    <div className="lg:hidden flex flex-col items-center py-2">
+      <div className="h-6 w-px border-l border-dashed border-foreground/40" />
+      <ChevronDown className="w-4 h-4 text-foreground/60 -mt-1" />
+    </div>
+  </div>
+);
+
+const WorkflowCanvas = ({
+  onSelect,
+}: {
+  onSelect: (id: DispatchSection) => void;
+}) => (
+  <div className="relative border border-foreground/15 bg-card overflow-hidden">
+    <div
+      aria-hidden
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)",
+        backgroundSize: "22px 22px",
+      }}
+    />
+    <div className="relative px-5 py-3 border-b border-foreground/10 flex items-center justify-between">
+      <span className="section-label">Workflow canvas</span>
+      <span className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-sans hidden sm:inline">
+        Ingestion → Judge
+      </span>
+    </div>
+    <div className="relative px-6 py-10 lg:px-10 lg:py-14">
+      <div className="flex flex-col lg:flex-row lg:items-stretch lg:justify-center lg:flex-wrap gap-y-2 lg:gap-y-6">
+        {WORKFLOW_NODES.map((node, i) => (
+          <Fragment key={node.id}>
+            <WorkflowNodeCard
+              node={node}
+              index={i}
+              isFirst={i === 0}
+              isLast={i === WORKFLOW_NODES.length - 1}
+              onClick={() => onSelect(node.id)}
+            />
+            {i < WORKFLOW_NODES.length - 1 && <WorkflowConnector />}
+          </Fragment>
+        ))}
+      </div>
+    </div>
+  </div>
+);
+
+const DispatchView = ({ token }: { token: string }) => {
+  const [section, setSection] = useState<DispatchSection | null>(null);
+
+  if (section) {
+    const active = WORKFLOW_NODES.find((n) => n.id === section)!;
+    const Icon = active.Icon;
+    return (
+      <div className="space-y-8">
+        <div>
+          <button
+            type="button"
+            onClick={() => setSection(null)}
+            className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 mb-4"
+          >
+            <ArrowLeft className="w-3 h-3" /> Back to workflow
+          </button>
+          <div className="flex items-start gap-3">
+            <div className="p-2.5 border border-foreground/20 bg-card mt-1">
+              <Icon className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <div className="section-label">Dispatch · Workflow</div>
+              <h2 className="text-3xl font-serif mt-0.5">{active.label}</h2>
+              <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
+                {active.description}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {section === "headlines" && <AgentsTab token={token} />}
+        {section === "judge" && <JudgeTab token={token} />}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <div className="section-label">Dispatch</div>
+        <h2 className="text-3xl font-serif mt-1">Workflows and Agents</h2>
+        <p className="text-sm text-muted-foreground font-light mt-2 max-w-2xl">
+          The pipeline that ingests AI news and ranks it into the on-site feed. Click any node to open it.
+        </p>
+      </div>
+
+      <WorkflowCanvas onSelect={setSection} />
+    </div>
+  );
+};
+
+type View = "home" | "products" | "dispatch" | "leads";
+
+type Tile<T extends string> = {
+  id: T;
+  label: string;
+  description: string;
+  Icon: typeof Bot;
+};
+
+const HOME_TILES: Tile<"products" | "leads">[] = [
+  {
+    id: "products",
+    label: "Products",
+    description: "All products — Dispatch news pipeline and more to come.",
+    Icon: Bot,
+  },
+  {
+    id: "leads",
+    label: "Leads",
+    description: "Free consultation requests.",
+    Icon: Mail,
+  },
+];
+
+const PRODUCT_TILES: Tile<"dispatch">[] = [
+  {
+    id: "dispatch",
+    label: "Dispatch",
+    description: "News pipeline — headline ingestion and the relevance judge.",
+    Icon: Radio,
+  },
+];
+
+const TileGrid = <T extends string>({
+  tiles,
+  onSelect,
+}: {
+  tiles: Tile<T>[];
+  onSelect: (id: T) => void;
+}) => (
+  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    {tiles.map(({ id, label, description, Icon }) => (
+      <button
+        key={id}
+        type="button"
+        onClick={() => onSelect(id)}
+        className="group aspect-square border border-foreground/15 bg-card p-6 text-left flex flex-col justify-between hover:border-primary/60 hover:bg-background/60 transition-colors"
+      >
+        <Icon className="w-8 h-8 text-foreground/80 group-hover:text-primary transition-colors" />
+        <div>
+          <div className="flex items-center justify-between">
+            <div className="text-lg font-serif">{label}</div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
+          </div>
+          <p className="text-xs text-muted-foreground font-light mt-2 leading-relaxed">
+            {description}
+          </p>
+        </div>
+      </button>
+    ))}
   </div>
 );
 

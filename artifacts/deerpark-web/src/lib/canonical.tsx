@@ -22,14 +22,9 @@ type RouteMeta = {
 
 const ROUTE_META: Record<string, RouteMeta> = {
   "/dispatch": {
-    title: "Dispatch — Daily AI brief for operators | DeerPark",
+    title: "Dispatch — Live AI headline feed | DeerPark",
     description:
-      "A curated daily AI brief for operators. The top 10 enterprise-relevant releases and research, with 2–4 sentences of context — in your inbox at 3:30 PM PT.",
-  },
-  "/dispatch/archive": {
-    title: "Dispatch Archive | DeerPark",
-    description:
-      "Past editions of Dispatch — DeerPark's daily AI brief for operators.",
+      "A live feed of the AI landscape for operators — the top enterprise-relevant releases and research, ranked and refreshed throughout the day.",
   },
   "/privacy": {
     title: "Privacy | DeerPark",
@@ -42,19 +37,10 @@ const ROUTE_META: Record<string, RouteMeta> = {
   },
 };
 
-// "defer" means: don't override title/description here. The page component
-// (e.g. DispatchPost) owns the title and will set it once it has its data.
-// Without this, /dispatch/:id would always show "Dispatch | DeerPark" in the
-// browser tab because the canonical effect ran before the post data was in
-// hand, clobbering the per-post title that /api/og injected into the SPA shell.
-type MetaResolution = RouteMeta | "defer" | null;
+type MetaResolution = RouteMeta | null;
 
 function resolveMeta(path: string): MetaResolution {
-  if (ROUTE_META[path]) return ROUTE_META[path];
-  if (path.startsWith("/dispatch/") && path !== "/dispatch/archive") {
-    return "defer";
-  }
-  return null;
+  return ROUTE_META[path] ?? null;
 }
 
 function setLinkHref(rel: string, href: string) {
@@ -99,7 +85,6 @@ export function CanonicalUrl() {
     setOg("og:url", url);
 
     const meta = resolveMeta(path);
-    if (meta === "defer") return;
 
     const title = meta?.title ?? HOME_TITLE;
     const description = meta?.description ?? HOME_DESCRIPTION;

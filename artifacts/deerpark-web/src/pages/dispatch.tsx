@@ -1,10 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import ReactMarkdown from "react-markdown";
-import { ArrowRight, Check, ExternalLink, Rss } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ExternalLink, Rss } from "lucide-react";
 import { FadeIn, Footer, Navbar, ConsultationFAB } from "@/components/site-layout";
-import { encodeSource } from "@/lib/attribution";
 
 type Headline = {
   source: string;
@@ -12,7 +9,6 @@ type Headline = {
   title: string;
   publishedAt: string;
   url?: string;
-  commentary?: string | null;
 };
 
 const HEADLINE_FALLBACK: Headline[] = [
@@ -52,7 +48,6 @@ type HeadlineApiItem = {
   title: string;
   url: string;
   publishedAt: string;
-  commentary?: string | null;
 };
 
 type HeadlineMode = "top" | "latest";
@@ -70,7 +65,6 @@ function useHeadlines(mode: HeadlineMode) {
         title: h.title,
         publishedAt: h.publishedAt,
         url: h.url,
-        commentary: h.commentary ?? null,
       }));
     },
     refetchInterval: 5 * 60 * 1000,
@@ -78,130 +72,8 @@ function useHeadlines(mode: HeadlineMode) {
   });
 }
 
-type SubscribeStatus =
-  | { state: "idle" }
-  | { state: "loading" }
-  | { state: "success" }
-  | { state: "error"; message: string };
-
-const DispatchSubscribe = () => {
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<SubscribeStatus>({ state: "idle" });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setStatus({ state: "loading" });
-
-    try {
-      const res = await fetch("/api/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          email,
-          source: encodeSource("dispatch"),
-        }),
-      });
-
-      if (res.ok) {
-        setStatus({ state: "success" });
-        setFirstName("");
-        setLastName("");
-        setEmail("");
-        return;
-      }
-
-      const message =
-        res.status === 400
-          ? "Please enter your first name, last name, and a valid email address."
-          : "Couldn't reach our subscribe service. Try again in a moment, or email contact@deerpark.io.";
-      setStatus({ state: "error", message });
-    } catch {
-      setStatus({
-        state: "error",
-        message: "Network error on our end. Try again in a moment, or email contact@deerpark.io.",
-      });
-    }
-  };
-
-  if (status.state === "success") {
-    return (
-      <div className="flex items-start gap-3 border border-primary/40 bg-primary/[0.06] px-4 py-3 text-sm font-sans">
-        <Check className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-        <span className="text-foreground/90 leading-snug">
-          You're subscribed. The next Dispatch will hit your inbox at 3:30 PM PT.
-        </span>
-      </div>
-    );
-  }
-
-  const submitting = status.state === "loading";
-  const inputClass =
-    "flex-1 h-12 px-4 appearance-none rounded-none bg-foreground/[0.04] border border-foreground/30 text-base sm:text-sm font-sans text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-foreground focus:bg-background transition-colors disabled:opacity-60";
-
-  return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="text"
-          required
-          value={firstName}
-          onChange={(e) => setFirstName(e.target.value)}
-          placeholder="First name"
-          aria-label="First name"
-          autoComplete="given-name"
-          disabled={submitting}
-          className={inputClass}
-        />
-        <input
-          type="text"
-          required
-          value={lastName}
-          onChange={(e) => setLastName(e.target.value)}
-          placeholder="Last name"
-          aria-label="Last name"
-          autoComplete="family-name"
-          disabled={submitting}
-          className={inputClass}
-        />
-      </div>
-      <div className="flex flex-col sm:flex-row gap-3">
-        <input
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="you@company.com"
-          aria-label="Email address"
-          autoComplete="email"
-          disabled={submitting}
-          className={inputClass}
-        />
-        <Button
-          type="submit"
-          disabled={submitting}
-          className="rounded-none h-12 px-6 text-xs uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 disabled:opacity-60"
-        >
-          {submitting ? "Subscribing…" : <>Subscribe <ArrowRight className="ml-2 w-4 h-4" /></>}
-        </Button>
-      </div>
-      {status.state === "error" && (
-        <p role="alert" className="text-xs text-red-400 font-sans">
-          {status.message}
-        </p>
-      )}
-      <p className="text-xs text-muted-foreground font-light leading-relaxed">
-        One brief per weekday. No spam, no list sharing. Unsubscribe in one click from any email.
-      </p>
-    </form>
-  );
-};
-
-const SubscribeHero = () => (
-  <section id="dispatch-subscribe" className="pt-32 md:pt-40 pb-12 bg-background">
+const FeedIntro = () => (
+  <section className="pt-32 md:pt-40 pb-4 bg-background">
     <div className="max-w-7xl mx-auto px-6">
       <FadeIn>
         <div className="flex items-center gap-3 mb-8">
@@ -209,11 +81,13 @@ const SubscribeHero = () => (
           <span className="section-label">Dispatch</span>
         </div>
         <div className="lg:grid lg:grid-cols-12">
-          <div className="lg:col-span-6 min-w-0">
-            <p className="text-muted-foreground font-light leading-relaxed mb-6">
-              Most AI newsletters are a firehose. Dispatch is ten stories that actually mattered today, each with the two sentences of context the headline left out. 3:30 PM PT, weekdays. Funding rounds and "we added dark mode" don't make it.
+          <div className="lg:col-span-7 min-w-0">
+            <h1 className="text-4xl md:text-5xl font-serif leading-[1.1] mb-6 pb-1">
+              <em className="not-italic font-light">The AI landscape, tracked live.</em>
+            </h1>
+            <p className="text-muted-foreground font-light leading-relaxed">
+              An always-on agent reads the public AI landscape — labs, clouds, model releases, research, and community signal — and filters for what's enterprise-relevant. The top ten that actually mattered, plus the full feed, refreshed throughout the day. Funding rounds and "we added dark mode" don't make it.
             </p>
-            <DispatchSubscribe />
           </div>
         </div>
       </FadeIn>
@@ -309,11 +183,6 @@ const HeadlineFeed = () => {
                       {item.title}
                     </span>
                   )}
-                  {item.commentary && (
-                    <div className="mt-3 text-sm md:text-[15px] leading-relaxed text-foreground/80 font-light max-w-3xl [&_p]:mb-2 [&_p:last-child]:mb-0 [&_strong]:font-medium [&_strong]:text-foreground">
-                      <ReactMarkdown>{item.commentary}</ReactMarkdown>
-                    </div>
-                  )}
                 </article>
               );
             })}
@@ -335,7 +204,7 @@ export default function Dispatch() {
     <div className="min-h-screen bg-background text-foreground selection:bg-foreground selection:text-background">
       <Navbar />
       <main>
-        <SubscribeHero />
+        <FeedIntro />
         <HeadlineFeed />
       </main>
       <ConsultationFAB />

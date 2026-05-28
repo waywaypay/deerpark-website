@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, headlinesTable } from "@workspace/db";
-import { inArray, sql } from "drizzle-orm";
+import { db } from "@workspace/db";
+import { sql } from "drizzle-orm";
 import { ingestAllSources } from "../lib/ingest-headlines";
 import { selectTopHeadlines } from "../lib/top-headlines";
 import { getJudgeStats, getLastRun } from "../lib/headline-judge";
@@ -15,7 +15,6 @@ type HeadlineRow = {
   url: string;
   publishedAt: Date;
   relevanceScore: number | null;
-  commentary: string | null;
 };
 
 /** Map SQL row keys from Drizzle execute() payload to HeadlineRow. */
@@ -32,10 +31,6 @@ const mapSqlRowToHeadline = (
     row["relevance_score"] === null || row["relevance_score"] === undefined
       ? null
       : Number(row["relevance_score"]),
-  commentary:
-    row["commentary"] === null || row["commentary"] === undefined
-      ? null
-      : String(row["commentary"]),
 });
 
 router.get("/headlines", async (req, res) => {
@@ -52,8 +47,8 @@ router.get("/headlines", async (req, res) => {
 
   try {
     if (mode === "top") {
-      // Single source of truth lives in lib/top-headlines.ts so the website
-      // and the daily top-10 email always agree on what "top dispatch" is.
+      // Single source of truth lives in lib/top-headlines.ts so the on-site
+      // feed's "Top 10" view stays consistent across callers.
       const items = await selectTopHeadlines({ days, limit });
       res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300");
       return res.json({ items, mode, days });
@@ -63,11 +58,11 @@ router.get("/headlines", async (req, res) => {
     const result = await db.execute(sql`
       WITH ranked AS (
         SELECT
-          id, source, category, title, url, published_at, relevance_score, commentary,
+          id, source, category, title, url, published_at, relevance_score,
           ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
         FROM headlines
       )
-      SELECT id, source, category, title, url, published_at, relevance_score, commentary
+      SELECT id, source, category, title, url, published_at, relevance_score
       FROM ranked
       WHERE rn <= ${perSource}
       ORDER BY published_at DESC
@@ -80,45 +75,6 @@ router.get("/headlines", async (req, res) => {
     return res.json({ items, mode });
   } catch (err) {
     req.log.error({ err }, "Failed to load headlines");
-    return res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-// Lookup a small batch of headlines by ID. Used by the dispatch post detail
-// page to render "Reacting to" — the headlines this post cited.
-router.get("/headlines/by-ids", async (req, res) => {
-  const raw = String(req.query["ids"] ?? "");
-  const ids = raw
-    .split(",")
-    .map((s) => Number(s.trim()))
-    .filter((n) => Number.isFinite(n) && n > 0)
-    .slice(0, 25);
-
-  if (ids.length === 0) {
-    return res.json({ items: [] });
-  }
-
-  try {
-    const rows = await db
-      .select({
-        id: headlinesTable.id,
-        source: headlinesTable.source,
-        category: headlinesTable.category,
-        title: headlinesTable.title,
-        url: headlinesTable.url,
-        publishedAt: headlinesTable.publishedAt,
-      })
-      .from(headlinesTable)
-      .where(inArray(headlinesTable.id, ids));
-
-    // Preserve caller-specified order (lets the writer agent rank citations).
-    const order = new Map(ids.map((id, idx) => [id, idx]));
-    rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-
-    res.setHeader("Cache-Control", "public, max-age=300, s-maxage=900");
-    return res.json({ items: rows });
-  } catch (err) {
-    req.log.error({ err }, "Failed to load headlines by ids");
     return res.status(500).json({ error: "Internal server error" });
   }
 });

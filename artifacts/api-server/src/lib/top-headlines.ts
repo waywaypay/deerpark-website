@@ -1,7 +1,6 @@
-// Top-of-feed selection. Single source of truth for "what is the top-N
-// dispatch right now": the public /api/headlines?mode=top route AND the
-// daily top-10 email both call into here so the website and the email
-// always show the same items.
+// Top-of-feed selection. Single source of truth for "what are the top-N
+// AI headlines right now" — backs the public /api/headlines?mode=top route
+// that the on-site feed renders.
 //
 // Pipeline:
 //   1. SQL pulls candidates from the last `days` days, ≤2 per source,
@@ -37,7 +36,6 @@ export type HeadlineRow = {
   url: string;
   publishedAt: Date;
   relevanceScore: number | null;
-  commentary: string | null;
 };
 
 const SOURCE_TIER = new Map(SOURCES.map((s) => [s.displayName, s.tier]));
@@ -70,10 +68,6 @@ const mapSqlRowToHeadline = (row: Record<string, unknown>): HeadlineRow => ({
     row["relevance_score"] === null || row["relevance_score"] === undefined
       ? null
       : Number(row["relevance_score"]),
-  commentary:
-    row["commentary"] === null || row["commentary"] === undefined
-      ? null
-      : String(row["commentary"]),
 });
 
 const scoreItem = (
@@ -92,16 +86,15 @@ const scoreItem = (
 };
 
 export type SelectTopOptions = {
-  /** Lookback window in days. Public route default 7; email default 1. */
+  /** Lookback window in days. Public route default 7. */
   days?: number;
   /** Final result size cap. */
   limit?: number;
 };
 
 /**
- * Run the full top-mode selection. Called by `/api/headlines?mode=top` and
- * by the daily top-10 email composer so the website and the inbox always
- * agree on what "top dispatch" is.
+ * Run the full top-mode selection. Backs `/api/headlines?mode=top`, which
+ * the on-site headline feed renders.
  */
 export async function selectTopHeadlines(
   opts: SelectTopOptions = {},
@@ -109,22 +102,22 @@ export async function selectTopHeadlines(
   const days = opts.days ?? 7;
   const limit = opts.limit ?? 10;
 
-  // Per-source cap is doubled here so the commentary-required filter below
-  // has more headroom — we still emit at most PER_SOURCE_CAP_TOP per source,
-  // but the SQL needs spare candidates to swap in when the freshest item
-  // from a source hasn't been commented on yet.
+  // Per-source cap is doubled here so the broad-press org filter below has
+  // more headroom — we still emit at most PER_SOURCE_CAP_TOP per source, but
+  // the SQL needs spare candidates to swap in when the freshest item from a
+  // source is dropped by the structural guards.
   const sqlPerSourceCap = PER_SOURCE_CAP_TOP * 2;
 
   const result = await db.execute(sql`
     WITH ranked AS (
       SELECT
-        id, source, category, title, url, published_at, relevance_score, commentary,
+        id, source, category, title, url, published_at, relevance_score,
         ROW_NUMBER() OVER (PARTITION BY source ORDER BY published_at DESC) AS rn
       FROM headlines
       WHERE published_at >= NOW() - (${days} || ' days')::interval
         AND (relevance_score IS NULL OR relevance_score >= ${MIN_TOP_RELEVANCE_SCORE})
     )
-    SELECT id, source, category, title, url, published_at, relevance_score, commentary
+    SELECT id, source, category, title, url, published_at, relevance_score
     FROM ranked
     WHERE rn <= ${sqlPerSourceCap}
   `);
@@ -133,23 +126,14 @@ export async function selectTopHeadlines(
     mapSqlRowToHeadline(r as Record<string, unknown>),
   );
 
-  // Structural guards applied before ranking:
-  //  1. Broad-press items (Bloomberg, Axios, etc.) must always have a named
-  //     AI-org anchor. The ingest-time keyword filter is too coarse — it
-  //     matches the substring "ai" inside common words ("captain", "fail",
-  //     "again"), so plane-crash / sports / weather stories occasionally
-  //     leak through. Requiring an org anchor at top-selection blocks them
-  //     even when the LLM judge mis-scored the row.
-  //  2. Drop items without commentary — the /dispatch page renders each
-  //     headline with its 2-3 sentence brief, and a card with a bare title
-  //     reads as broken. Commentator runs every ingest tick on the same
-  //     relevance gate, so the only items here are mid-cycle / failed
-  //     batches; the dropped slots are filled by the next-best candidate.
+  // Structural guard applied before ranking: broad-press items (Bloomberg,
+  // Axios, etc.) must always have a named AI-org anchor. The ingest-time
+  // keyword filter is too coarse — it matches the substring "ai" inside
+  // common words ("captain", "fail", "again"), so plane-crash / sports /
+  // weather stories occasionally leak through. Requiring an org anchor at
+  // top-selection blocks them even when the LLM judge mis-scored the row.
   const candidates = rawCandidates.filter((c) => {
     if (BROAD_PRESS_SOURCES.has(c.source) && extractOrgs(c).size === 0) {
-      return false;
-    }
-    if (c.commentary === null || c.commentary.trim().length === 0) {
       return false;
     }
     return true;
@@ -162,7 +146,7 @@ export async function selectTopHeadlines(
   );
 
   // Re-apply the per-source cap after the SQL pull-2x: we asked for extra
-  // candidates so the commentary filter has fallback options, but the public
+  // candidates so the broad-press filter has fallback options, but the public
   // top view should still hold to PER_SOURCE_CAP_TOP per outlet so a single
   // active feed can't dominate.
   const perSourceSeen = new Map<string, number>();
@@ -195,7 +179,6 @@ export function getTopSelectionSpec(): {
   minPapers: number;
   broadPressSources: string[];
   broadPressRequiresOrg: boolean;
-  requiresCommentary: boolean;
 } {
   return {
     tierWeights: { ...TIER_WEIGHTS },
@@ -207,6 +190,5 @@ export function getTopSelectionSpec(): {
     minPapers: MIN_PAPERS_IN_SELECTION,
     broadPressSources: Array.from(BROAD_PRESS_SOURCES),
     broadPressRequiresOrg: true,
-    requiresCommentary: true,
   };
 }

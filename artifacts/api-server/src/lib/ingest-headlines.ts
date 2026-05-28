@@ -5,7 +5,6 @@ import { sql } from "drizzle-orm";
 import { SOURCES, type SourceConfig } from "./headline-sources";
 import { logger } from "./logger";
 import { scoreUnscoredHeadlines } from "./headline-judge";
-import { clearViolatingCommentary, generateMissingCommentary } from "./headline-commentator";
 
 type NormalizedItem = Omit<InsertHeadline, "id" | "createdAt" | "relevanceScore">;
 
@@ -470,44 +469,12 @@ export async function ingestAllSources(): Promise<IngestResult[]> {
     WHERE h.id = old.id
   `);
 
-  // Score newly-ingested rows for AI relevance, then write commentary for
-  // any newly-top-eligible rows. Both are fire-and-forget — they're quality
-  // layers, not part of the ingest contract; if the LLM is slow or
-  // unconfigured we still want ingest to return cleanly. Commentary chains
-  // off the judge so it sees the freshly-set relevance_score values.
-  //
-  // If the judge made zero progress and only produced errors, skip the
-  // commentator for this tick — Venice is throttling, and firing more
-  // calls into the same wall just deepens the abuse-threshold cooldown.
-  // Next ingest tick (15 min later) gets a fresh shot at both.
-  scoreUnscoredHeadlines()
-    .then(async (judgeSummary) => {
-      const judgeStuck = judgeSummary.scored === 0 && judgeSummary.errors > 0;
-      if (judgeStuck) {
-        logger.info(
-          { judgeSummary },
-          "Headline commentator: skipped — judge made no progress this tick",
-        );
-        return;
-      }
-      // Clear stale slop before regen so rows committed before a banned-phrase
-      // was added get re-evaluated this tick. Without this, commented_at is
-      // sticky and offending text lives on the live site forever.
-      try {
-        const cleared = await clearViolatingCommentary();
-        if (cleared > 0) {
-          logger.info({ cleared }, "Headline commentator: cleared stale commentary");
-        }
-      } catch (err) {
-        logger.warn({ err }, "Headline commentator: stale-clear sweep failed");
-      }
-      return generateMissingCommentary().catch((err) => {
-        logger.warn({ err }, "Headline commentator: post-judge run failed");
-      });
-    })
-    .catch((err) => {
-      logger.warn({ err }, "Headline judge: post-ingest scoring failed");
-    });
+  // Score newly-ingested rows for AI relevance. Fire-and-forget — it's a
+  // quality layer, not part of the ingest contract; if the LLM is slow or
+  // unconfigured we still want ingest to return cleanly.
+  scoreUnscoredHeadlines().catch((err) => {
+    logger.warn({ err }, "Headline judge: post-ingest scoring failed");
+  });
 
   return results;
 }

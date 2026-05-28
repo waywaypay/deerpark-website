@@ -42,7 +42,7 @@ export default function NotFound() {
                   size="lg"
                   className="rounded-none h-14 px-8 text-sm uppercase tracking-widest border-foreground/25 hover:bg-foreground/5"
                 >
-                  Read the Dispatch
+                  Live AI feed
                 </Button>
               </Link>
             </div>
