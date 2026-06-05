@@ -1,13 +1,13 @@
-import { FadeIn, Footer, Navbar } from "@/components/site-layout";
+import { FadeIn, SiteHeader, SiteFooter } from "@/components/site-layout";
 
 const LAST_UPDATED = "May 2026";
 
 export default function Privacy() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Navbar />
+      <SiteHeader />
       <main>
-        <section className="pt-32 md:pt-40 pb-20 border-b border-foreground/10">
+        <section className="pt-16 md:pt-24 pb-20 border-b border-foreground/10">
           <div className="max-w-3xl mx-auto px-6">
             <FadeIn>
               <div className="flex items-center gap-3 mb-8">
@@ -152,7 +152,7 @@ export default function Privacy() {
           </div>
         </section>
       </main>
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
