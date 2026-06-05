@@ -5,13 +5,11 @@ const SITE_ORIGIN = "https://www.deerpark.io";
 
 // Homepage values shipped in index.html. Used as the fallback when a route has
 // no override so we always restore the defaults when navigating back to "/".
-const HOME_TITLE = "DeerPark — From AI curious to AI capable.";
+const HOME_TITLE = "DeerPark";
 const HOME_DESCRIPTION =
-  "AI enablement for organizations. We assess your readiness, ship the applications your team needs, and train people to run them — six to eight weeks from kickoff to handoff.";
-const HOME_OG_DESCRIPTION =
-  "We assess, build, deploy, and train — so your team actually uses what we ship. Kickoff to handoff in six to eight weeks.";
-const HOME_TWITTER_DESCRIPTION =
-  "AI enablement for organizations. Kickoff to handoff in six to eight weeks.";
+  "AI deployment, products, and benchmarks from DeerPark.";
+const HOME_OG_DESCRIPTION = HOME_DESCRIPTION;
+const HOME_TWITTER_DESCRIPTION = HOME_DESCRIPTION;
 
 type RouteMeta = {
   title: string;
@@ -21,10 +19,23 @@ type RouteMeta = {
 };
 
 const ROUTE_META: Record<string, RouteMeta> = {
-  "/dispatch": {
-    title: "Dispatch — Live AI headline feed | DeerPark",
+  "/case-studies": {
+    title: "Case Studies | DeerPark",
     description:
-      "A live feed of the AI landscape for operators — the top enterprise-relevant releases and research, ranked and refreshed throughout the day.",
+      "Recent AI deployment case studies — custom applications and workflow automation, with the outcomes they delivered.",
+  },
+  "/products": {
+    title: "Products | DeerPark",
+    description: "AI products from DeerPark, including the SEC MCP server and CLI.",
+  },
+  "/benchmarks": {
+    title: "Benchmarks | DeerPark",
+    description: "Evaluating model performance and cost.",
+  },
+  "/sec": {
+    title: "SEC MCP | DeerPark",
+    description:
+      "An MCP server and CLI that pull SEC EDGAR data accurately — filings, financials, insider activity, ownership, segment revenue, and XBRL KPIs.",
   },
   "/privacy": {
     title: "Privacy | DeerPark",

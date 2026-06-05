@@ -1,5 +1,5 @@
 import { ArrowRight, Check, Database, FileText, Gauge, Terminal, Zap } from "lucide-react";
-import { ConsultCTA, FadeIn, Footer, Navbar, ConsultationFAB } from "@/components/site-layout";
+import { FadeIn, SiteHeader, SiteFooter } from "@/components/site-layout";
 
 type Tool = {
   name: string;
@@ -52,12 +52,12 @@ const CAPABILITIES = [
 ] as const;
 
 const Header = () => (
-  <section className="pt-32 md:pt-40 pb-16 bg-background border-b border-foreground/10">
+  <section className="pt-16 md:pt-24 pb-16 bg-background border-b border-foreground/10">
     <div className="max-w-7xl mx-auto px-6">
       <FadeIn>
         <div className="flex items-center gap-3 mb-8">
           <div className="h-[1px] w-12 bg-primary" />
-          <span className="section-label">Product · SEC EDGAR</span>
+          <span className="section-label">Product · SEC MCP</span>
         </div>
         <div className="lg:grid lg:grid-cols-12 lg:gap-12">
           <div className="lg:col-span-8 min-w-0">
@@ -266,12 +266,12 @@ const Outro = () => (
           We deploy the MCP into your tenant, point it at the EDGAR data your analysts actually use, and train
           your team on the workflows around it.
         </p>
-        <ConsultCTA
-          source="sec"
+        <a
+          href="mailto:contact@deerpark.io"
           className="inline-flex items-center justify-center gap-2 rounded-none h-14 px-8 text-sm font-medium uppercase tracking-widest bg-foreground text-background hover:bg-foreground/90 transition-colors"
         >
           Talk to us <ArrowRight className="ml-2 w-4 h-4" />
-        </ConsultCTA>
+        </a>
       </FadeIn>
     </div>
   </section>
@@ -279,17 +279,16 @@ const Outro = () => (
 
 export default function Sec() {
   return (
-    <div className="min-h-screen bg-background text-foreground selection:bg-foreground selection:text-background">
-      <Navbar />
-      <main>
+    <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-foreground selection:text-background">
+      <SiteHeader />
+      <main className="flex-1">
         <Header />
         <Capabilities />
         <Tools />
         <Usage />
         <Outro />
       </main>
-      <ConsultationFAB />
-      <Footer />
+      <SiteFooter />
     </div>
   );
 }
