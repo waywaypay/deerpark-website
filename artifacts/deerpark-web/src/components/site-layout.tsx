@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "wouter";
 import { ArrowRight, Menu, X } from "lucide-react";
 import logo from "../assets/logo-icon.png";
@@ -22,21 +22,24 @@ export const FadeIn = ({
   children: React.ReactNode;
   delay?: number;
   className?: string;
-}) => (
-  <motion.div
-    initial={{ opacity: 0, y: 20 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    // Positive margin extends the IntersectionObserver root so content just
-    // below the fold fades in on first paint instead of waiting for a scroll
-    // the user has no reason to make — and so headless renderers / SEO
-    // crawlers see the content.
-    viewport={{ once: true, margin: "400px" }}
-    transition={{ duration: 0.7, delay, ease: [0.21, 0.47, 0.32, 0.98] }}
-    className={className}
-  >
-    {children}
-  </motion.div>
-);
+}) => {
+  const reduced = useReducedMotion();
+  return (
+    <motion.div
+      initial={reduced ? { opacity: 1, y: 0 } : { opacity: 0, y: 12 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "400px" }}
+      transition={{
+        duration: reduced ? 0 : 0.7,
+        delay: reduced ? 0 : delay,
+        ease: [0.21, 0.47, 0.32, 0.98],
+      }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+};
 
 const Wordmark = ({
   className = "text-lg md:text-xl",

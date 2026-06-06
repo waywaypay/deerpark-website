@@ -123,11 +123,11 @@
 
   .section-label {
     font-family: var(--app-font-sans);
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 600;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: hsl(var(--foreground) / 0.85);
+    color: hsl(var(--foreground));
   }
 }
 
