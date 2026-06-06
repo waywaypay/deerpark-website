@@ -8,10 +8,10 @@ const PRODUCTIVITY_STUDY_URL =
 const CONTACT_EMAIL = "contact@deerpark.io";
 
 const headingClass =
-  "font-serif text-2xl sm:text-3xl md:text-4xl text-foreground transition-colors group-hover:text-foreground/60";
+  "font-serif text-lg sm:text-xl md:text-2xl text-foreground transition-colors group-hover:text-foreground/60";
 
 const descriptorClass =
-  "mt-1 text-sm sm:text-base text-muted-foreground font-light";
+  "mt-1 text-xs sm:text-sm text-muted-foreground font-light";
 
 const inlineLinkClass =
   "underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground text-foreground/80 hover:text-foreground transition-colors";
@@ -19,7 +19,13 @@ const inlineLinkClass =
 export default function Home() {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background text-foreground selection:bg-foreground selection:text-background">
-      <SiteHeader showBack={false} />
+      <SiteHeader
+        showBack={false}
+        logoClassName="h-20 md:h-28"
+        wordmarkClassName="text-2xl md:text-3xl"
+        barClassName="py-6 md:py-8"
+        containerClassName="max-w-3xl"
+      />
       <main className="flex-1 flex items-center px-6 py-14 sm:py-20">
         <div className="w-full max-w-3xl mx-auto">
           <ul className="border-b border-foreground/10">
@@ -28,7 +34,7 @@ export default function Home() {
                 <span className={headingClass}>AI Deployment</span>
               </Link>
               <p className={descriptorClass}>
-                Case studies with up to an{" "}
+                Case studies with an average{" "}
                 <a
                   href={PRODUCTIVITY_STUDY_URL}
                   target="_blank"
