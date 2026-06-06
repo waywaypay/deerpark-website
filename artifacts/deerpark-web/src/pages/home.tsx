@@ -19,7 +19,7 @@ const mailto = (subject: string) =>
 /* ---------------------------------------------------------------- Hero --- */
 
 const HERO_STATS = [
-  { value: "−90%", label: "manual effort, shipped workflows" },
+  { value: "−80%", label: "manual effort, shipped workflows" },
   { value: "+25%", label: "quality vs. off-the-shelf" },
   { value: "8 wks", label: "kickoff to production" },
 ] as const;
