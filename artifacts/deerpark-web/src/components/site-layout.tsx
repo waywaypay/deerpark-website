@@ -38,12 +38,18 @@ export const FadeIn = ({
   </motion.div>
 );
 
-const Wordmark = ({ className = "text-lg md:text-xl" }: { className?: string }) => (
+const Wordmark = ({
+  className = "text-lg md:text-xl",
+  logoClassName = "h-8 md:h-9",
+}: {
+  className?: string;
+  logoClassName?: string;
+}) => (
   <Link
     href="/"
     className={`group inline-flex items-center gap-2.5 font-wordmark ${className} tracking-[0.06em] text-foreground hover:text-foreground/70 transition-colors shrink-0`}
   >
-    <img src={logo} alt="" className="h-8 md:h-9 w-auto" />
+    <img src={logo} alt="" className={`${logoClassName} w-auto`} />
     <span>
       {"DeerPark"}
       <span className="text-foreground/50 font-light">.io</span>
@@ -72,18 +78,20 @@ const ScheduleButton = ({
 );
 
 /**
- * Site header: a compact brand mark plus real navigation and a persistent
+ * Site header: the brand mark plus real navigation and a persistent
  * "Schedule a call" CTA. Sticky so the nav and primary action stay reachable
- * as visitors scroll long pages. Collapses to a hamburger menu on mobile.
+ * as visitors scroll long pages. The logo/wordmark are sized for presence but
+ * stay well below the hero headline so page hierarchy holds. Collapses to a
+ * hamburger menu on mobile.
  */
 export const SiteHeader = () => {
   const [open, setOpen] = useState(false);
   return (
     <header className="sticky top-0 z-50 border-b border-foreground/10 bg-background/85 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-6 h-16 md:h-20 flex items-center justify-between gap-6">
-        <Wordmark />
+      <div className="max-w-7xl mx-auto px-6 h-20 md:h-24 flex items-center justify-between gap-6">
+        <Wordmark className="text-xl md:text-2xl" logoClassName="h-10 md:h-12" />
 
-        <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-muted-foreground">
+        <nav className="hidden md:flex items-center gap-6 lg:gap-8 text-sm font-medium text-muted-foreground">
           {NAV_LINKS.map((l) => (
             <Link key={l.href} href={l.href} className="hover:text-foreground transition-colors">
               {l.label}
