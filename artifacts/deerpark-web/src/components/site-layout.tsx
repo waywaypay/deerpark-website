@@ -28,15 +28,21 @@ export const FadeIn = ({
   </motion.div>
 );
 
-/** Minimal header for interior pages: just a wordmark that returns home. */
-export const SiteHeader = () => (
+/**
+ * Site header: logo + wordmark that link home. Interior pages show a leading
+ * back-arrow to signal "return home"; the home page itself sets
+ * `showBack={false}` since there's nowhere to go back to.
+ */
+export const SiteHeader = ({ showBack = true }: { showBack?: boolean }) => (
   <header className="border-b border-foreground/10">
     <div className="max-w-7xl mx-auto px-6 h-16 md:h-20 flex items-center">
       <Link
         href="/"
         className="group inline-flex items-center gap-2.5 font-wordmark text-lg md:text-xl tracking-[0.06em] text-foreground hover:text-foreground/70 transition-colors"
       >
-        <ArrowLeft className="w-4 h-4 text-foreground/40 group-hover:text-foreground/80 transition-colors" />
+        {showBack && (
+          <ArrowLeft className="w-4 h-4 text-foreground/40 group-hover:text-foreground/80 transition-colors" />
+        )}
         <img src={logo} alt="" className="h-7 md:h-8 w-auto" />
         <span>
           {"DeerPark"}
