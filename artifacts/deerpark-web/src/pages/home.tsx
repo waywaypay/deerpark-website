@@ -168,7 +168,7 @@ const Hero = () => (
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-0.5 text-foreground/80 underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground hover:text-foreground transition-colors"
               >
-                research on up-to-80% AI productivity gains
+                research on 80% AI productivity gains
                 <ArrowUpRight className="w-3 h-3" />
               </a>
               .
