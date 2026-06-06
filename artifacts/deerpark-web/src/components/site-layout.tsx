@@ -31,19 +31,33 @@ export const FadeIn = ({
 /**
  * Site header: logo + wordmark that link home. Interior pages show a leading
  * back-arrow to signal "return home"; the home page itself sets
- * `showBack={false}` since there's nowhere to go back to.
+ * `showBack={false}` since there's nowhere to go back to. Logo / wordmark / bar
+ * sizing is overridable so the home page can show an oversized brand mark while
+ * interior pages keep the compact nav defaults.
  */
-export const SiteHeader = ({ showBack = true }: { showBack?: boolean }) => (
+export const SiteHeader = ({
+  showBack = true,
+  logoClassName = "h-7 md:h-8",
+  wordmarkClassName = "text-lg md:text-xl",
+  barClassName = "h-16 md:h-20",
+  containerClassName = "max-w-7xl",
+}: {
+  showBack?: boolean;
+  logoClassName?: string;
+  wordmarkClassName?: string;
+  barClassName?: string;
+  containerClassName?: string;
+}) => (
   <header className="border-b border-foreground/10">
-    <div className="max-w-7xl mx-auto px-6 h-16 md:h-20 flex items-center">
+    <div className={`${containerClassName} mx-auto px-6 flex items-center ${barClassName}`}>
       <Link
         href="/"
-        className="group inline-flex items-center gap-2.5 font-wordmark text-lg md:text-xl tracking-[0.06em] text-foreground hover:text-foreground/70 transition-colors"
+        className={`group inline-flex items-center gap-2.5 font-wordmark ${wordmarkClassName} tracking-[0.06em] text-foreground hover:text-foreground/70 transition-colors`}
       >
         {showBack && (
           <ArrowLeft className="w-4 h-4 text-foreground/40 group-hover:text-foreground/80 transition-colors" />
         )}
-        <img src={logo} alt="" className="h-7 md:h-8 w-auto" />
+        <img src={logo} alt="" className={`${logoClassName} w-auto`} />
         <span>
           {"DeerPark"}
           <span className="text-foreground/50 font-light">.io</span>
