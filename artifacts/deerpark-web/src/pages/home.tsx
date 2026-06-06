@@ -168,7 +168,7 @@ const Hero = () => (
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-0.5 text-foreground/80 underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground hover:text-foreground transition-colors"
               >
-                research on up-to-80% AI productivity gains
+                research on 80% AI productivity gains
                 <ArrowUpRight className="w-3 h-3" />
               </a>
               .
@@ -225,9 +225,7 @@ const Approach = () => (
           Three ways to work with us.
         </h2>
         <p className="text-base md:text-lg text-muted-foreground font-light leading-relaxed max-w-2xl mb-14">
-          Engage at the tier that matches your commitment — from a one-time opportunity map,
-          to an embedded operator in the flow of work, to a full custom build. Training is
-          included, not sold separately.
+          Engage at the tier that matches your commitment.
         </p>
       </FadeIn>
 
