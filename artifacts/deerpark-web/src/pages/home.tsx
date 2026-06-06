@@ -109,8 +109,8 @@ const Hero = () => (
       }}
     />
     <div className="relative z-10 max-w-7xl mx-auto px-6 py-16 md:py-24 lg:py-28">
-      <div className="grid lg:grid-cols-12 gap-12 lg:gap-16 items-center">
-        <div className="lg:col-span-7 min-w-0">
+      <div className="grid lg:grid-cols-12 gap-12 lg:gap-16 items-stretch">
+        <div className="lg:col-span-7 min-w-0 flex flex-col">
           <FadeIn>
             <div className="flex items-center gap-3 mb-8">
               <div className="h-[1px] w-12 bg-primary" />
@@ -142,15 +142,15 @@ const Hero = () => (
               </a>
               <a
                 href="#work"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-foreground/25 px-7 py-3.5 text-base font-medium tracking-wide text-foreground hover:bg-foreground/[0.04] hover:border-foreground/40 transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-foreground/40 bg-foreground/[0.04] px-7 py-3.5 text-base font-medium tracking-wide text-foreground hover:bg-foreground/[0.08] hover:border-foreground/60 transition-colors"
               >
                 See our work
               </a>
             </div>
           </FadeIn>
 
-          <FadeIn delay={0.2}>
-            <dl className="mt-12 grid grid-cols-3 gap-6 border-t border-foreground/10 pt-8 max-w-lg">
+          <FadeIn delay={0.2} className="mt-auto">
+            <dl className="mt-0 grid grid-cols-3 gap-6 border-t border-foreground/10 pt-8 max-w-lg">
               {HERO_STATS.map((s) => (
                 <div key={s.value}>
                   <dt className="text-2xl md:text-3xl font-serif text-foreground">{s.value}</dt>
@@ -243,7 +243,7 @@ const Approach = () => (
                   <p.icon className="w-5 h-5 text-primary" />
                 </div>
               </div>
-              <h3 className="text-2xl md:text-3xl font-serif mb-4">{p.title}</h3>
+              <h3 className="text-2xl md:text-3xl font-serif font-medium mb-4">{p.title}</h3>
               <p className="text-sm text-muted-foreground font-light leading-relaxed mb-8">
                 {p.summary}
               </p>
@@ -420,7 +420,7 @@ const Products = () => (
         </FadeIn>
 
         <FadeIn delay={0.08}>
-          <div className="flex h-full flex-col justify-between border border-dashed border-foreground/20 p-8 md:p-10">
+          <div className="flex h-full flex-col border border-dashed border-foreground/20 p-8 md:p-10">
             <div>
               <span className="section-label">In the works</span>
               <h3 className="text-2xl md:text-3xl font-serif mt-4 mb-4">More on the way.</h3>
@@ -429,9 +429,18 @@ const Products = () => (
                 deployments rely on. Have a problem worth a product?
               </p>
             </div>
+            <div className="flex-1 my-6" aria-hidden="true">
+              <svg viewBox="0 0 160 80" className="w-full opacity-[0.12]" fill="currentColor">
+                {[0, 1, 2, 3, 4, 5, 6, 7].flatMap((col) =>
+                  [0, 1, 2, 3].map((row) => (
+                    <circle key={`${col}-${row}`} cx={10 + col * 20} cy={10 + row * 20} r={2.5} />
+                  ))
+                )}
+              </svg>
+            </div>
             <a
               href={mailto("Product idea — DeerPark")}
-              className="group mt-8 inline-flex items-center gap-2 text-sm text-foreground underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground transition-colors"
+              className="group inline-flex items-center gap-2 text-sm text-foreground underline decoration-foreground/25 underline-offset-4 hover:decoration-foreground transition-colors"
             >
               Tell us about it
               <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-0.5" />
