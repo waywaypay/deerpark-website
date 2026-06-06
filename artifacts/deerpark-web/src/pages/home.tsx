@@ -127,7 +127,7 @@ const Hero = () => (
           <FadeIn delay={0.1}>
             <p className="text-lg md:text-xl text-muted-foreground font-light leading-relaxed max-w-xl mb-9">
               We map where AI pays back fastest, build the software your team needs, and
-              train your people to run it — in your stack, on your data.
+              train your people to run it.
             </p>
           </FadeIn>
 
